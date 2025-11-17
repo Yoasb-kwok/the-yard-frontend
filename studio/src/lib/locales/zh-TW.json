@@ -1,0 +1,247 @@
+{
+  "nav": {
+    "home": "首頁",
+    "about": "關於我們",
+    "calendar": "課程表",
+    "news": "最新消息",
+    "contact": "聯絡我們",
+    "login": "登入",
+    "dashboard": "儀表板",
+    "schedule": "課程表",
+    "shop": "商店",
+    "profile": "個人資料",
+    "users": "用戶",
+    "classes": "課程",
+    "reports": "報告",
+    "settings": "設定",
+    "signOut": "登出",
+    "menu": "選單"
+  },
+  "common": {
+    "loading": "載入中...",
+    "save": "儲存",
+    "cancel": "取消",
+    "delete": "刪除",
+    "edit": "編輯",
+    "create": "建立",
+    "update": "更新",
+    "submit": "提交",
+    "search": "搜尋",
+    "close": "關閉",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "confirm": "確認",
+    "success": "成功",
+    "error": "錯誤",
+    "warning": "警告",
+    "info": "資訊"
+  },
+  "home": {
+    "title": "改變您的練習",
+    "subtitle": "加入我們專注的學生社群，在支持性的環境中體驗世界級的培訓與專業導師。",
+    "bookTrial": "預約試堂",
+    "signIn": "登入",
+    "todaysClasses": "今日課程",
+    "noClassesToday": "今日沒有安排課程",
+    "enrolled": "已報名",
+    "expertInstructors": "專業導師",
+    "expertInstructorsDesc": "向擁有多年經驗的認證專業人士學習",
+    "flexibleSchedule": "彈性時間表",
+    "flexibleScheduleDesc": "全天候課程，適合您忙碌的生活方式",
+    "smallClassSizes": "小班教學",
+    "smallClassSizesDesc": "在親密的小組環境中獲得個人化關注"
+  },
+  "about": {
+    "title": "關於我們",
+    "content": "歡迎來到我們的教室！我們致力於在支持性和歡迎的環境中提供卓越的培訓體驗。\n\n## 我們的使命\n我們的使命是通過專業指導、個人化關注和以社群為中心的方法，幫助您實現健康和健身目標。\n\n## 我們的導師\n我們所有的導師都是擁有多年經驗的認證專業人士。他們熱衷於幫助學生成長和改善他們的練習。\n\n## 我們的設施\n我們提供最先進的設施，旨在增強您的學習體驗。我們的教室配備了現代設備和舒適的空間，適合各種類型的課程。\n\n## 加入我們\n無論您是初學者還是有經驗的練習者，我們都歡迎您加入我們的社群。今天就預約試堂，體驗我們的特別之處！"
+  },
+  "news": {
+    "title": "最新消息",
+    "noNews": "暫無消息"
+  },
+  "contact": {
+    "title": "聯絡我們",
+    "subtitle": "我們很樂意聽到您的消息！請通過以下任何方式與我們聯繫。",
+    "email": "電子郵件",
+    "phone": "電話",
+    "address": "地址",
+    "sendMessage": "發送訊息給我們",
+    "name": "姓名",
+    "message": "訊息",
+    "send": "發送訊息"
+  },
+  "terms": {
+    "title": "條款與條件",
+    "content": "使用我們的服務即表示您同意以下條款與條件：\n\n## 註冊與付款\n- 所有課程預訂需要提前註冊\n- 必須在參加課程前完成付款\n- 代幣套裝不可退款但可轉讓\n\n## 取消政策\n- 必須至少提前24小時取消\n- 遲取消可能會導致代幣扣除\n- 缺席將收取全額課程費用\n\n## 課程出席\n- 請準時到達您預訂的課程\n- 遲到可能不被允許進入\n- 任何時候都應保持尊重行為\n\n## 責任\n- 參與者自行承擔參加課程的風險\n- 請告知導師任何傷害或醫療狀況\n- 我們不對課程期間發生的任何傷害負責\n\n## 條款變更\n我們保留隨時修改這些條款的權利。繼續使用我們的服務即表示接受任何變更。"
+  },
+  "privacy": {
+    "title": "隱私政策",
+    "content": "我們尊重您的隱私，並致力於保護您的個人資料。本隱私政策解釋了我們在使用我們的服務時如何收集、使用和保護您的資訊。\n\n## 我們收集的資訊\n我們收集您直接提供給我們的資訊，包括：\n- 姓名和聯絡資訊\n- 付款資訊\n- 課程偏好和報名歷史\n\n## 我們如何使用您的資訊\n我們使用收集的資訊來：\n- 處理您的註冊和付款\n- 與您溝通課程和服務\n- 改善我們的服務和用戶體驗\n\n## 資料安全\n我們實施適當的安全措施，以保護您的個人資訊免受未經授權的訪問、更改、披露或破壞。\n\n## 聯絡我們\n如果您對本隱私政策有任何疑問，請通過 info@studio.com 與我們聯繫。"
+  },
+  "trial": {
+    "title": "申請試堂",
+    "selectTrial": "選擇試堂",
+    "chooseTrial": "選擇試堂課程",
+    "fullName": "全名",
+    "idFirstFour": "身份證前四位數字",
+    "mobile": "手機號碼",
+    "email": "電子郵件",
+    "password": "密碼",
+    "passwordMin": "至少6個字符",
+    "submitApplication": "提交申請",
+    "submitting": "提交中...",
+    "applicationSubmitted": "申請已提交！",
+    "applicationSubmittedDesc": "我們已向您發送電子郵件確認。請檢查您的收件箱以設置密碼並激活您的帳戶。",
+    "redirecting": "正在重定向到登入頁面...",
+    "free": "免費"
+  },
+  "login": {
+    "title": "登入您的帳戶",
+    "or": "或",
+    "applyTrial": "申請試堂",
+    "email": "電子郵件地址",
+    "password": "密碼",
+    "signingIn": "登入中...",
+    "signIn": "登入",
+    "invalidCredentials": "電子郵件或密碼無效"
+  },
+  "dashboard": {
+    "title": "儀表板",
+    "tokenBalance": "代幣餘額",
+    "availableTokens": "可用代幣",
+    "upcomingClasses": "即將到來的課程",
+    "classesScheduled": "已安排的課程",
+    "yourTokenPackages": "您的代幣套裝",
+    "noActiveTokens": "沒有活躍的代幣套裝",
+    "expires": "到期",
+    "expiringSoon": "即將到期",
+    "tokensExpiring": "代幣套裝即將到期",
+    "noUpcomingClasses": "沒有即將到來的課程"
+  },
+  "schedule": {
+    "title": "我的課程表",
+    "noUpcomingClasses": "沒有即將到來的課程",
+    "instructor": "導師",
+    "start": "開始",
+    "end": "結束"
+  },
+  "shop": {
+    "title": "代幣商店",
+    "addToCart": "加入購物車",
+    "tokens": "代幣",
+    "validity": "有效期",
+    "days": "天",
+    "price": "價格",
+    "shoppingCart": "購物車",
+    "cartEmpty": "您的購物車是空的",
+    "remove": "移除",
+    "couponCode": "優惠券代碼",
+    "apply": "應用",
+    "couponApplied": "優惠券已應用",
+    "subtotal": "小計",
+    "discount": "折扣",
+    "total": "總計",
+    "paymentMethod": "付款方式",
+    "creditCard": "信用卡",
+    "fps": "轉數快",
+    "cash": "現金",
+    "checkout": "結帳",
+    "processing": "處理中...",
+    "orderPlaced": "訂單已成功下達！等待管理員確認付款。"
+  },
+  "profile": {
+    "title": "我的個人資料",
+    "role": "角色",
+    "fullName": "全名",
+    "mobile": "手機",
+    "idFirstFour": "身份證（前四位數字）",
+    "notProvided": "未提供"
+  },
+  "admin": {
+    "dashboard": {
+      "title": "管理員儀表板",
+      "todaysRevenue": "今日收入",
+      "todaysClasses": "今日課程",
+      "expiringSoon": "即將到期",
+      "expiringStudents": "代幣即將到期的學生",
+      "lowTokens": "代幣不足",
+      "lowTokenStudents": "代幣≤2的學生",
+      "todaysClassesList": "今日課程",
+      "noClassesToday": "今日沒有安排課程"
+    },
+    "users": {
+      "title": "用戶管理",
+      "searchPlaceholder": "按姓名或手機搜尋...",
+      "name": "姓名",
+      "mobile": "手機",
+      "role": "角色",
+      "tokens": "代幣",
+      "joined": "加入時間",
+      "actions": "操作",
+      "editUser": "編輯用戶",
+      "fullName": "全名",
+      "saveChanges": "儲存變更",
+      "passwordReset": "發送密碼重設",
+      "passwordResetSent": "密碼重設電子郵件已發送（模擬）",
+      "userUpdated": "用戶已成功更新"
+    },
+    "classes": {
+      "title": "課程管理",
+      "createClass": "建立課程",
+      "className": "課程名稱",
+      "instructor": "導師",
+      "startTime": "開始時間",
+      "endTime": "結束時間",
+      "capacity": "容量",
+      "internalCourse": "內部課程（補課）",
+      "enrolled": "已報名",
+      "cancel": "取消",
+      "restore": "恢復",
+      "cancelled": "已取消",
+      "classCreated": "課程已成功建立"
+    },
+    "reports": {
+      "title": "報告",
+      "newUsers": "新用戶",
+      "totalNewUsers": "期間內的新用戶總數",
+      "fromTrial": "來自試堂",
+      "alerts": "警示",
+      "lowTokens": "代幣不足",
+      "expiringSoon": "即將到期",
+      "lowTokenStudents": "代幣不足的學生（≤2）",
+      "noLowTokens": "沒有代幣不足的學生",
+      "remainingTokens": "剩餘代幣",
+      "nearExpiry": "接近到期日的學生",
+      "noExpiring": "沒有代幣即將到期的學生",
+      "expiryDate": "到期日"
+    },
+    "settings": {
+      "title": "設定",
+      "selectPage": "選擇頁面",
+      "pageTitle": "頁面標題",
+      "content": "內容",
+      "saveChanges": "儲存變更",
+      "saving": "儲存中...",
+      "contentUpdated": "內容已成功更新"
+    }
+  },
+  "calendar": {
+    "title": "課程日曆",
+    "day": "日",
+    "week": "週",
+    "month": "月",
+    "today": "今天",
+    "noLessons": "沒有安排的課程"
+  },
+  "footer": {
+    "company": "公司",
+    "resources": "資源",
+    "legal": "法律",
+    "latestNews": "最新消息",
+    "termsConditions": "條款與條件",
+    "privacyPolicy": "隱私政策",
+    "copyright": "© 2024 教室。版權所有。"
+  }
+}
+

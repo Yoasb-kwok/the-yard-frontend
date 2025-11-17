@@ -1,0 +1,247 @@
+{
+  "nav": {
+    "home": "首页",
+    "about": "关于我们",
+    "calendar": "课程表",
+    "news": "最新消息",
+    "contact": "联系我们",
+    "login": "登录",
+    "dashboard": "仪表板",
+    "schedule": "课程表",
+    "shop": "商店",
+    "profile": "个人资料",
+    "users": "用户",
+    "classes": "课程",
+    "reports": "报告",
+    "settings": "设置",
+    "signOut": "登出",
+    "menu": "菜单"
+  },
+  "common": {
+    "loading": "加载中...",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "update": "更新",
+    "submit": "提交",
+    "search": "搜索",
+    "close": "关闭",
+    "back": "返回",
+    "next": "下一步",
+    "previous": "上一步",
+    "confirm": "确认",
+    "success": "成功",
+    "error": "错误",
+    "warning": "警告",
+    "info": "信息"
+  },
+  "home": {
+    "title": "改变您的练习",
+    "subtitle": "加入我们专注的学生社群，在支持性的环境中体验世界级的培训与专业导师。",
+    "bookTrial": "预约试课",
+    "signIn": "登录",
+    "todaysClasses": "今日课程",
+    "noClassesToday": "今日没有安排课程",
+    "enrolled": "已报名",
+    "expertInstructors": "专业导师",
+    "expertInstructorsDesc": "向拥有多年经验的认证专业人士学习",
+    "flexibleSchedule": "灵活时间表",
+    "flexibleScheduleDesc": "全天候课程，适合您忙碌的生活方式",
+    "smallClassSizes": "小班教学",
+    "smallClassSizesDesc": "在亲密的小组环境中获得个性化关注"
+  },
+  "about": {
+    "title": "关于我们",
+    "content": "欢迎来到我们的教室！我们致力于在支持性和欢迎的环境中提供卓越的培训体验。\n\n## 我们的使命\n我们的使命是通过专业指导、个性化关注和以社群为中心的方法，帮助您实现健康和健身目标。\n\n## 我们的导师\n我们所有的导师都是拥有多年经验的认证专业人士。他们热衷于帮助学生成长和改善他们的练习。\n\n## 我们的设施\n我们提供最先进的设施，旨在增强您的学习体验。我们的教室配备了现代设备和舒适的空间，适合各种类型的课程。\n\n## 加入我们\n无论您是初学者还是有经验的练习者，我们都欢迎您加入我们的社群。今天就预约试课，体验我们的特别之处！"
+  },
+  "news": {
+    "title": "最新消息",
+    "noNews": "暂无消息"
+  },
+  "contact": {
+    "title": "联系我们",
+    "subtitle": "我们很乐意听到您的消息！请通过以下任何方式与我们联系。",
+    "email": "电子邮件",
+    "phone": "电话",
+    "address": "地址",
+    "sendMessage": "发送消息给我们",
+    "name": "姓名",
+    "message": "消息",
+    "send": "发送消息"
+  },
+  "terms": {
+    "title": "条款与条件",
+    "content": "使用我们的服务即表示您同意以下条款与条件：\n\n## 注册与付款\n- 所有课程预订需要提前注册\n- 必须在参加课程前完成付款\n- 代币套装不可退款但可转让\n\n## 取消政策\n- 必须至少提前24小时取消\n- 迟取消可能会导致代币扣除\n- 缺席将收取全额课程费用\n\n## 课程出席\n- 请准时到达您预订的课程\n- 迟到可能不被允许进入\n- 任何时候都应保持尊重行为\n\n## 责任\n- 参与者自行承担参加课程的风险\n- 请告知导师任何伤害或医疗状况\n- 我们不对课程期间发生的任何伤害负责\n\n## 条款变更\n我们保留随时修改这些条款的权利。继续使用我们的服务即表示接受任何变更。"
+  },
+  "privacy": {
+    "title": "隐私政策",
+    "content": "我们尊重您的隐私，并致力于保护您的个人资料。本隐私政策解释了我们在使用我们的服务时如何收集、使用和保护您的信息。\n\n## 我们收集的信息\n我们收集您直接提供给我们的信息，包括：\n- 姓名和联系信息\n- 付款信息\n- 课程偏好和报名历史\n\n## 我们如何使用您的信息\n我们使用收集的信息来：\n- 处理您的注册和付款\n- 与您沟通课程和服务\n- 改善我们的服务和用户体验\n\n## 数据安全\n我们实施适当的安全措施，以保护您的个人信息免受未经授权的访问、更改、披露或破坏。\n\n## 联系我们\n如果您对本隐私政策有任何疑问，请通过 info@studio.com 与我们联系。"
+  },
+  "trial": {
+    "title": "申请试课",
+    "selectTrial": "选择试课",
+    "chooseTrial": "选择试课课程",
+    "fullName": "全名",
+    "idFirstFour": "身份证前四位数字",
+    "mobile": "手机号码",
+    "email": "电子邮件",
+    "password": "密码",
+    "passwordMin": "至少6个字符",
+    "submitApplication": "提交申请",
+    "submitting": "提交中...",
+    "applicationSubmitted": "申请已提交！",
+    "applicationSubmittedDesc": "我们已向您发送电子邮件确认。请检查您的收件箱以设置密码并激活您的账户。",
+    "redirecting": "正在重定向到登录页面...",
+    "free": "免费"
+  },
+  "login": {
+    "title": "登录您的账户",
+    "or": "或",
+    "applyTrial": "申请试课",
+    "email": "电子邮件地址",
+    "password": "密码",
+    "signingIn": "登录中...",
+    "signIn": "登录",
+    "invalidCredentials": "电子邮件或密码无效"
+  },
+  "dashboard": {
+    "title": "仪表板",
+    "tokenBalance": "代币余额",
+    "availableTokens": "可用代币",
+    "upcomingClasses": "即将到来的课程",
+    "classesScheduled": "已安排的课程",
+    "yourTokenPackages": "您的代币套装",
+    "noActiveTokens": "没有活跃的代币套装",
+    "expires": "到期",
+    "expiringSoon": "即将到期",
+    "tokensExpiring": "代币套装即将到期",
+    "noUpcomingClasses": "没有即将到来的课程"
+  },
+  "schedule": {
+    "title": "我的课程表",
+    "noUpcomingClasses": "没有即将到来的课程",
+    "instructor": "导师",
+    "start": "开始",
+    "end": "结束"
+  },
+  "shop": {
+    "title": "代币商店",
+    "addToCart": "加入购物车",
+    "tokens": "代币",
+    "validity": "有效期",
+    "days": "天",
+    "price": "价格",
+    "shoppingCart": "购物车",
+    "cartEmpty": "您的购物车是空的",
+    "remove": "移除",
+    "couponCode": "优惠券代码",
+    "apply": "应用",
+    "couponApplied": "优惠券已应用",
+    "subtotal": "小计",
+    "discount": "折扣",
+    "total": "总计",
+    "paymentMethod": "付款方式",
+    "creditCard": "信用卡",
+    "fps": "转数快",
+    "cash": "现金",
+    "checkout": "结账",
+    "processing": "处理中...",
+    "orderPlaced": "订单已成功下达！等待管理员确认付款。"
+  },
+  "profile": {
+    "title": "我的个人资料",
+    "role": "角色",
+    "fullName": "全名",
+    "mobile": "手机",
+    "idFirstFour": "身份证（前四位数字）",
+    "notProvided": "未提供"
+  },
+  "admin": {
+    "dashboard": {
+      "title": "管理员仪表板",
+      "todaysRevenue": "今日收入",
+      "todaysClasses": "今日课程",
+      "expiringSoon": "即将到期",
+      "expiringStudents": "代币即将到期的学生",
+      "lowTokens": "代币不足",
+      "lowTokenStudents": "代币≤2的学生",
+      "todaysClassesList": "今日课程",
+      "noClassesToday": "今日没有安排课程"
+    },
+    "users": {
+      "title": "用户管理",
+      "searchPlaceholder": "按姓名或手机搜索...",
+      "name": "姓名",
+      "mobile": "手机",
+      "role": "角色",
+      "tokens": "代币",
+      "joined": "加入时间",
+      "actions": "操作",
+      "editUser": "编辑用户",
+      "fullName": "全名",
+      "saveChanges": "保存变更",
+      "passwordReset": "发送密码重置",
+      "passwordResetSent": "密码重置电子邮件已发送（模拟）",
+      "userUpdated": "用户已成功更新"
+    },
+    "classes": {
+      "title": "课程管理",
+      "createClass": "创建课程",
+      "className": "课程名称",
+      "instructor": "导师",
+      "startTime": "开始时间",
+      "endTime": "结束时间",
+      "capacity": "容量",
+      "internalCourse": "内部课程（补课）",
+      "enrolled": "已报名",
+      "cancel": "取消",
+      "restore": "恢复",
+      "cancelled": "已取消",
+      "classCreated": "课程已成功创建"
+    },
+    "reports": {
+      "title": "报告",
+      "newUsers": "新用户",
+      "totalNewUsers": "期间内的新用户总数",
+      "fromTrial": "来自试课",
+      "alerts": "警示",
+      "lowTokens": "代币不足",
+      "expiringSoon": "即将到期",
+      "lowTokenStudents": "代币不足的学生（≤2）",
+      "noLowTokens": "没有代币不足的学生",
+      "remainingTokens": "剩余代币",
+      "nearExpiry": "接近到期日的学生",
+      "noExpiring": "没有代币即将到期的学生",
+      "expiryDate": "到期日"
+    },
+    "settings": {
+      "title": "设置",
+      "selectPage": "选择页面",
+      "pageTitle": "页面标题",
+      "content": "内容",
+      "saveChanges": "保存变更",
+      "saving": "保存中...",
+      "contentUpdated": "内容已成功更新"
+    }
+  },
+  "calendar": {
+    "title": "课程日历",
+    "day": "日",
+    "week": "周",
+    "month": "月",
+    "today": "今天",
+    "noLessons": "没有安排的课程"
+  },
+  "footer": {
+    "company": "公司",
+    "resources": "资源",
+    "legal": "法律",
+    "latestNews": "最新消息",
+    "termsConditions": "条款与条件",
+    "privacyPolicy": "隐私政策",
+    "copyright": "© 2024 教室。版权所有。"
+  }
+}
+

@@ -1,0 +1,247 @@
+{
+  "nav": {
+    "home": "Home",
+    "about": "About Us",
+    "calendar": "Calendar",
+    "news": "News",
+    "contact": "Contact",
+    "login": "Sign In",
+    "dashboard": "Dashboard",
+    "schedule": "Schedule",
+    "shop": "Shop",
+    "profile": "Profile",
+    "users": "Users",
+    "classes": "Classes",
+    "reports": "Reports",
+    "settings": "Settings",
+    "signOut": "Sign Out",
+    "menu": "Menu"
+  },
+  "common": {
+    "loading": "Loading...",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "update": "Update",
+    "submit": "Submit",
+    "search": "Search",
+    "close": "Close",
+    "back": "Back",
+    "next": "Next",
+    "previous": "Previous",
+    "confirm": "Confirm",
+    "success": "Success",
+    "error": "Error",
+    "warning": "Warning",
+    "info": "Information"
+  },
+  "home": {
+    "title": "Transform Your Practice",
+    "subtitle": "Join our community of dedicated students and experience world-class training with expert instructors in a supportive environment.",
+    "bookTrial": "Book Trial Lesson",
+    "signIn": "Sign In",
+    "todaysClasses": "Today's Classes",
+    "noClassesToday": "No classes scheduled for today",
+    "enrolled": "enrolled",
+    "expertInstructors": "Expert Instructors",
+    "expertInstructorsDesc": "Learn from certified professionals with years of experience",
+    "flexibleSchedule": "Flexible Schedule",
+    "flexibleScheduleDesc": "Classes throughout the day to fit your busy lifestyle",
+    "smallClassSizes": "Small Class Sizes",
+    "smallClassSizesDesc": "Personalized attention in intimate group settings"
+  },
+  "about": {
+    "title": "About Us",
+    "content": "Welcome to our studio! We are dedicated to providing exceptional training experiences in a supportive and welcoming environment.\n\n## Our Mission\nOur mission is to help you achieve your fitness and wellness goals through expert instruction, personalized attention, and a community-focused approach.\n\n## Our Instructors\nAll our instructors are certified professionals with years of experience. They are passionate about helping students grow and improve their practice.\n\n## Our Facilities\nWe offer state-of-the-art facilities designed to enhance your learning experience. Our studio is equipped with modern equipment and comfortable spaces for all types of classes.\n\n## Join Us\nWhether you're a beginner or an experienced practitioner, we welcome you to join our community. Book a trial lesson today and experience what makes us special!"
+  },
+  "news": {
+    "title": "Latest News",
+    "noNews": "No news posts available"
+  },
+  "contact": {
+    "title": "Contact Us",
+    "subtitle": "We would love to hear from you! Get in touch with us through any of the methods below.",
+    "email": "Email",
+    "phone": "Phone",
+    "address": "Address",
+    "sendMessage": "Send us a message",
+    "name": "Name",
+    "message": "Message",
+    "send": "Send Message"
+  },
+  "terms": {
+    "title": "Terms and Conditions",
+    "content": "By using our services, you agree to the following terms and conditions:\n\n## Registration and Payment\n- All class bookings require advance registration\n- Payment must be completed before attending classes\n- Token packages are non-refundable but may be transferable\n\n## Cancellation Policy\n- Cancellations must be made at least 24 hours in advance\n- Late cancellations may result in token deduction\n- No-shows will be charged the full class fee\n\n## Class Attendance\n- Please arrive on time for your scheduled class\n- Late arrivals may not be admitted\n- Respectful behavior is expected at all times\n\n## Liability\n- Participants engage in classes at their own risk\n- Please inform instructors of any injuries or medical conditions\n- We are not liable for any injuries sustained during classes\n\n## Changes to Terms\nWe reserve the right to modify these terms at any time. Continued use of our services constitutes acceptance of any changes."
+  },
+  "privacy": {
+    "title": "Privacy Policy",
+    "content": "We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and safeguard your information when you use our services.\n\n## Information We Collect\nWe collect information that you provide directly to us, including:\n- Name and contact information\n- Payment information\n- Class preferences and enrollment history\n\n## How We Use Your Information\nWe use the information we collect to:\n- Process your registrations and payments\n- Communicate with you about classes and services\n- Improve our services and user experience\n\n## Data Security\nWe implement appropriate security measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.\n\n## Contact Us\nIf you have questions about this privacy policy, please contact us at info@studio.com."
+  },
+  "trial": {
+    "title": "Apply for Trial Lesson",
+    "selectTrial": "Select Trial Lesson",
+    "chooseTrial": "Choose a trial lesson",
+    "fullName": "Full Name",
+    "idFirstFour": "First 4 Digits of ID",
+    "mobile": "Mobile Number",
+    "email": "Email",
+    "password": "Password",
+    "passwordMin": "Minimum 6 characters",
+    "submitApplication": "Submit Application",
+    "submitting": "Submitting...",
+    "applicationSubmitted": "Application Submitted!",
+    "applicationSubmittedDesc": "We've sent you an email confirmation. Please check your inbox to set your password and activate your account.",
+    "redirecting": "Redirecting to login...",
+    "free": "FREE"
+  },
+  "login": {
+    "title": "Sign in to your account",
+    "or": "Or",
+    "applyTrial": "apply for a trial lesson",
+    "email": "Email address",
+    "password": "Password",
+    "signingIn": "Signing in...",
+    "signIn": "Sign in",
+    "invalidCredentials": "Invalid email or password"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "tokenBalance": "Token Balance",
+    "availableTokens": "Available tokens",
+    "upcomingClasses": "Upcoming Classes",
+    "classesScheduled": "Classes scheduled",
+    "yourTokenPackages": "Your Token Packages",
+    "noActiveTokens": "No active token packages",
+    "expires": "Expires",
+    "expiringSoon": "Expiring Soon",
+    "tokensExpiring": "token package(s) expiring soon",
+    "noUpcomingClasses": "No upcoming classes scheduled"
+  },
+  "schedule": {
+    "title": "My Schedule",
+    "noUpcomingClasses": "No upcoming classes scheduled",
+    "instructor": "Instructor",
+    "start": "Start",
+    "end": "End"
+  },
+  "shop": {
+    "title": "Token Shop",
+    "addToCart": "Add to Cart",
+    "tokens": "Tokens",
+    "validity": "Validity",
+    "days": "days",
+    "price": "Price",
+    "shoppingCart": "Shopping Cart",
+    "cartEmpty": "Your cart is empty",
+    "remove": "Remove",
+    "couponCode": "Coupon code",
+    "apply": "Apply",
+    "couponApplied": "Coupon applied",
+    "subtotal": "Subtotal",
+    "discount": "Discount",
+    "total": "Total",
+    "paymentMethod": "Payment Method",
+    "creditCard": "Credit Card",
+    "fps": "FPS",
+    "cash": "Cash",
+    "checkout": "Checkout",
+    "processing": "Processing...",
+    "orderPlaced": "Order placed successfully! Awaiting payment confirmation from admin."
+  },
+  "profile": {
+    "title": "My Profile",
+    "role": "Role",
+    "fullName": "Full Name",
+    "mobile": "Mobile",
+    "idFirstFour": "ID (First 4 Digits)",
+    "notProvided": "Not provided"
+  },
+  "admin": {
+    "dashboard": {
+      "title": "Admin Dashboard",
+      "todaysRevenue": "Today's Revenue",
+      "todaysClasses": "Today's Classes",
+      "expiringSoon": "Expiring Soon",
+      "expiringStudents": "Students with expiring tokens",
+      "lowTokens": "Low Tokens",
+      "lowTokenStudents": "Students with ≤2 tokens",
+      "todaysClassesList": "Today's Classes",
+      "noClassesToday": "No classes scheduled today"
+    },
+    "users": {
+      "title": "User Management",
+      "searchPlaceholder": "Search by name or mobile...",
+      "name": "Name",
+      "mobile": "Mobile",
+      "role": "Role",
+      "tokens": "Tokens",
+      "joined": "Joined",
+      "actions": "Actions",
+      "editUser": "Edit User",
+      "fullName": "Full Name",
+      "saveChanges": "Save Changes",
+      "passwordReset": "Send password reset",
+      "passwordResetSent": "Password reset email sent (mock)",
+      "userUpdated": "User updated successfully"
+    },
+    "classes": {
+      "title": "Class Management",
+      "createClass": "Create Class",
+      "className": "Class Name",
+      "instructor": "Instructor",
+      "startTime": "Start Time",
+      "endTime": "End Time",
+      "capacity": "Capacity",
+      "internalCourse": "Internal Course (補課)",
+      "enrolled": "Enrolled",
+      "cancel": "Cancel",
+      "restore": "Restore",
+      "cancelled": "Cancelled",
+      "classCreated": "Class created successfully"
+    },
+    "reports": {
+      "title": "Reports",
+      "newUsers": "New Users",
+      "totalNewUsers": "Total new users in period",
+      "fromTrial": "from trial lessons",
+      "alerts": "Alerts",
+      "lowTokens": "Low Tokens",
+      "expiringSoon": "Expiring Soon",
+      "lowTokenStudents": "Students with Low Tokens (≤2)",
+      "noLowTokens": "No students with low tokens",
+      "remainingTokens": "Remaining Tokens",
+      "nearExpiry": "Students Near Expiry Date",
+      "noExpiring": "No students with expiring tokens",
+      "expiryDate": "Expiry Date"
+    },
+    "settings": {
+      "title": "Settings",
+      "selectPage": "Select Page",
+      "pageTitle": "Page Title",
+      "content": "Content",
+      "saveChanges": "Save Changes",
+      "saving": "Saving...",
+      "contentUpdated": "Content updated successfully"
+    }
+  },
+  "calendar": {
+    "title": "Class Calendar",
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "today": "Today",
+    "noLessons": "No lessons scheduled"
+  },
+  "footer": {
+    "company": "Company",
+    "resources": "Resources",
+    "legal": "Legal",
+    "latestNews": "Latest News",
+    "termsConditions": "Terms & Conditions",
+    "privacyPolicy": "Privacy Policy",
+    "copyright": "© 2024 Studio. All rights reserved."
+  }
+}
+
