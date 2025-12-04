@@ -82,10 +82,16 @@
     "email": "電子郵件",
     "phone": "電話",
     "address": "地址",
+    "addressTC": "九龍新蒲崗六合街21號Trium Lab七樓 (前Artisan Lab)",
+    "addressEN": "7/f, Trium Lab, 21 Luk Hop Street, San Po Kong, Kowloon, Hong Kong",
     "sendMessage": "發送訊息給我們",
     "name": "姓名",
     "message": "訊息",
-    "send": "發送訊息"
+    "send": "發送訊息",
+    "serviceHours": "The YARD 租場及查詢熱線服務時間",
+    "serviceHoursWeekday": "星期一至五：下午4 - 11時",
+    "serviceHoursWeekend": "星期六、日及公眾假期： 下午12 -11時",
+    "serviceHoursNote": "其他時間可致電留言或 Whatsapp, 我們會盡快回覆！"
   },
   "terms": {
     "title": "條款與條件",

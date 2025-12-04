@@ -16,7 +16,6 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
 
   const navItems = [
     { path: '/', label: t('nav.home') },
-    { path: '/about', label: t('nav.about') },
     { path: '/calendar', label: t('nav.calendar') },
     { path: '/news', label: t('nav.news') },
     { path: '/contact', label: t('nav.contact') },
@@ -110,7 +109,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('footer.company')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/about" className="text-sm text-gray-600 hover:text-gray-900">{t('nav.about')}</Link></li>
+                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-600 hover:text-gray-900">{t('nav.about')}</a></li>
                 <li><Link to="/contact" className="text-sm text-gray-600 hover:text-gray-900">{t('nav.contact')}</Link></li>
               </ul>
             </div>

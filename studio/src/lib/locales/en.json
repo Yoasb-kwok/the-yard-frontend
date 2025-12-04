@@ -82,10 +82,16 @@
     "email": "Email",
     "phone": "Phone",
     "address": "Address",
+    "addressTC": "九龍新蒲崗六合街21號Trium Lab七樓 (前Artisan Lab)",
+    "addressEN": "7/f, Trium Lab, 21 Luk Hop Street, San Po Kong, Kowloon, Hong Kong",
     "sendMessage": "Send us a message",
     "name": "Name",
     "message": "Message",
-    "send": "Send Message"
+    "send": "Send Message",
+    "serviceHours": "Our reservation and enquiry hotline service hours",
+    "serviceHoursWeekday": "Mon to Fri: 4 - 11pm",
+    "serviceHoursWeekend": "Sat, Sun & Public Holiday: 12nn- 11pm",
+    "serviceHoursNote": "Please leave your voice message or WhatsApp us during non-service hours. We will respond asap!"
   },
   "terms": {
     "title": "Terms and Conditions",
