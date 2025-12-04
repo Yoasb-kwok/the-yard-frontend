@@ -8,6 +8,7 @@ import CalendarPage from './pages/public/CalendarPage';
 import NewsPage from './pages/public/NewsPage';
 import NewsDetailPage from './pages/public/NewsDetailPage';
 import ContactPage from './pages/public/ContactPage';
+import TokenPackagePage from './pages/public/TokenPackagePage';
 import TermsPage from './pages/public/TermsPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 import TrialPage from './pages/public/TrialPage';
@@ -34,6 +35,7 @@ function App() {
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/news/:id" element={<NewsDetailPage />} />
+          <Route path="/token-package" element={<TokenPackagePage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />

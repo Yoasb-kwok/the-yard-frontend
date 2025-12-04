@@ -2,8 +2,9 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, BookOpen, Users, BarChart, Settings, Menu, X } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import logoImage from '../assets/images/the-yard-logo.png';
 
 interface LayoutProps {
   children: ReactNode;
@@ -35,9 +36,18 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;
 
+  // Public navigation items for top menu bar
+  const publicNavItems = [
+    { path: '/', label: t('nav.home') },
+    { path: '/calendar', label: t('nav.calendar') },
+    { path: '/news', label: t('nav.news') },
+    { path: '/token-package', label: t('nav.tokenPackage') },
+    { path: '/contact', label: t('nav.contact') },
+  ];
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -45,54 +55,81 @@ export default function Layout({ children }: LayoutProps) {
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="lg:hidden mr-3 p-2 text-gray-600 hover:text-gray-900"
               >
-                <Menu className="h-6 w-6" />
+                <PanelLeft className="h-6 w-6" />
               </button>
               <Link to={isAdmin ? '/admin' : '/dashboard'} className="flex items-center">
-                <BookOpen className="h-8 w-8 text-primary" />
-                <span className="ml-2 text-xl font-semibold text-gray-900">Studio</span>
+                <img src={logoImage} alt="The Yard Logo" className="h-8 w-auto" />
               </Link>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="hidden sm:block">
-                <span className="text-sm text-gray-600">
-                  {profile?.full_name} {isAdmin && <span className="text-primary font-medium">(Admin)</span>}
-                </span>
+            {/* Desktop Navigation */}
+            <div className="hidden md:flex items-center space-x-4">
+              {publicNavItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`text-sm font-medium transition-colors ${
+                    isActive(item.path)
+                      ? 'text-primary'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <LanguageSwitcher />
+              <div className="hidden sm:flex items-center text-sm text-gray-600">
+                {profile?.full_name} {isAdmin && <span className="text-primary font-medium ml-1">(Admin)</span>}
               </div>
+              <button
+                onClick={signOut}
+                className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
+              >
+                {t('nav.signOut')}
+              </button>
+            </div>
+
+            {/* Mobile menu button */}
+            <div className="md:hidden flex items-center space-x-2">
               <LanguageSwitcher />
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2 text-gray-600 hover:text-gray-900"
+                className="p-2 text-gray-600 hover:text-gray-900"
               >
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </button>
-              <div className="hidden lg:flex items-center space-x-4">
-                <button
-                  onClick={signOut}
-                  className="inline-flex items-center px-3 py-2 text-sm text-gray-700 hover:text-gray-900"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  {t('nav.signOut')}
-                </button>
-              </div>
             </div>
           </div>
 
           {/* Mobile menu dropdown */}
           {mobileMenuOpen && (
-            <div className="lg:hidden border-t">
+            <div className="md:hidden border-t">
               <div className="px-2 pt-2 pb-3 space-y-1">
-                <div className="px-3 py-2 text-sm text-gray-700">
+                <div className="px-3 py-2 text-sm text-gray-700 border-b mb-2">
                   {profile?.full_name} {isAdmin && <span className="text-primary font-medium">(Admin)</span>}
                 </div>
+                {/* Public Navigation Items */}
+                {publicNavItems.map((item) => (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`block px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive(item.path)
+                        ? 'bg-primary-lighter text-primary'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
                 <button
                   onClick={() => {
                     signOut();
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-gray-900"
+                  className="w-full text-left px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md"
                 >
-                  <LogOut className="h-4 w-4 mr-2" />
                   {t('nav.signOut')}
                 </button>
               </div>
@@ -101,7 +138,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </nav>
 
-      <div className="flex">
+      <div className="flex pt-16">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block w-64 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
           <nav className="mt-5 px-2 space-y-1">

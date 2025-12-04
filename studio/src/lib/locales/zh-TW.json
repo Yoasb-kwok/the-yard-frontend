@@ -4,6 +4,7 @@
     "about": "關於我們",
     "calendar": "課程表",
     "news": "最新消息",
+    "tokenPackage": "代幣套票",
     "contact": "聯絡我們",
     "login": "登入",
     "dashboard": "儀表板",
@@ -89,8 +90,31 @@
       },
       "3": {
         "title": "節日特別優惠",
-        "content": "這個節日期間，我們為代幣套裝提供特別折扣。購買高級套裝可享8折優惠！限時優惠，有效期至月底。",
-        "fullContent": "這個節日期間，我們為代幣套裝提供特別折扣。購買高級套裝可享8折優惠！限時優惠，有效期至月底。\n\n不要錯過這些超值優惠！訪問我們的商店或聯繫我們了解更多信息。"
+        "content": "這個節日期間，我們為代幣套票提供特別折扣。購買高級套裝可享8折優惠！限時優惠，有效期至月底。",
+        "fullContent": "這個節日期間，我們為代幣套票提供特別折扣。購買高級套裝可享8折優惠！限時優惠，有效期至月底。\n\n不要錯過這些超值優惠！訪問我們的商店或聯繫我們了解更多信息。"
+      }
+    }
+  },
+  "tokenPackage": {
+    "title": "代幣套票",
+    "subtitle": "選擇適合您需求的代幣套票。登入後即可購買，開始您的旅程。",
+    "tokens": "代幣",
+    "validity": "有效期",
+    "days": "天",
+    "price": "價格",
+    "loginToPurchase": "登入購買",
+    "packages": {
+      "1": {
+        "name": "入門套裝",
+        "description": "適合初學者"
+      },
+      "2": {
+        "name": "標準套裝",
+        "description": "適合經常上課的學生"
+      },
+      "3": {
+        "name": "高級套裝",
+        "description": "適合經常使用的訪客"
       }
     }
   },
@@ -152,11 +176,11 @@
     "availableTokens": "可用代幣",
     "upcomingClasses": "即將到來的課程",
     "classesScheduled": "已安排的課程",
-    "yourTokenPackages": "您的代幣套裝",
-    "noActiveTokens": "沒有活躍的代幣套裝",
+    "yourTokenPackages": "您的代幣套票",
+    "noActiveTokens": "沒有活躍的代幣套票",
     "expires": "到期",
     "expiringSoon": "即將到期",
-    "tokensExpiring": "代幣套裝即將到期",
+    "tokensExpiring": "代幣套票即將到期",
     "noUpcomingClasses": "沒有即將到來的課程"
   },
   "schedule": {

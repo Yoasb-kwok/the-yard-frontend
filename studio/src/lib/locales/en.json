@@ -4,6 +4,7 @@
     "about": "About Us",
     "calendar": "Calendar",
     "news": "News",
+    "tokenPackage": "Token Package",
     "contact": "Contact",
     "login": "Sign In",
     "dashboard": "Dashboard",
@@ -91,6 +92,29 @@
         "title": "Holiday Special Promotion",
         "content": "This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.",
         "fullContent": "This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.\n\nDon't miss out on these amazing deals! Visit our shop or contact us for more information."
+      }
+    }
+  },
+  "tokenPackage": {
+    "title": "Token Packages",
+    "subtitle": "Choose the perfect token package for your needs. Login to purchase and start your journey with us.",
+    "tokens": "Tokens",
+    "validity": "Validity",
+    "days": "days",
+    "price": "Price",
+    "loginToPurchase": "Login to Purchase",
+    "packages": {
+      "1": {
+        "name": "Starter Pack",
+        "description": "Perfect for beginners"
+      },
+      "2": {
+        "name": "Regular Pack",
+        "description": "Great value for regular students"
+      },
+      "3": {
+        "name": "Premium Pack",
+        "description": "Best value for frequent visitors"
       }
     }
   },

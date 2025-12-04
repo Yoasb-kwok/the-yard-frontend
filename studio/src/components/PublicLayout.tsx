@@ -30,6 +30,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
     { path: '/', label: t('nav.home') },
     { path: '/calendar', label: t('nav.calendar') },
     { path: '/news', label: t('nav.news') },
+    { path: '/token-package', label: t('nav.tokenPackage') },
     { path: '/contact', label: t('nav.contact') },
   ];
 
