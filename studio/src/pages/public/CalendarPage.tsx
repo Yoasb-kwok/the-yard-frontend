@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X } from 'lucide-react';
+import { theme } from '../../lib/theme';
 
 interface Lesson {
   id: string;
@@ -192,28 +193,28 @@ export default function CalendarPage() {
   const getLocationColors = (location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui') => {
     const colorMap = {
       sanpokong: {
-        primary: '#007257', // Primary green for 新蒲崗
-        dark: '#005a44',
-        light: '#008a6a',
-        lighter: '#e6f5f2',
+        primary: '#10b981', // Light green for 新蒲崗
+        dark: '#059669',
+        light: '#34d399',
+        lighter: '#d1fae5',
       },
       causewaybay: {
-        primary: '#2563eb', // Blue
-        dark: '#1e40af',
-        light: '#3b82f6',
-        lighter: '#dbeafe',
+        primary: '#a67c52', // Light brown for 銅鑼灣
+        dark: '#8b6f47',
+        light: '#c49b6a',
+        lighter: '#f0e6d2',
       },
       fotan: {
-        primary: '#7c3aed', // Purple
-        dark: '#5b21b6',
-        light: '#8b5cf6',
-        lighter: '#ede9fe',
+        primary: '#f97316', // Light orange for 火炭
+        dark: '#ea580c',
+        light: '#fb923c',
+        lighter: '#ffedd5',
       },
       sheungshui: {
-        primary: '#ea580c', // Orange
-        dark: '#c2410c',
-        light: '#f97316',
-        lighter: '#ffedd5',
+        primary: '#3b82f6', // Light blue for 上水
+        dark: '#2563eb',
+        light: '#60a5fa',
+        lighter: '#dbeafe',
       },
     };
     return colorMap[location];
@@ -328,10 +329,7 @@ export default function CalendarPage() {
                     <img
                       src={getTutorImageUrl(lesson.instructor)}
                       alt={lesson.instructor}
-                      className="w-20 h-20 rounded-full object-cover mr-4 border-4"
-                      style={{
-                        borderColor: locationColors.lighter,
-                      }}
+                      className="w-20 h-20 rounded-full object-cover mr-4"
                     />
                     <div>
                       <p className="text-base font-bold text-gray-900">{lesson.instructor}</p>
@@ -339,12 +337,7 @@ export default function CalendarPage() {
                   </div>
 
                   <div className="space-y-4 mb-6 flex-1">
-                    <div 
-                      className="flex items-center text-gray-800 rounded-lg p-3"
-                      style={{
-                        backgroundColor: locationColors.lighter,
-                      }}
-                    >
+                    <div className="flex items-center text-gray-800 rounded-lg p-3">
                       <Clock 
                         className="h-5 w-5 mr-3 flex-shrink-0" 
                         style={{ color: locationColors.primary }}
@@ -353,12 +346,7 @@ export default function CalendarPage() {
                         {formatTime(new Date(lesson.start_time))} - {formatTime(new Date(lesson.end_time))}
                       </span>
                     </div>
-                    <div 
-                      className="flex items-center text-gray-800 rounded-lg p-3"
-                      style={{
-                        backgroundColor: locationColors.lighter,
-                      }}
-                    >
+                    <div className="flex items-center text-gray-800 rounded-lg p-3">
                       <MapPin 
                         className="h-5 w-5 mr-3 flex-shrink-0" 
                         style={{ color: locationColors.primary }}
@@ -382,13 +370,13 @@ export default function CalendarPage() {
                     }}
                     className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105"
                     style={{
-                      backgroundColor: locationColors.primary,
+                      backgroundColor: theme.colors.primary,
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = locationColors.dark;
+                      e.currentTarget.style.backgroundColor = theme.colors.primaryDark;
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = locationColors.primary;
+                      e.currentTarget.style.backgroundColor = theme.colors.primary;
                     }}
                   >
                     {t('home.bookTrial')}
@@ -797,10 +785,7 @@ export default function CalendarPage() {
                         <img
                           src={getTutorImageUrl(selectedLesson.instructor)}
                           alt={selectedLesson.instructor}
-                          className="w-20 h-20 rounded-full object-cover mr-4 border-4"
-                          style={{
-                            borderColor: locationColors.lighter,
-                          }}
+                          className="w-20 h-20 rounded-full object-cover mr-4"
                         />
                         <div>
                           <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
@@ -810,12 +795,7 @@ export default function CalendarPage() {
 
                       {/* Class Details */}
                       <div className="space-y-4 mb-6">
-                        <div
-                          className="flex items-center text-gray-800 rounded-lg p-3"
-                          style={{
-                            backgroundColor: locationColors.lighter,
-                          }}
-                        >
+                        <div className="flex items-center text-gray-800 rounded-lg p-3">
                           <Calendar
                             className="h-5 w-5 mr-3 flex-shrink-0"
                             style={{ color: locationColors.primary }}
@@ -833,12 +813,7 @@ export default function CalendarPage() {
                           </div>
                         </div>
 
-                        <div
-                          className="flex items-center text-gray-800 rounded-lg p-3"
-                          style={{
-                            backgroundColor: locationColors.lighter,
-                          }}
-                        >
+                        <div className="flex items-center text-gray-800 rounded-lg p-3">
                           <Clock
                             className="h-5 w-5 mr-3 flex-shrink-0"
                             style={{ color: locationColors.primary }}
@@ -851,12 +826,7 @@ export default function CalendarPage() {
                           </div>
                         </div>
 
-                        <div
-                          className="flex items-center text-gray-800 rounded-lg p-3"
-                          style={{
-                            backgroundColor: locationColors.lighter,
-                          }}
-                        >
+                        <div className="flex items-center text-gray-800 rounded-lg p-3">
                           <MapPin
                             className="h-5 w-5 mr-3 flex-shrink-0"
                             style={{ color: locationColors.primary }}
