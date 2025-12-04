@@ -26,6 +26,7 @@ import ProfilePage from './pages/student/ProfilePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
+import InstructorsPage from './pages/admin/InstructorsPage';
 import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import CouponsPage from './pages/admin/CouponsPage';
@@ -105,6 +106,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <ClassesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/instructors"
+            element={
+              <ProtectedRoute requireAdmin>
+                <InstructorsPage />
               </ProtectedRoute>
             }
           />

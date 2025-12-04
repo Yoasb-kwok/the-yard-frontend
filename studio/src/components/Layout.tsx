@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -60,6 +60,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin', icon: Home, label: t('nav.dashboard') },
     { path: '/admin/users', icon: Users, label: t('nav.users') },
     { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
+    { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
     { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
     { path: '/admin/reports', icon: BarChart, label: t('nav.reports') },
     { path: '/admin/settings', icon: Settings, label: t('nav.settings') },
