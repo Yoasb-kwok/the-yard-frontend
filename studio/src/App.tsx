@@ -28,7 +28,6 @@ import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
 import ClassAttendancePage from './pages/admin/ClassAttendancePage';
 import InstructorsPage from './pages/admin/InstructorsPage';
-import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import CouponsPage from './pages/admin/CouponsPage';
 import UserPurchaseHistoryPage from './pages/admin/UserPurchaseHistoryPage';
@@ -128,14 +127,6 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <InstructorsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/reports"
-            element={
-              <ProtectedRoute requireAdmin>
-                <ReportsPage />
               </ProtectedRoute>
             }
           />

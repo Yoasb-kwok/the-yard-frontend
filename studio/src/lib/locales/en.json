@@ -329,6 +329,7 @@
       "title": "Dashboard",
       "todaysRevenue": "This Month's Revenue",
       "todaysClasses": "Today's Classes",
+      "newUsersThisMonth": "This Month's New Users",
       "expiringSoon": "Expiring Soon",
       "expiringStudents": "Students with expiring tokens",
       "lowTokens": "Low Tokens",

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { Calendar, DollarSign, Users, AlertCircle, LayoutDashboard, Filter } from 'lucide-react';
+import { Calendar, DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus } from 'lucide-react';
 
 interface TodayClass {
   id: string;
@@ -17,7 +17,7 @@ interface TodayClass {
 
 interface Stats {
   todayRevenue: number;
-  todayClasses: number;
+  newUsersThisMonth: number;
   expiringStudents: number;
   lowTokenStudents: number;
 }
@@ -62,7 +62,7 @@ export default function AdminDashboard() {
   const [locationFilter, setLocationFilter] = useState<'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui'>('all');
   const [stats, setStats] = useState<Stats>({
     todayRevenue: 0,
-    todayClasses: 0,
+    newUsersThisMonth: 0,
     expiringStudents: 0,
     lowTokenStudents: 0,
   });
@@ -99,7 +99,7 @@ export default function AdminDashboard() {
     setTodayClasses(MOCK_TODAY_CLASSES);
     setStats({
       todayRevenue: 1250.00,
-      todayClasses: MOCK_TODAY_CLASSES.length,
+      newUsersThisMonth: 12,
       expiringStudents: 3,
       lowTokenStudents: 5,
     });
@@ -137,10 +137,10 @@ export default function AdminDashboard() {
 
           <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.todaysClasses')}</h3>
-              <Calendar className="h-5 w-5 text-primary" />
+              <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.newUsersThisMonth')}</h3>
+              <UserPlus className="h-5 w-5 text-primary" />
             </div>
-            <div className="text-2xl font-bold text-gray-900">{stats.todayClasses}</div>
+            <div className="text-2xl font-bold text-gray-900">{stats.newUsersThisMonth}</div>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-6">
