@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface BannerSlide {
   image: string;
@@ -59,28 +58,6 @@ export default function BannerSlider({ slides, autoPlayInterval = 5000 }: Banner
           </div>
         ))}
       </div>
-
-      {/* Navigation Arrows */}
-      {slides.length > 1 && (
-        <>
-          <button
-            onClick={goToPrevious}
-            className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-2 rounded-full shadow-lg transition-all z-20"
-            aria-label="Previous slide"
-            type="button"
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-          <button
-            onClick={goToNext}
-            className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 p-2 rounded-full shadow-lg transition-all z-20"
-            aria-label="Next slide"
-            type="button"
-          >
-            <ChevronRight className="h-6 w-6" />
-          </button>
-        </>
-      )}
 
       {/* Dots Indicator */}
       {slides.length > 1 && (

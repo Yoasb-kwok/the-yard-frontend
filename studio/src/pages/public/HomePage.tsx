@@ -119,23 +119,24 @@ export default function HomePage() {
         <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
           <div className="text-center px-4 sm:px-6 lg:px-8 pointer-events-auto">
             <h1 className="text-5xl font-bold mb-6 text-white drop-shadow-lg">
-              {t('home.title')}
+              <a
+                href="http://wa.me/+85292299875"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline transition-all"
+              >
+                BOOKING WHATSAPP: +852 9229 9875
+              </a>
             </h1>
             <p className="text-xl mb-8 text-white/90 max-w-2xl mx-auto drop-shadow-md">
               {t('home.subtitle')}
             </p>
             <div className="flex justify-center gap-4 flex-wrap">
               <Link
-                to="/trial"
+                to="/calendar?view=day"
                 className="bg-white text-primary px-8 py-3 rounded-lg font-semibold hover:bg-primary-lighter transition-colors shadow-lg"
               >
-                {t('home.bookTrial')}
-              </Link>
-              <Link
-                to="/login"
-                className="bg-primary-dark text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary transition-colors border border-white/50 shadow-lg"
-              >
-                {t('home.signIn')}
+                {t('nav.calendar')}
               </Link>
             </div>
           </div>
@@ -251,13 +252,15 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <h3 className="text-2xl font-bold text-white mb-3">{t('home.roomRental')}</h3>
-                <Link
-                  to="/contact"
+                <a
+                  href="https://www.theyard.com.hk/room-rental--rate.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
                 >
                   {t('home.exploreNow')}
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -273,13 +276,15 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <h3 className="text-2xl font-bold text-white mb-3">{t('home.eventChoreography')}</h3>
-                <Link
-                  to="/contact"
+                <a
+                  href="https://www.theyard.com.hk/event-production.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
                 >
                   {t('home.exploreNow')}
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -295,13 +300,15 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <h3 className="text-2xl font-bold text-white mb-3">{t('home.stageProduction')}</h3>
-                <Link
-                  to="/contact"
+                <a
+                  href="https://www.theyard.com.hk/event-production.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
                 >
                   {t('home.exploreNow')}
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -317,13 +324,15 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <h3 className="text-2xl font-bold text-white mb-3">{t('home.workshopsTrainings')}</h3>
-                <Link
-                  to="/contact"
+                <a
+                  href="https://www.theyard.com.hk/event-highlights.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
                 >
                   {t('home.exploreNow')}
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </div>
             </div>
           </div>
@@ -339,13 +348,15 @@ export default function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 right-0 p-6">
                 <h3 className="text-2xl font-bold text-white mb-3">{t('home.kidsDanceCourses')}</h3>
-                <Link
-                  to="/contact"
+                <a
+                  href="https://www.theyard.com.hk/yayakids.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
                 >
                   {t('home.exploreNow')}
                   <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
+                </a>
               </div>
             </div>
           </div>
