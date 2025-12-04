@@ -1,8 +1,9 @@
 import { ReactNode, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Menu, X, Mail, Facebook, Instagram } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import { useAuth } from '../contexts/AuthContext';
 import logoImage from '../assets/images/the-yard-logo.png';
 
 // WhatsApp Icon Component
@@ -24,7 +25,14 @@ interface PublicLayoutProps {
 export default function PublicLayout({ children }: PublicLayoutProps) {
   const { t } = useTranslation();
   const location = useLocation();
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
 
   const navItems = [
     { path: '/', label: t('nav.home') },
@@ -63,12 +71,21 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 </Link>
               ))}
               <LanguageSwitcher />
-              <Link
-                to="/login"
-                className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
-              >
-                {t('nav.login')}
-              </Link>
+              {user ? (
+                <button
+                  onClick={handleSignOut}
+                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('nav.signOut')}
+                </button>
+              ) : (
+                <Link
+                  to="/login"
+                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('nav.login')}
+                </Link>
+              )}
             </div>
 
             {/* Mobile menu button */}
@@ -101,13 +118,25 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                     {item.label}
                   </Link>
                 ))}
-                <Link
-                  to="/login"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="block px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
-                >
-                  {t('nav.login')}
-                </Link>
+                {user ? (
+                  <button
+                    onClick={() => {
+                      handleSignOut();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
+                  >
+                    {t('nav.signOut')}
+                  </button>
+                ) : (
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
+                  >
+                    {t('nav.login')}
+                  </Link>
+                )}
               </div>
             </div>
           )}
