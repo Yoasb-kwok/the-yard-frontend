@@ -167,7 +167,9 @@
     "submitting": "Submitting...",
     "applicationSubmitted": "Application Submitted!",
     "applicationSubmittedDesc": "We've sent you an email confirmation. Please check your inbox to set your password and activate your account.",
+    "applicationSubmittedDescLoggedIn": "Your trial lesson application has been submitted successfully! We will review your application and contact you soon.",
     "redirecting": "Redirecting to login...",
+    "redirectingToDashboard": "Redirecting to dashboard...",
     "free": "FREE"
   },
   "login": {

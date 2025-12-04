@@ -167,7 +167,9 @@
     "submitting": "提交中...",
     "applicationSubmitted": "申請已提交！",
     "applicationSubmittedDesc": "我們已向您發送電子郵件確認。請檢查您的收件箱以設置密碼並激活您的帳戶。",
+    "applicationSubmittedDescLoggedIn": "您的試堂申請已成功提交！我們將審核您的申請並盡快與您聯繫。",
     "redirecting": "正在重定向到登入頁面...",
+    "redirectingToDashboard": "正在重定向到儀表板...",
     "free": "免費"
   },
   "login": {

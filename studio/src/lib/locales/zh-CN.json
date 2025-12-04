@@ -167,7 +167,9 @@
     "submitting": "提交中...",
     "applicationSubmitted": "申请已提交！",
     "applicationSubmittedDesc": "我们已向您发送电子邮件确认。请检查您的收件箱以设置密码并激活您的账户。",
+    "applicationSubmittedDescLoggedIn": "您的试堂申请已成功提交！我们将审核您的申请并尽快与您联系。",
     "redirecting": "正在重定向到登录页面...",
+    "redirectingToDashboard": "正在重定向到仪表板...",
     "free": "免费"
   },
   "login": {

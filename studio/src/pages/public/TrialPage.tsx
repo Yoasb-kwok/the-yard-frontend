@@ -27,8 +27,35 @@ export default function TrialPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [wasLoggedIn, setWasLoggedIn] = useState(false);
   const navigate = useNavigate();
-  const { signUp } = useAuth();
+  const { signUp, user, profile } = useAuth();
+  
+  // Check if user is logged in
+  const isLoggedIn = !!user && !!profile;
+
+  // Extract country code and mobile number
+  const getMobileParts = (mobile: string | null): { countryCode: string; number: string } => {
+    if (!mobile) {
+      return { countryCode: '', number: '' };
+    }
+    
+    // Check if mobile starts with country codes: 852, 853, or 86
+    if (mobile.startsWith('852')) {
+      return { countryCode: '+852', number: mobile.substring(3) };
+    } else if (mobile.startsWith('853')) {
+      return { countryCode: '+853', number: mobile.substring(3) };
+    } else if (mobile.startsWith('86')) {
+      return { countryCode: '+86', number: mobile.substring(2) };
+    }
+    
+    // If no country code detected but number exists, default to +852 (Hong Kong)
+    if (mobile.length > 0) {
+      return { countryCode: '+852', number: mobile };
+    }
+    
+    return { countryCode: '', number: '' };
+  };
 
   // Generate tutor profile image URL from UI Avatars
   const getTutorImageUrl = (name: string): string => {
@@ -60,14 +87,39 @@ export default function TrialPage() {
     e.preventDefault();
     setError('');
 
-    // Validation
-    if (idLastFour.length !== 4 || !/^[A-Za-z0-9]{4}$/.test(idLastFour)) {
-      setError(t('register.invalidIdCard'));
+    if (!classData) {
+      setError(t('trial.noClassSelected'));
       return;
     }
 
-    if (!classData) {
-      setError(t('trial.noClassSelected'));
+    // If logged in, use user's information
+    if (isLoggedIn && user && profile) {
+      // For logged-in users, we just need to submit the application
+      // (In a real app, this would be an API call to apply for the trial)
+      setLoading(true);
+      setWasLoggedIn(true);
+      try {
+        // Simulate API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setSuccess(true);
+        setTimeout(() => {
+          navigate('/dashboard');
+        }, 3000);
+      } catch (err: unknown) {
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError(t('common.error'));
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    // For non-logged-in users, validate and register
+    if (idLastFour.length !== 4 || !/^[A-Za-z0-9]{4}$/.test(idLastFour)) {
+      setError(t('register.invalidIdCard'));
       return;
     }
 
@@ -104,9 +156,14 @@ export default function TrialPage() {
               {t('trial.applicationSubmitted')}
             </h2>
             <p className="text-gray-600 mb-4">
-              {t('trial.applicationSubmittedDesc')}
+              {wasLoggedIn 
+                ? t('trial.applicationSubmittedDescLoggedIn')
+                : t('trial.applicationSubmittedDesc')
+              }
             </p>
-            <p className="text-sm text-gray-500">{t('trial.redirecting')}</p>
+            <p className="text-sm text-gray-500">
+              {wasLoggedIn ? t('trial.redirectingToDashboard') : t('trial.redirecting')}
+            </p>
           </div>
         </div>
       </PublicLayout>
@@ -192,11 +249,37 @@ export default function TrialPage() {
               </div>
             </div>
 
-            {/* Left Section - Registration Form */}
+            {/* Left Section - Registration Form or Apply Button */}
             <div className="bg-white rounded-lg shadow-md p-6">
               <h3 className="text-xl font-bold text-gray-900 mb-6">
-                {t('trial.registrationForm')}
+                {isLoggedIn ? t('trial.submitApplication') : t('trial.registrationForm')}
               </h3>
+
+              {isLoggedIn && profile && user && (
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">{t('register.fullName')}</p>
+                    <p className="text-base font-semibold text-gray-900">{profile.full_name}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">{t('register.email')}</p>
+                    <p className="text-base font-semibold text-gray-900">{user.email}</p>
+                  </div>
+                  {profile.mobile && (
+                    <div>
+                      <p className="text-sm text-gray-600 mb-2">{t('register.mobile')}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-semibold text-gray-900">
+                          {getMobileParts(profile.mobile).countryCode}
+                        </span>
+                        <span className="text-base font-semibold text-gray-900">
+                          {getMobileParts(profile.mobile).number}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <form className="space-y-6" onSubmit={handleSubmit}>
                 {error && (
@@ -205,89 +288,91 @@ export default function TrialPage() {
                   </div>
                 )}
 
-                <div className="rounded-md shadow-sm space-y-4">
-                  <div>
-                    <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('register.fullName')}
-                    </label>
-                    <input
-                      id="fullName"
-                      name="fullName"
-                      type="text"
-                      autoComplete="name"
-                      required
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                      placeholder={t('register.fullName')}
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="idLastFour" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('register.idLastFour')}
-                    </label>
-                    <input
-                      id="idLastFour"
-                      name="idLastFour"
-                      type="text"
-                      maxLength={4}
-                      pattern="[A-Za-z0-9]{4}"
-                      required
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm uppercase"
-                      placeholder={t('register.idLastFour')}
-                      value={idLastFour}
-                      onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('register.mobile')}
-                    </label>
-                    <div className="flex rounded-md shadow-sm">
-                      <select
-                        id="countryCode"
-                        name="countryCode"
-                        value={countryCode}
-                        onChange={(e) => setCountryCode(e.target.value)}
-                        className="appearance-none relative block px-3 py-2 border border-gray-300 border-r-0 rounded-l-md bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-primary focus:border-primary focus:z-10"
-                      >
-                        <option value="852">+852</option>
-                        <option value="86">+86</option>
-                        <option value="853">+853</option>
-                      </select>
+                {!isLoggedIn && (
+                  <div className="rounded-md shadow-sm space-y-4">
+                    <div>
+                      <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('register.fullName')}
+                      </label>
                       <input
-                        id="mobile"
-                        name="mobile"
-                        type="tel"
-                        autoComplete="tel"
+                        id="fullName"
+                        name="fullName"
+                        type="text"
+                        autoComplete="name"
                         required
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-r-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        placeholder={t('register.mobile')}
-                        value={mobile}
-                        onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('register.fullName')}
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="idLastFour" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('register.idLastFour')}
+                      </label>
+                      <input
+                        id="idLastFour"
+                        name="idLastFour"
+                        type="text"
+                        maxLength={4}
+                        pattern="[A-Za-z0-9]{4}"
+                        required
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm uppercase"
+                        placeholder={t('register.idLastFour')}
+                        value={idLastFour}
+                        onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('register.mobile')}
+                      </label>
+                      <div className="flex rounded-md shadow-sm">
+                        <select
+                          id="countryCode"
+                          name="countryCode"
+                          value={countryCode}
+                          onChange={(e) => setCountryCode(e.target.value)}
+                          className="appearance-none relative block px-3 py-2 border border-gray-300 border-r-0 rounded-l-md bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-primary focus:border-primary focus:z-10"
+                        >
+                          <option value="852">+852</option>
+                          <option value="86">+86</option>
+                          <option value="853">+853</option>
+                        </select>
+                        <input
+                          id="mobile"
+                          name="mobile"
+                          type="tel"
+                          autoComplete="tel"
+                          required
+                          className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-r-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                          placeholder={t('register.mobile')}
+                          value={mobile}
+                          onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('register.email')}
+                      </label>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        required
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('register.email')}
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
                       />
                     </div>
                   </div>
-
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('register.email')}
-                    </label>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      autoComplete="email"
-                      required
-                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                      placeholder={t('register.email')}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div>
                   <button
