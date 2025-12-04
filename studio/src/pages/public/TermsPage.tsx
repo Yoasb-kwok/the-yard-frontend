@@ -24,7 +24,7 @@ export default function TermsPage() {
   if (loading) {
     return (
       <PublicLayout>
-        <div className="max-w-4xl mx-auto px-4 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         </div>
       </PublicLayout>
@@ -33,7 +33,7 @@ export default function TermsPage() {
 
   return (
     <PublicLayout>
-      <div className="max-w-4xl mx-auto px-4 py-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">{content.title}</h1>
         <div className="bg-white rounded-lg shadow-md p-8">
           <div className="prose prose-lg max-w-none text-gray-700 whitespace-pre-line leading-relaxed">

@@ -5,32 +5,24 @@ import { Mail, MapPin, Facebook, Instagram, Clock } from 'lucide-react';
 import building1Image from '../../assets/images/building1.jpg';
 import building2Image from '../../assets/images/building2.jpg';
 
-// Dummy data
-const DUMMY_CONTENT = {
-  title: 'Contact Us',
-  content: 'We would love to hear from you! Get in touch with us through any of the methods below.',
-};
-
 export default function ContactPage() {
   const { t, i18n } = useTranslation();
-  const [content, setContent] = useState({ title: '', content: '' });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadContent();
-  }, []);
+  }, [t]);
 
   async function loadContent() {
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 300));
-    setContent(DUMMY_CONTENT);
     setLoading(false);
   }
 
   if (loading) {
     return (
       <PublicLayout>
-        <div className="max-w-4xl mx-auto px-4 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         </div>
       </PublicLayout>
@@ -39,8 +31,8 @@ export default function ContactPage() {
 
   return (
     <PublicLayout>
-      <div className="max-w-6xl mx-auto px-4 py-16">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">{content.title}</h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <h1 className="text-4xl font-bold text-gray-900 mb-8">{t('contact.title')}</h1>
 
         <div className="grid md:grid-cols-2 gap-8 mb-8">
           {/* Contact Information Card */}
