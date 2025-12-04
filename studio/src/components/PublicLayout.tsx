@@ -130,6 +130,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
               <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('footer.resources')}</h3>
               <ul className="space-y-2">
                 <li><Link to="/news" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.latestNews')}</Link></li>
+                <li><Link to="/faq" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.faq')}</Link></li>
               </ul>
             </div>
             <div>
