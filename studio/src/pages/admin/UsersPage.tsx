@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
-import { Search, Edit, Mail, Calendar, Package } from 'lucide-react';
+import { Search, Edit, Mail, Calendar, Package, Receipt, Clock } from 'lucide-react';
 
 interface UserToken {
   remaining_tokens: number;
@@ -257,6 +257,20 @@ export default function UsersPage() {
                             <Package className="h-4 w-4" />
                           </button>
                         )}
+                        <button
+                          onClick={() => navigate(`/admin/users/${user.id}/purchase-history`)}
+                          className="text-blue-600 hover:text-blue-800 mr-3"
+                          title={t('admin.users.purchaseHistory')}
+                        >
+                          <Receipt className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => navigate(`/admin/users/${user.id}/schedule`)}
+                          className="text-purple-600 hover:text-purple-800 mr-3"
+                          title={t('admin.users.upcomingClasses')}
+                        >
+                          <Clock className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={() => sendPasswordReset(user.id)}
                           className="text-gray-600 hover:text-gray-800"

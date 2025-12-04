@@ -28,6 +28,8 @@
     "cancel": "Cancel",
     "delete": "Delete",
     "edit": "Edit",
+    "to": "to",
+    "back": "Back",
     "create": "Create",
     "update": "Update",
     "submit": "Submit",
@@ -360,7 +362,11 @@
       "tokenPackage": "Token Package",
       "tokenExpiryDateUpdated": "Token expiry date updated successfully",
       "assignTokens": "Assign Tokens",
-      "noTokens": "No token packages"
+      "noTokens": "No token packages",
+      "purchaseHistory": "Purchase History",
+      "userNotFound": "User not found",
+      "upcomingClasses": "Upcoming Classes",
+      "noUpcomingClasses": "No upcoming classes"
     },
     "classes": {
       "title": "Class Management",
@@ -374,8 +380,11 @@
       "selectInstructor": "Select Instructor",
       "startTime": "Start Time",
       "endTime": "End Time",
+      "dateTime": "Date & Time",
       "capacity": "Maximum occupancy",
       "location": "Location",
+      "actions": "Actions",
+      "viewAttendance": "View Attendance",
       "internalCourse": "Internal Course (補課)",
       "enrolled": "Enrolled",
       "cancel": "Cancel",
@@ -556,6 +565,7 @@
     },
     "purchaseHistory": {
       "title": "User Purchase History",
+      "userPurchaseHistory": "User Purchase History",
       "searchPlaceholder": "Search by user name, mobile, order ID, or package...",
       "filter": "Filter",
       "paymentStatus": "Payment Status",
@@ -575,6 +585,7 @@
       "coupon": "Coupon",
       "noPurchases": "No purchases found",
       "actions": "Actions",
+      "assignTokens": "Assign Tokens",
       "statuses": {
         "paid": "Paid",
         "pending": "Pending",

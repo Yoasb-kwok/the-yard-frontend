@@ -32,6 +32,8 @@ import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
 import CouponsPage from './pages/admin/CouponsPage';
 import UserPurchaseHistoryPage from './pages/admin/UserPurchaseHistoryPage';
+import UserPurchaseHistoryDetailPage from './pages/admin/UserPurchaseHistoryDetailPage';
+import UserSchedulePage from './pages/admin/UserSchedulePage';
 import TokenAssignmentPage from './pages/admin/TokenAssignmentPage';
 import ReassignStudentsPage from './pages/admin/ReassignStudentsPage';
 
@@ -158,6 +160,22 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <UserPurchaseHistoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users/:userId/purchase-history"
+            element={
+              <ProtectedRoute requireAdmin>
+                <UserPurchaseHistoryDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/users/:userId/schedule"
+            element={
+              <ProtectedRoute requireAdmin>
+                <UserSchedulePage />
               </ProtectedRoute>
             }
           />

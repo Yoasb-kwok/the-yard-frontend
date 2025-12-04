@@ -316,9 +316,9 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </nav>
 
-      <div className="flex pt-16">
+      <div className="flex pt-16 min-h-screen">
         {/* Desktop Sidebar */}
-        <aside className="hidden xl:block w-64 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
+        <aside className="hidden xl:block w-64 flex-shrink-0 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
           <nav className="mt-5 px-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -389,7 +389,7 @@ export default function Layout({ children }: LayoutProps) {
           </>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 xl:p-8">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 xl:p-8">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>

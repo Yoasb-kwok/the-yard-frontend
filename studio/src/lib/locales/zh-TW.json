@@ -28,6 +28,8 @@
     "cancel": "取消",
     "delete": "刪除",
     "edit": "編輯",
+    "to": "至",
+    "back": "返回",
     "create": "建立",
     "update": "更新",
     "submit": "提交",
@@ -360,7 +362,11 @@
       "tokenPackage": "代幣套票",
       "tokenExpiryDateUpdated": "代幣到期日已成功更新",
       "assignTokens": "分配代幣",
-      "noTokens": "沒有代幣套票"
+      "noTokens": "沒有代幣套票",
+      "purchaseHistory": "購買記錄",
+      "userNotFound": "未找到用戶",
+      "upcomingClasses": "即將到來的課程",
+      "noUpcomingClasses": "沒有即將到來的課程"
     },
     "classes": {
       "title": "課程管理",
@@ -374,7 +380,10 @@
       "selectInstructor": "選擇導師",
       "startTime": "開始時間",
       "endTime": "結束時間",
+      "dateTime": "日期和時間",
       "capacity": "最大人數",
+      "actions": "操作",
+      "viewAttendance": "查看出席名單",
       "location": "地點",
       "internalCourse": "內部課程（補課）",
       "enrolled": "已報名",
@@ -556,6 +565,7 @@
     },
     "purchaseHistory": {
       "title": "用戶購買記錄",
+      "userPurchaseHistory": "用戶購買記錄",
       "searchPlaceholder": "按用戶姓名、手機、訂單號或套餐搜尋...",
       "filter": "篩選",
       "paymentStatus": "付款狀態",
@@ -575,6 +585,7 @@
       "coupon": "優惠券",
       "noPurchases": "未找到購買記錄",
       "actions": "操作",
+      "assignTokens": "分配代幣",
       "statuses": {
         "paid": "已付款",
         "pending": "待付款",
