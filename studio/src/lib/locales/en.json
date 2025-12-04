@@ -280,12 +280,14 @@
     }
   },
   "profile": {
-    "title": "My Profile",
+    "title": "Profile",
     "role": "Role",
     "fullName": "Full Name",
-    "mobile": "Mobile",
-    "idFirstFour": "ID (First 4 Digits)",
-    "notProvided": "Not provided"
+    "mobile": "Mobile Number",
+    "idFirstFour": "Last 4 characters of ID Card",
+    "notProvided": "Not provided",
+    "student": "Student",
+    "admin": "Admin"
   },
   "admin": {
     "dashboard": {

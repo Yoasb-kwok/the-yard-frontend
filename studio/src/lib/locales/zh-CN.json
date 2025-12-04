@@ -280,12 +280,14 @@
     }
   },
   "profile": {
-    "title": "我的个人资料",
+    "title": "个人资料",
     "role": "角色",
     "fullName": "全名",
-    "mobile": "手机",
-    "idFirstFour": "身份证（前四位数字）",
-    "notProvided": "未提供"
+    "mobile": "手机号码",
+    "idFirstFour": "身份证后4位字",
+    "notProvided": "未提供",
+    "student": "学生",
+    "admin": "管理员"
   },
   "admin": {
     "dashboard": {

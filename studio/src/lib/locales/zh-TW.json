@@ -280,12 +280,14 @@
     }
   },
   "profile": {
-    "title": "我的個人資料",
+    "title": "個人資料",
     "role": "角色",
     "fullName": "全名",
-    "mobile": "手機",
-    "idFirstFour": "身份證（前四位數字）",
-    "notProvided": "未提供"
+    "mobile": "手機號碼",
+    "idFirstFour": "身份證後4位字",
+    "notProvided": "未提供",
+    "student": "學生",
+    "admin": "管理員"
   },
   "admin": {
     "dashboard": {

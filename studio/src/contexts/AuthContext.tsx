@@ -48,7 +48,7 @@ const HARDCODED_ACCOUNTS = {
       id: 'student-001',
       full_name: 'Student User',
       role: 'student' as const,
-      mobile: '87654321',
+      mobile: '85287654321',
       id_first_four: 'S123',
     },
   },
