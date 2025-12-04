@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin } from 'lucide-react';
+import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit } from 'lucide-react';
 
 interface Class {
   id: string;
   name: string;
+  class_code: string;
   instructor: string;
   start_time: string;
   end_time: string;
@@ -17,13 +18,43 @@ interface Class {
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 }
 
+interface Instructor {
+  id: string;
+  name: string;
+  profile_image_url: string | null;
+  created_at: string;
+}
+
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+
+// Mock instructors data
+const MOCK_INSTRUCTORS: Instructor[] = [
+  {
+    id: '1',
+    name: 'Jane Smith',
+    profile_image_url: 'https://ui-avatars.com/api/?name=Jane+Smith&size=128&background=007257&color=fff&bold=true',
+    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '2',
+    name: 'John Doe',
+    profile_image_url: 'https://ui-avatars.com/api/?name=John+Doe&size=128&background=2563eb&color=fff&bold=true',
+    created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '3',
+    name: 'Sarah Johnson',
+    profile_image_url: 'https://ui-avatars.com/api/?name=Sarah+Johnson&size=128&background=7c3aed&color=fff&bold=true',
+    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+];
 
 // Mock data
 const MOCK_CLASSES: Class[] = [
   {
     id: '1',
     name: 'Yoga Basics',
+    class_code: 'YB001',
     instructor: 'Jane Smith',
     start_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
     end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
@@ -36,6 +67,7 @@ const MOCK_CLASSES: Class[] = [
   {
     id: '2',
     name: 'Pilates Intermediate',
+    class_code: 'PI002',
     instructor: 'John Doe',
     start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
     end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
@@ -48,6 +80,7 @@ const MOCK_CLASSES: Class[] = [
   {
     id: '3',
     name: '補課 - Yoga Basics',
+    class_code: 'YB-MK001',
     instructor: 'Jane Smith',
     start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
     end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
@@ -66,24 +99,31 @@ type ViewType = 'month' | 'week' | 'day';
 export default function ClassesPage() {
   const { t, i18n } = useTranslation();
   const [classes, setClasses] = useState<Class[]>([]);
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [editingClass, setEditingClass] = useState<Class | null>(null);
+  const [editAllRepeats, setEditAllRepeats] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [view, setView] = useState<ViewType>('month');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [form, setForm] = useState({
     name: '',
+    class_code: '',
     instructor: '',
     start_time: '',
     end_time: '',
     capacity: 10,
     is_internal: false,
     location: 'sanpokong' as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui',
+    repeat_weekly: false,
+    repeat_until: '',
   });
 
   useEffect(() => {
     loadClasses();
+    loadInstructors();
   }, []);
 
   async function loadClasses() {
@@ -93,36 +133,250 @@ export default function ClassesPage() {
     setLoading(false);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function loadInstructors() {
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 300));
+    setInstructors(MOCK_INSTRUCTORS);
+  }
 
-    const newClass: Class = {
-      id: Date.now().toString(),
-      name: form.name,
-      instructor: form.instructor,
-      start_time: form.start_time,
-      end_time: form.end_time,
-      capacity: form.capacity,
-      enrolled_count: 0,
-      is_internal: form.is_internal,
-      is_cancelled: false,
-      location: form.location,
-    };
+  function findRepeatedClasses(classItem: Class): Class[] {
+    // Find all classes that are part of the same repeat series
+    // Criteria: same name, class_code, instructor, location, and is_internal
+    return classes.filter(c => 
+      c.id !== classItem.id &&
+      c.name === classItem.name &&
+      c.class_code === classItem.class_code &&
+      c.instructor === classItem.instructor &&
+      c.location === classItem.location &&
+      c.is_internal === classItem.is_internal
+    );
+  }
 
-    setClasses([newClass, ...classes]);
-    alert(t('admin.classes.classCreated'));
-    setShowModal(false);
+  function formatDateTimeLocal(dateString: string): string {
+    // Convert ISO string to local datetime-local format (YYYY-MM-DDTHH:mm)
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  function openEditModal(classItem: Class) {
+    setEditingClass(classItem);
+    setEditAllRepeats(false); // Default to single edit
+    // Format datetime for input fields (YYYY-MM-DDTHH:mm) using local time
+    const startDateTime = formatDateTimeLocal(classItem.start_time);
+    const endDateTime = formatDateTimeLocal(classItem.end_time);
+    
+    setForm({
+      name: classItem.name,
+      class_code: classItem.class_code,
+      instructor: classItem.instructor,
+      start_time: startDateTime,
+      end_time: endDateTime,
+      capacity: classItem.capacity,
+      is_internal: classItem.is_internal,
+      location: classItem.location || 'sanpokong',
+      repeat_weekly: false,
+      repeat_until: '',
+    });
+    setShowModal(true);
+  }
+
+  function openCreateModal() {
+    setEditingClass(null);
     setForm({
       name: '',
+      class_code: '',
       instructor: '',
       start_time: '',
       end_time: '',
       capacity: 10,
       is_internal: false,
       location: 'sanpokong',
+      repeat_weekly: false,
+      repeat_until: '',
+    });
+    setShowModal(true);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+
+    // If editing, update the existing class(es)
+    if (editingClass) {
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      if (editAllRepeats) {
+        // Update all repeated classes
+        const repeatedClasses = findRepeatedClasses(editingClass);
+        const allClassesToUpdate = [editingClass, ...repeatedClasses];
+        
+        setClasses(classes.map(c => {
+          const shouldUpdate = allClassesToUpdate.some(updateClass => updateClass.id === c.id);
+          if (shouldUpdate) {
+            // Calculate time difference from original class
+            const originalStart = new Date(editingClass.start_time);
+            const originalEnd = new Date(editingClass.end_time);
+            const newStart = new Date(form.start_time);
+            const newEnd = new Date(form.end_time);
+            const timeDiff = newStart.getTime() - originalStart.getTime();
+            const duration = newEnd.getTime() - newStart.getTime();
+            
+            // Calculate new times for this class
+            const classStart = new Date(c.start_time);
+            const classEnd = new Date(c.end_time);
+            const newClassStart = new Date(classStart.getTime() + timeDiff);
+            const newClassEnd = new Date(newClassStart.getTime() + duration);
+            
+            return {
+              ...c,
+              name: form.name,
+              class_code: form.class_code,
+              instructor: form.instructor,
+              start_time: newClassStart.toISOString(),
+              end_time: newClassEnd.toISOString(),
+              capacity: form.capacity,
+              is_internal: form.is_internal,
+              location: form.location,
+            };
+          }
+          return c;
+        }));
+        alert(t('admin.classes.classesUpdated', { count: allClassesToUpdate.length }));
+      } else {
+        // Update single class
+        const updatedClass: Class = {
+          ...editingClass,
+          name: form.name,
+          class_code: form.class_code,
+          instructor: form.instructor,
+          start_time: form.start_time,
+          end_time: form.end_time,
+          capacity: form.capacity,
+          is_internal: form.is_internal,
+          location: form.location,
+        };
+
+        setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
+        alert(t('admin.classes.classUpdated'));
+      }
+      
+      setShowModal(false);
+      setEditingClass(null);
+      setEditAllRepeats(false);
+      setForm({
+        name: '',
+        class_code: '',
+        instructor: '',
+        start_time: '',
+        end_time: '',
+        capacity: 10,
+        is_internal: false,
+        location: 'sanpokong',
+        repeat_weekly: false,
+        repeat_until: '',
+      });
+      return;
+    }
+
+    // Creating new class(es)
+    if (form.repeat_weekly && !form.repeat_until) {
+      alert(t('admin.classes.repeatUntilRequired'));
+      return;
+    }
+
+    if (form.repeat_weekly && form.repeat_until && form.start_time) {
+      const startDate = new Date(form.start_time);
+      const repeatUntilDate = new Date(form.repeat_until);
+      if (repeatUntilDate <= startDate) {
+        alert(t('admin.classes.repeatUntilAfterStart'));
+        return;
+      }
+    }
+
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    const newClasses: Class[] = [];
+
+    if (form.repeat_weekly && form.repeat_until) {
+      // Create multiple classes for weekly repeats
+      const startDate = new Date(form.start_time);
+      const endDate = new Date(form.end_time);
+      // Set repeat_until to end of day to include classes on that date
+      const repeatUntilDate = new Date(form.repeat_until);
+      repeatUntilDate.setHours(23, 59, 59, 999);
+      
+      // Calculate time difference for end_time
+      const timeDiff = endDate.getTime() - startDate.getTime();
+
+      let currentDate = new Date(startDate);
+      let classCounter = 0;
+
+      while (currentDate <= repeatUntilDate) {
+        const classStartTime = new Date(currentDate);
+        const classEndTime = new Date(classStartTime.getTime() + timeDiff);
+
+        const newClass: Class = {
+          id: `${Date.now()}-${classCounter}`,
+          name: form.name,
+          class_code: form.class_code,
+          instructor: form.instructor,
+          start_time: classStartTime.toISOString(),
+          end_time: classEndTime.toISOString(),
+          capacity: form.capacity,
+          enrolled_count: 0,
+          is_internal: form.is_internal,
+          is_cancelled: false,
+          location: form.location,
+        };
+
+        newClasses.push(newClass);
+
+        // Move to next week (7 days later)
+        currentDate.setDate(currentDate.getDate() + 7);
+        classCounter++;
+      }
+    } else {
+      // Create single class
+      const newClass: Class = {
+        id: Date.now().toString(),
+        name: form.name,
+        class_code: form.class_code,
+        instructor: form.instructor,
+        start_time: form.start_time,
+        end_time: form.end_time,
+        capacity: form.capacity,
+        enrolled_count: 0,
+        is_internal: form.is_internal,
+        is_cancelled: false,
+        location: form.location,
+      };
+      newClasses.push(newClass);
+    }
+
+    setClasses([...newClasses, ...classes]);
+    if (newClasses.length === 1) {
+      alert(t('admin.classes.classCreated'));
+    } else {
+      alert(t('admin.classes.classesCreated', { count: newClasses.length }));
+    }
+    setShowModal(false);
+    setForm({
+      name: '',
+      class_code: '',
+      instructor: '',
+      start_time: '',
+      end_time: '',
+      capacity: 10,
+      is_internal: false,
+      location: 'sanpokong',
+      repeat_weekly: false,
+      repeat_until: '',
     });
   }
 
@@ -345,7 +599,10 @@ export default function ClassesPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-600 mb-1">{t('admin.classes.instructor')}: {classItem.instructor}</p>
+                    {classItem.class_code && (
+                      <p className="text-gray-600 mb-1 text-sm font-medium">{classItem.class_code}</p>
+                    )}
+                    <p className="text-gray-600 mb-1">{classItem.instructor}</p>
                     <div className="flex items-center text-sm text-gray-600 mb-1">
                       <Calendar className="h-4 w-4 mr-1" />
                       {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
@@ -361,6 +618,13 @@ export default function ClassesPage() {
                     </p>
                   </div>
                   <div className="flex gap-2">
+                    <button
+                      onClick={() => openEditModal(classItem)}
+                      className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      {t('common.edit')}
+                    </button>
                     <button
                       onClick={() => toggleCancel(classItem.id, classItem.is_cancelled)}
                       className={`px-4 py-2 rounded-md text-sm font-medium ${
@@ -545,7 +809,7 @@ export default function ClassesPage() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">{t('admin.classes.title')}</h1>
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openCreateModal}
             className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark flex items-center"
           >
             <Plus className="h-5 w-5 mr-2" />
@@ -722,7 +986,10 @@ export default function ClassesPage() {
                       </span>
                     )}
                   </div>
-                  <p className="text-gray-600 mb-1">{t('admin.classes.instructor')}: {classItem.instructor}</p>
+                  {classItem.class_code && (
+                    <p className="text-gray-600 mb-1 text-sm font-medium">{classItem.class_code}</p>
+                  )}
+                  <p className="text-gray-600 mb-1">{classItem.instructor}</p>
                   <div className="flex items-center text-sm text-gray-600 mb-1">
                     <Calendar className="h-4 w-4 mr-1" />
                     {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
@@ -738,6 +1005,13 @@ export default function ClassesPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => openEditModal(classItem)}
+                    className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
+                  >
+                    <Edit className="h-4 w-4 mr-1" />
+                    {t('common.edit')}
+                  </button>
                   <button
                     onClick={() => toggleCancel(classItem.id, classItem.is_cancelled)}
                     className={`px-4 py-2 rounded-md text-sm font-medium ${
@@ -759,7 +1033,40 @@ export default function ClassesPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('admin.classes.createClass')}</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">
+              {editingClass ? t('admin.classes.editClass') : t('admin.classes.createClass')}
+            </h2>
+            {editingClass && findRepeatedClasses(editingClass).length > 0 && (
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-gray-700 mb-3">
+                  {t('admin.classes.repeatClassDetected', { count: findRepeatedClasses(editingClass).length })}
+                </p>
+                <div className="space-y-2">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="editMode"
+                      checked={!editAllRepeats}
+                      onChange={() => setEditAllRepeats(false)}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">{t('admin.classes.editSingleClass')}</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="editMode"
+                      checked={editAllRepeats}
+                      onChange={() => setEditAllRepeats(true)}
+                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      {t('admin.classes.editAllRepeats', { count: findRepeatedClasses(editingClass).length + 1 })}
+                    </span>
+                  </label>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.className')}</label>
@@ -772,14 +1079,31 @@ export default function ClassesPage() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.instructor')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.classCode')}</label>
                 <input
                   type="text"
+                  required
+                  value={form.class_code}
+                  onChange={(e) => setForm({ ...form, class_code: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('admin.classes.classCodePlaceholder')}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.instructor')}</label>
+                <select
                   required
                   value={form.instructor}
                   onChange={(e) => setForm({ ...form, instructor: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                >
+                  <option value="">{t('admin.classes.selectInstructor')}</option>
+                  {instructors.map((instructor) => (
+                    <option key={instructor.id} value={instructor.name}>
+                      {instructor.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.startTime')}</label>
@@ -826,6 +1150,39 @@ export default function ClassesPage() {
                   <option value="sheungshui">{getLocationLabel('sheungshui')}</option>
                 </select>
               </div>
+              {!editingClass && (
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="repeat_weekly"
+                    checked={form.repeat_weekly}
+                    onChange={(e) => setForm({ ...form, repeat_weekly: e.target.checked, repeat_until: e.target.checked ? form.repeat_until : '' })}
+                    className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                  />
+                  <label htmlFor="repeat_weekly" className="ml-2 text-sm text-gray-700">
+                    {t('admin.classes.repeatWeekly')}
+                  </label>
+                </div>
+              )}
+              {form.repeat_weekly && !editingClass && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.repeatUntil')}</label>
+                  <input
+                    type="date"
+                    required={form.repeat_weekly}
+                    value={form.repeat_until}
+                    onChange={(e) => setForm({ ...form, repeat_until: e.target.value })}
+                    min={form.start_time ? (() => {
+                      const start = new Date(form.start_time);
+                      const minDate = new Date(start);
+                      minDate.setDate(minDate.getDate() + 7);
+                      return minDate.toISOString().split('T')[0];
+                    })() : ''}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{t('admin.classes.repeatUntilHint')}</p>
+                </div>
+              )}
               <div className="flex items-center">
                 <input
                   type="checkbox"
@@ -841,16 +1198,20 @@ export default function ClassesPage() {
               <div className="flex justify-end space-x-3 mt-6">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    setShowModal(false);
+                    setEditingClass(null);
+                    setEditAllRepeats(false);
+                  }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800"
                 >
-                  {t('admin.classes.cancel')}
+                  {t('common.cancel')}
                 </button>
                 <button
                   type="submit"
                   className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
                 >
-                  {t('admin.classes.createClass')}
+                  {editingClass ? t('common.update') : t('admin.classes.createClass')}
                 </button>
               </div>
             </form>
