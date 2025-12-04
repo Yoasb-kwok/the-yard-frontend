@@ -1,7 +1,7 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, X, Mail, Facebook, Instagram } from 'lucide-react';
+import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from '../assets/images/the-yard-logo.png';
@@ -25,15 +25,22 @@ interface PublicLayoutProps {
 export default function PublicLayout({ children }: PublicLayoutProps) {
   const { t } = useTranslation();
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
+    setUserMenuOpen(false);
   };
 
+  // Check if student is logged in
+  const isStudent = user && profile?.role === 'student';
+
+  // Build navigation items
   const navItems = [
     { path: '/', label: t('nav.home') },
     { path: '/calendar', label: t('nav.calendar') },
@@ -43,6 +50,22 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [userMenuOpen]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -72,12 +95,39 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
               ))}
               <LanguageSwitcher />
               {user ? (
-                <button
-                  onClick={handleSignOut}
-                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
-                >
-                  {t('nav.signOut')}
-                </button>
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2"
+                  >
+                    <User className="h-4 w-4" />
+                    {profile?.full_name || t('nav.dashboard')}
+                    <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {userMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                      {isStudent && (
+                        <Link
+                          to="/dashboard"
+                          onClick={() => setUserMenuOpen(false)}
+                          className={`block px-4 py-2 text-sm transition-colors ${
+                            isActive('/dashboard')
+                              ? 'bg-primary-lighter text-primary'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {t('nav.dashboard')}
+                        </Link>
+                      )}
+                      <button
+                        onClick={handleSignOut}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        {t('nav.signOut')}
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <Link
                   to="/login"
@@ -119,15 +169,30 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                   </Link>
                 ))}
                 {user ? (
-                  <button
-                    onClick={() => {
-                      handleSignOut();
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
-                  >
-                    {t('nav.signOut')}
-                  </button>
+                  <>
+                    {isStudent && (
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
+                          isActive('/dashboard')
+                            ? 'bg-primary-lighter text-primary'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        }`}
+                      >
+                        {t('nav.dashboard')}
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => {
+                        handleSignOut();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full text-left px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
+                    >
+                      {t('nav.signOut')}
+                    </button>
+                  </>
                 ) : (
                   <Link
                     to="/login"

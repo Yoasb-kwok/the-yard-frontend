@@ -1,8 +1,8 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -16,8 +16,26 @@ export default function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [userMenuOpen]);
 
   const studentNavItems = [
     { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
@@ -78,15 +96,30 @@ export default function Layout({ children }: LayoutProps) {
                 </Link>
               ))}
               <LanguageSwitcher />
-              <div className="hidden sm:flex items-center text-sm text-gray-600">
-                {profile?.full_name} {isAdmin && <span className="text-primary font-medium ml-1">(Admin)</span>}
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2"
+                >
+                  <User className="h-4 w-4" />
+                  {profile?.full_name || t('nav.dashboard')}
+                  {isAdmin && <span className="text-xs opacity-90">(Admin)</span>}
+                  <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {userMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                    <button
+                      onClick={() => {
+                        signOut();
+                        setUserMenuOpen(false);
+                      }}
+                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                    >
+                      {t('nav.signOut')}
+                    </button>
+                  </div>
+                )}
               </div>
-              <button
-                onClick={signOut}
-                className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
-              >
-                {t('nav.signOut')}
-              </button>
             </div>
 
             {/* Mobile menu button */}
@@ -105,30 +138,40 @@ export default function Layout({ children }: LayoutProps) {
           {mobileMenuOpen && (
             <div className="md:hidden border-t">
               <div className="px-2 pt-2 pb-3 space-y-1">
-                <div className="px-3 py-2 text-sm text-gray-700 border-b mb-2">
-                  {profile?.full_name} {isAdmin && <span className="text-primary font-medium">(Admin)</span>}
-                </div>
                 {/* Public Navigation Items */}
                 {publicNavItems.map((item) => (
                   <Link
                     key={item.path}
                     to={item.path}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`block px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
                       isActive(item.path)
                         ? 'bg-primary-lighter text-primary'
-                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
                     {item.label}
                   </Link>
                 ))}
+                {!isAdmin && (
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
+                      isActive('/dashboard')
+                        ? 'bg-primary-lighter text-primary'
+                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }`}
+                  >
+                    {t('nav.dashboard')}
+                  </Link>
+                )}
                 <button
                   onClick={() => {
                     signOut();
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full text-left px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 rounded-md"
+                  className="w-full text-left px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
                 >
                   {t('nav.signOut')}
                 </button>
