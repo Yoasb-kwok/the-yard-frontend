@@ -263,7 +263,13 @@
     "latestNews": "最新消息",
     "termsConditions": "條款與條件",
     "privacyPolicy": "隱私政策",
-    "copyright": "© 2025 The Yard。版權所有。"
+    "copyright": "© 2025 The Yard。版權所有。",
+    "hotline": "熱線",
+    "hotlineNumber": "+852 9229 9875",
+    "hotlineTitle": "The YARD 租場及查詢熱線服務時間:",
+    "hotlineWeekday": "星期一至五：下午4 - 11時",
+    "hotlineWeekend": "星期六、日及公眾假期： 下午12 -11時",
+    "hotlineNote": "其他時間可致電留言或 Whatsapp, 我們會盡快回覆！"
   }
 }
 

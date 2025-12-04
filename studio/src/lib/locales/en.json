@@ -263,7 +263,13 @@
     "latestNews": "Latest News",
     "termsConditions": "Terms & Conditions",
     "privacyPolicy": "Privacy Policy",
-    "copyright": "© 2024 Studio. All rights reserved."
+    "copyright": "© 2024 Studio. All rights reserved.",
+    "hotline": "Hotline",
+    "hotlineNumber": "+852 9229 9875",
+    "hotlineTitle": "Our reservation and enquiry hotline service hours:",
+    "hotlineWeekday": "Mon to Fri: 4 - 11pm",
+    "hotlineWeekend": "Sat, Sun & Public Holiday: 12nn- 11pm",
+    "hotlineNote": "Please leave your voice message or WhatsApp us during non-service hours. We will respond asap!"
   }
 }
 
