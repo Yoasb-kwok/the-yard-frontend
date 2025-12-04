@@ -1,65 +1,83 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency } from '../../lib/utils';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
 
-interface TrialLesson {
+interface ClassData {
   id: string;
   name: string;
-  description: string;
-  price: number;
+  instructor: string;
+  start_time: string;
+  end_time: string;
+  location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+  program_code: string;
 }
 
-// Dummy data
-const DUMMY_TRIALS: TrialLesson[] = [
-  {
-    id: '1',
-    name: 'Free Trial Class',
-    description: 'Experience our teaching style with a complimentary trial class',
-    price: 0,
-  },
-  {
-    id: '2',
-    name: 'Premium Trial Package',
-    description: 'Try our premium classes with a discounted trial package',
-    price: 100,
-  },
-];
-
 export default function TrialPage() {
-  const [trials, setTrials] = useState<TrialLesson[]>([]);
-  const [selectedTrial, setSelectedTrial] = useState<string>('');
+  const { t, i18n } = useTranslation();
+  const location = useLocation();
+  const classData = (location.state as { classData?: ClassData })?.classData;
   const [fullName, setFullName] = useState('');
-  const [idFirstFour, setIdFirstFour] = useState('');
+  const [idLastFour, setIdLastFour] = useState('');
+  const [countryCode, setCountryCode] = useState('852');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { signUp } = useAuth();
 
-  useEffect(() => {
-    loadTrials();
-  }, []);
+  // Generate tutor profile image URL from UI Avatars
+  const getTutorImageUrl = (name: string): string => {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
+  };
 
-  async function loadTrials() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setTrials(DUMMY_TRIALS);
-  }
+  // Format date
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(i18n.language, {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    });
+  };
+
+  // Format time only (HH:MM)
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString(i18n.language, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    // Validation
+    if (idLastFour.length !== 4 || !/^[A-Za-z0-9]{4}$/.test(idLastFour)) {
+      setError(t('register.invalidIdCard'));
+      return;
+    }
+
+    if (!classData) {
+      setError(t('trial.noClassSelected'));
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Use the hardcoded signUp from AuthContext
-      await signUp(email, password, fullName, idFirstFour, mobile);
+      // Combine country code with mobile number
+      const fullMobile = `${countryCode}${mobile}`;
+      // For trial applications, we don't set a password - user will set it later
+      await signUp(email, '', fullName, idLastFour, fullMobile);
 
       setSuccess(true);
       setTimeout(() => {
@@ -69,7 +87,7 @@ export default function TrialPage() {
       if (err instanceof Error) {
         setError(err.message);
       } else {
-        setError('Failed to submit application');
+        setError(t('common.error'));
       }
     } finally {
       setLoading(false);
@@ -82,11 +100,25 @@ export default function TrialPage() {
         <div className="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4">
           <div className="max-w-md w-full text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Application Submitted!</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              {t('trial.applicationSubmitted')}
+            </h2>
             <p className="text-gray-600 mb-4">
-              We've sent you an email confirmation. Please check your inbox to set your password and activate your account.
+              {t('trial.applicationSubmittedDesc')}
             </p>
-            <p className="text-sm text-gray-500">Redirecting to login...</p>
+            <p className="text-sm text-gray-500">{t('trial.redirecting')}</p>
+          </div>
+        </div>
+      </PublicLayout>
+    );
+  }
+
+  if (!classData) {
+    return (
+      <PublicLayout>
+        <div className="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4">
+          <div className="max-w-md w-full text-center">
+            <p className="text-gray-600">{t('trial.noClassSelected')}</p>
           </div>
         </div>
       </PublicLayout>
@@ -95,106 +127,180 @@ export default function TrialPage() {
 
   return (
     <PublicLayout>
-      <div className="max-w-3xl mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold text-gray-900 mb-8">Apply for Trial Lesson</h1>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">{t('trial.title')}</h1>
+        </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8 space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
-              {error}
+        <div className="grid lg:grid-cols-2 gap-8">
+            {/* Right Section - Class Information */}
+            <div className="bg-white rounded-lg shadow-md p-6 lg:sticky lg:top-8 lg:h-fit">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">
+                {t('trial.classInformation')}
+              </h3>
+
+              {/* Tutor Image and Name */}
+              <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
+                <img
+                  src={getTutorImageUrl(classData.instructor)}
+                  alt={classData.instructor}
+                  className="w-24 h-24 rounded-full object-cover mr-4 border-4 border-primary-lighter"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
+                  <p className="text-lg font-bold text-gray-900">{classData.instructor}</p>
+                </div>
+              </div>
+
+              {/* Class Details */}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.className')}</p>
+                  <p className="text-lg font-semibold text-gray-900">{classData.name}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classCode')}</p>
+                  <p className="text-lg font-semibold text-primary">{classData.program_code}</p>
+                </div>
+
+                <div className="flex items-center text-gray-800">
+                  <Calendar className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
+                    <p className="text-base font-semibold">{formatDate(classData.start_time)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center text-gray-800">
+                  <Clock className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classTime')}</p>
+                    <p className="text-base font-semibold">
+                      {formatTime(classData.start_time)} - {formatTime(classData.end_time)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center text-gray-800">
+                  <MapPin className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('home.location')}</p>
+                    <p className="text-base font-semibold">{t(`home.locations.${classData.location}`)}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Select Trial Lesson
-            </label>
-            <select
-              required
-              value={selectedTrial}
-              onChange={(e) => setSelectedTrial(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            >
-              <option value="">Choose a trial lesson</option>
-              {trials.map((trial) => (
-                <option key={trial.id} value={trial.id}>
-                  {trial.name} - {trial.price === 0 ? 'FREE' : formatCurrency(trial.price)}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Left Section - Registration Form */}
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">
+                {t('trial.registrationForm')}
+              </h3>
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              />
+              <form className="space-y-6" onSubmit={handleSubmit}>
+                {error && (
+                  <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
+                    {error}
+                  </div>
+                )}
+
+                <div className="rounded-md shadow-sm space-y-4">
+                  <div>
+                    <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('register.fullName')}
+                    </label>
+                    <input
+                      id="fullName"
+                      name="fullName"
+                      type="text"
+                      autoComplete="name"
+                      required
+                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                      placeholder={t('register.fullName')}
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="idLastFour" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('register.idLastFour')}
+                    </label>
+                    <input
+                      id="idLastFour"
+                      name="idLastFour"
+                      type="text"
+                      maxLength={4}
+                      pattern="[A-Za-z0-9]{4}"
+                      required
+                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm uppercase"
+                      placeholder={t('register.idLastFour')}
+                      value={idLastFour}
+                      onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('register.mobile')}
+                    </label>
+                    <div className="flex rounded-md shadow-sm">
+                      <select
+                        id="countryCode"
+                        name="countryCode"
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        className="appearance-none relative block px-3 py-2 border border-gray-300 border-r-0 rounded-l-md bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-primary focus:border-primary focus:z-10"
+                      >
+                        <option value="852">+852</option>
+                        <option value="86">+86</option>
+                        <option value="853">+853</option>
+                      </select>
+                      <input
+                        id="mobile"
+                        name="mobile"
+                        type="tel"
+                        autoComplete="tel"
+                        required
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-r-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('register.mobile')}
+                        value={mobile}
+                        onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('register.email')}
+                    </label>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                      placeholder={t('register.email')}
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50"
+                  >
+                    {loading ? t('trial.submitting') : t('trial.submitApplication')}
+                  </button>
+                </div>
+              </form>
             </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                First 4 Digits of ID
-              </label>
-              <input
-                type="text"
-                required
-                maxLength={4}
-                pattern="[0-9]{4}"
-                value={idFirstFour}
-                onChange={(e) => setIdFirstFour(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-            <input
-              type="tel"
-              required
-              value={mobile}
-              onChange={(e) => setMobile(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary text-white py-3 rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 font-medium"
-          >
-            {loading ? 'Submitting...' : 'Submit Application'}
-          </button>
-        </form>
+        </div>
       </div>
     </PublicLayout>
   );

@@ -198,7 +198,18 @@ export default function HomePage() {
                 </div>
 
                 <Link
-                  to="/trial"
+                  to={`/trial?classId=${classItem.id}`}
+                  state={{
+                    classData: {
+                      id: classItem.id,
+                      name: classItem.name,
+                      instructor: classItem.instructor,
+                      start_time: classItem.start_time,
+                      end_time: classItem.end_time,
+                      location: classItem.location,
+                      program_code: classItem.program_code,
+                    }
+                  }}
                   className="w-full bg-primary text-white px-6 py-3 rounded-lg text-base font-bold hover:bg-primary-dark transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105"
                 >
                   {t('home.bookTrial')}
