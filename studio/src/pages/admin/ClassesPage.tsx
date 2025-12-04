@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit } from 'lucide-react';
+import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
 
 interface Class {
   id: string;
@@ -98,6 +99,7 @@ type ViewType = 'month' | 'week' | 'day';
 
 export default function ClassesPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [classes, setClasses] = useState<Class[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -619,6 +621,13 @@ export default function ClassesPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => navigate(`/admin/classes/${classItem.id}/attendance`)}
+                      className="px-4 py-2 rounded-md text-sm font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 flex items-center"
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      {t('admin.classes.attendance')}
+                    </button>
+                    <button
                       onClick={() => openEditModal(classItem)}
                       className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
                     >
@@ -1005,6 +1014,13 @@ export default function ClassesPage() {
                   </p>
                 </div>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/admin/classes/${classItem.id}/attendance`)}
+                    className="px-4 py-2 rounded-md text-sm font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 flex items-center"
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    {t('admin.classes.attendance')}
+                  </button>
                   <button
                     onClick={() => openEditModal(classItem)}
                     className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"

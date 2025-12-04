@@ -26,6 +26,7 @@ import ProfilePage from './pages/student/ProfilePage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
+import ClassAttendancePage from './pages/admin/ClassAttendancePage';
 import InstructorsPage from './pages/admin/InstructorsPage';
 import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
@@ -106,6 +107,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <ClassesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/classes/:classId/attendance"
+            element={
+              <ProtectedRoute requireAdmin>
+                <ClassAttendancePage />
               </ProtectedRoute>
             }
           />
