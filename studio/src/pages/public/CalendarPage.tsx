@@ -532,8 +532,50 @@ export default function CalendarPage() {
       return date.toLocaleDateString(getLocale(), { weekday: 'short' });
     });
 
+    const locations: { value: LocationFilter; label: string }[] = [
+      { value: 'all', label: t('calendar.allLocations') },
+      { value: 'sanpokong', label: t('home.locations.sanpokong') },
+      { value: 'causewaybay', label: t('home.locations.causewaybay') },
+      { value: 'fotan', label: t('home.locations.fotan') },
+      { value: 'sheungshui', label: t('home.locations.sheungshui') },
+    ];
+
     return (
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="space-y-4">
+        {/* Location Filter */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Filter className="h-5 w-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {locations.map((loc) => {
+              const isActive = locationFilter === loc.value;
+              const colors = loc.value === 'all' 
+                ? { primary: '#007257', dark: '#005a44' }
+                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
+              
+              return (
+                <button
+                  key={loc.value}
+                  onClick={() => setLocationFilter(loc.value)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  style={isActive ? {
+                    backgroundColor: colors.primary,
+                  } : {}}
+                >
+                  {loc.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-7 border-b">
           {weekDays.map((day, idx) => (
             <div key={idx} className="p-3 text-center bg-gray-50 font-medium text-gray-700 border-r last:border-r-0">
@@ -600,6 +642,7 @@ export default function CalendarPage() {
               </div>
             );
           })}
+        </div>
         </div>
       </div>
     );
