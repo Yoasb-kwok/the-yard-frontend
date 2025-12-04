@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, Search, X, AlertTriangle, Users } from 'lucide-react';
 
 interface Class {
   id: string;
@@ -31,6 +31,11 @@ interface Enrollment {
   check_out_time: string | null;
   sick_leave_document_url: string | null;
   created_at: string;
+  reassigned_to_class_id?: string | null;
+  reassigned_to_class_name?: string | null;
+  reassigned_to_class_code?: string | null;
+  reassigned_to_class_start_time?: string | null;
+  reassigned_to_class_end_time?: string | null;
 }
 
 // Mock classes data
@@ -126,6 +131,11 @@ const MOCK_ENROLLMENTS: Enrollment[] = [
     check_out_time: null,
     sick_leave_document_url: null,
     created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    reassigned_to_class_id: '2',
+    reassigned_to_class_name: 'Pilates Intermediate',
+    reassigned_to_class_code: 'PI002',
+    reassigned_to_class_start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    reassigned_to_class_end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
   },
 ];
 
@@ -137,6 +147,7 @@ export default function ClassAttendancePage() {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [cancelModal, setCancelModal] = useState(false);
 
   useEffect(() => {
     if (classId) {
@@ -196,6 +207,45 @@ export default function ClassAttendancePage() {
       attendance_confirmed: !selectedClass.attendance_confirmed,
     });
   }
+
+
+  function openCancelModal() {
+    setCancelModal(true);
+  }
+
+  function closeCancelModal() {
+    setCancelModal(false);
+  }
+
+  async function handleCancelClass() {
+    if (!selectedClass) return;
+    
+    if (!confirm(t('admin.attendance.confirmCancelClass'))) return;
+    
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Mark class as cancelled
+    // Keep enrollments so we can reassign them later
+    setSelectedClass({
+      ...selectedClass,
+      is_cancelled: true,
+    });
+    
+    alert(t('admin.attendance.classCancelled'));
+    closeCancelModal();
+  }
+
+
+  const getLocationLabel = (location?: string): string => {
+    if (!location) return '-';
+    return t(`home.locations.${location}`);
+  };
+
+
+  const enrolledStudents = enrollments.filter(
+    e => e.class_id === selectedClass?.id && e.status === 'enrolled'
+  );
 
   // Format mobile number with country code
   function formatMobile(mobile: string | null): string {
@@ -292,7 +342,36 @@ export default function ClassAttendancePage() {
         {/* Class Information */}
         {selectedClass && (
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">{selectedClass.name}</h2>
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-900">{selectedClass.name}</h2>
+              <div className="flex gap-2">
+                {!selectedClass.is_cancelled ? (
+                  <button
+                    onClick={openCancelModal}
+                    className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center gap-2"
+                  >
+                    <X className="h-4 w-4" />
+                    {t('admin.attendance.cancelClass')}
+                  </button>
+                ) : enrolledStudents.length > 0 ? (
+                  <button
+                    onClick={() => navigate(`/admin/classes/${selectedClass.id}/reassign`)}
+                    className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary-dark flex items-center gap-2"
+                  >
+                    <Users className="h-4 w-4" />
+                    {t('admin.attendance.reassignStudents')}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {selectedClass.is_cancelled && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <div className="flex items-center gap-2 text-red-800">
+                  <AlertTriangle className="h-5 w-5" />
+                  <span className="font-medium">{t('admin.attendance.classCancelledWarning')}</span>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <p className="text-sm text-gray-600 mb-1">
@@ -305,6 +384,11 @@ export default function ClassAttendancePage() {
                   <span className="font-medium">{t('admin.attendance.time')}:</span>{' '}
                   {formatDateTime(selectedClass.start_time, getLocale())} - {formatDateTime(selectedClass.end_time, getLocale())}
                 </p>
+                {selectedClass.location && (
+                  <p className="text-sm text-gray-600 mb-1">
+                    <span className="font-medium">{t('admin.attendance.location')}:</span> {getLocationLabel(selectedClass.location)}
+                  </p>
+                )}
               </div>
               <div>
                 <p className="text-sm text-gray-600 mb-1">
@@ -384,6 +468,9 @@ export default function ClassAttendancePage() {
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.mobile')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.status')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.checkIn')}</th>
+                        {selectedClass.is_cancelled && (
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.reassignedTo')}</th>
+                        )}
                         {!selectedClass.attendance_confirmed && (
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.actions')}</th>
                         )}
@@ -402,6 +489,26 @@ export default function ClassAttendancePage() {
                           <td className="px-4 py-3 text-sm text-gray-600">
                             {enrollment.check_in_time ? formatDateTime(enrollment.check_in_time, getLocale()) : '-'}
                           </td>
+                          {selectedClass.is_cancelled && (
+                            <td className="px-4 py-3 text-sm text-gray-600">
+                              {enrollment.reassigned_to_class_name ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium text-primary">{enrollment.reassigned_to_class_name}</span>
+                                  <span className="text-xs text-gray-500">{enrollment.reassigned_to_class_code}</span>
+                                  {enrollment.reassigned_to_class_start_time && (
+                                    <span className="text-xs text-gray-500">
+                                      {formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
+                                      {enrollment.reassigned_to_class_end_time && (
+                                        <> - {formatDateTime(enrollment.reassigned_to_class_end_time, getLocale())}</>
+                                      )}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 italic">{t('admin.attendance.notReassigned')}</span>
+                              )}
+                            </td>
+                          )}
                           {!selectedClass.attendance_confirmed && (
                             <td className="px-4 py-3 text-sm">
                               <select
@@ -442,6 +549,34 @@ export default function ClassAttendancePage() {
                             {enrollment.check_in_time ? formatDateTime(enrollment.check_in_time, getLocale()) : '-'}
                           </span>
                         </div>
+                        {selectedClass.is_cancelled && (
+                          <div className="pt-2 border-t border-gray-200">
+                            <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="text-gray-500 font-medium">{t('admin.attendance.reassignedTo')}:</span>
+                              <span className="text-gray-900 text-right">
+                                {enrollment.reassigned_to_class_name ? (
+                                  <div className="flex flex-col items-end">
+                                    <span className="font-medium text-primary">{enrollment.reassigned_to_class_name}</span>
+                                    <span className="text-gray-500">{enrollment.reassigned_to_class_code}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-400 italic">{t('admin.attendance.notReassigned')}</span>
+                                )}
+                              </span>
+                            </div>
+                            {enrollment.reassigned_to_class_name && enrollment.reassigned_to_class_start_time && (
+                              <div className="flex items-center justify-between text-xs mt-1">
+                                <span className="text-gray-500 font-medium">{t('admin.attendance.time')}:</span>
+                                <span className="text-gray-900 text-right">
+                                  {formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
+                                  {enrollment.reassigned_to_class_end_time && (
+                                    <> - {formatDateTime(enrollment.reassigned_to_class_end_time, getLocale())}</>
+                                  )}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {!selectedClass.attendance_confirmed && (
                           <div className="pt-2 border-t border-gray-200">
                             <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -467,6 +602,62 @@ export default function ClassAttendancePage() {
             )}
           </div>
         )}
+
+        {/* Cancel Class Modal */}
+        {cancelModal && selectedClass && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-red-100 rounded-full">
+                    <AlertTriangle className="h-6 w-6 text-red-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900">{t('admin.attendance.cancelClass')}</h3>
+                </div>
+                <button
+                  onClick={closeCancelModal}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* Warning Message */}
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  {t('admin.attendance.cancelClassWarning')}
+                </p>
+              </div>
+
+              {/* Class Information */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">{t('admin.attendance.classToCancel')}</h4>
+                <p className="text-sm text-gray-600">{selectedClass.name} ({selectedClass.class_code})</p>
+                <p className="text-sm text-gray-600">
+                  {formatDateTime(selectedClass.start_time, getLocale())} - {formatDateTime(selectedClass.end_time, getLocale())}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  onClick={closeCancelModal}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleCancelClass}
+                  className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  {t('admin.attendance.cancelClass')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </Layout>
   );

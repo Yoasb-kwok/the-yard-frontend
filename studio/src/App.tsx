@@ -33,6 +33,7 @@ import SettingsPage from './pages/admin/SettingsPage';
 import CouponsPage from './pages/admin/CouponsPage';
 import UserPurchaseHistoryPage from './pages/admin/UserPurchaseHistoryPage';
 import TokenAssignmentPage from './pages/admin/TokenAssignmentPage';
+import ReassignStudentsPage from './pages/admin/ReassignStudentsPage';
 
 function App() {
   return (
@@ -165,6 +166,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <TokenAssignmentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/classes/:classId/reassign"
+            element={
+              <ProtectedRoute requireAdmin>
+                <ReassignStudentsPage />
               </ProtectedRoute>
             }
           />
