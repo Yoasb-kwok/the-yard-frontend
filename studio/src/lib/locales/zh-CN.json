@@ -326,15 +326,17 @@
   },
   "admin": {
     "dashboard": {
-      "title": "管理员仪表板",
-      "todaysRevenue": "今日收入",
+      "title": "仪表板",
+      "todaysRevenue": "本月收入",
       "todaysClasses": "今日课程",
       "expiringSoon": "即将到期",
       "expiringStudents": "代币即将到期的学生",
       "lowTokens": "代币不足",
-      "lowTokenStudents": "代币≤2的学生",
+      "lowTokenStudents": "少于2个代币的学生",
       "todaysClassesList": "今日课程",
-      "noClassesToday": "今日没有安排课程"
+      "noClassesToday": "今日没有安排课程",
+      "with": "与",
+      "enrolled": "已报名"
     },
     "users": {
       "title": "用户管理",

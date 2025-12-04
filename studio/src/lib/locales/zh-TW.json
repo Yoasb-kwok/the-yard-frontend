@@ -326,15 +326,17 @@
   },
   "admin": {
     "dashboard": {
-      "title": "管理員儀表板",
-      "todaysRevenue": "今日收入",
+      "title": "儀表板",
+      "todaysRevenue": "本月收入",
       "todaysClasses": "今日課程",
       "expiringSoon": "即將到期",
       "expiringStudents": "代幣即將到期的學生",
       "lowTokens": "代幣不足",
-      "lowTokenStudents": "代幣≤2的學生",
+      "lowTokenStudents": "少於2個代幣的學生",
       "todaysClassesList": "今日課程",
-      "noClassesToday": "今日沒有安排課程"
+      "noClassesToday": "今日沒有安排課程",
+      "with": "與",
+      "enrolled": "已報名"
     },
     "users": {
       "title": "用戶管理",

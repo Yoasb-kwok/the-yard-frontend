@@ -326,15 +326,17 @@
   },
   "admin": {
     "dashboard": {
-      "title": "Admin Dashboard",
-      "todaysRevenue": "Today's Revenue",
+      "title": "Dashboard",
+      "todaysRevenue": "This Month's Revenue",
       "todaysClasses": "Today's Classes",
       "expiringSoon": "Expiring Soon",
       "expiringStudents": "Students with expiring tokens",
       "lowTokens": "Low Tokens",
-      "lowTokenStudents": "Students with ≤2 tokens",
+      "lowTokenStudents": "Students with less than 2 tokens",
       "todaysClassesList": "Today's Classes",
-      "noClassesToday": "No classes scheduled today"
+      "noClassesToday": "No classes scheduled today",
+      "with": "with",
+      "enrolled": "enrolled"
     },
     "users": {
       "title": "User Management",
