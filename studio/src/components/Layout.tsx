@@ -38,7 +38,7 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -101,7 +101,7 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </nav>
 
-      <div className="flex">
+      <div className="flex pt-16">
         {/* Desktop Sidebar */}
         <aside className="hidden lg:block w-64 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
           <nav className="mt-5 px-2 space-y-1">

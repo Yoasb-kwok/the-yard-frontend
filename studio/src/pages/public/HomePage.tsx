@@ -4,9 +4,14 @@ import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import BannerSlider from '../../components/BannerSlider';
 import { formatDateTime } from '../../lib/utils';
-import { Calendar, Clock, Users } from 'lucide-react';
+import { Calendar, Clock, Users, ArrowRight } from 'lucide-react';
 import greenBgImage from '../../assets/images/green_bg.jpg';
 import roomRentalImage from '../../assets/images/room_rental.jpg';
+import roomRentalServiceImage from '../../assets/images/s1-room-rental.jpg';
+import eventChoreographyImage from '../../assets/images/s2-event-choreography.jpg';
+import stageProductionImage from '../../assets/images/s3-stage-production.jpg';
+import workshopTrainingImage from '../../assets/images/s4-workshop-training.jpg';
+import kidsDanceCoursesImage from '../../assets/images/s5-kids-dance-courses.jpg';
 
 interface TodayClass {
   id: string;
@@ -157,7 +162,123 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="bg-gray-100 py-16">
+      {/* Services Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <h2 className="text-3xl font-bold text-gray-900 mb-12 text-center">{t('home.ourServices')}</h2>
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Room Rental */}
+          <div className="relative group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow">
+            <div className="relative h-64 overflow-hidden">
+              <img
+                src={roomRentalServiceImage}
+                alt={t('home.roomRental')}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <h3 className="text-2xl font-bold text-white mb-3">{t('home.roomRental')}</h3>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('home.exploreNow')}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Event Choreography */}
+          <div className="relative group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow">
+            <div className="relative h-64 overflow-hidden">
+              <img
+                src={eventChoreographyImage}
+                alt={t('home.eventChoreography')}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <h3 className="text-2xl font-bold text-white mb-3">{t('home.eventChoreography')}</h3>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('home.exploreNow')}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Stage Production */}
+          <div className="relative group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow">
+            <div className="relative h-64 overflow-hidden">
+              <img
+                src={stageProductionImage}
+                alt={t('home.stageProduction')}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <h3 className="text-2xl font-bold text-white mb-3">{t('home.stageProduction')}</h3>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('home.exploreNow')}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Workshops & Trainings */}
+          <div className="relative group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow">
+            <div className="relative h-64 overflow-hidden">
+              <img
+                src={workshopTrainingImage}
+                alt={t('home.workshopsTrainings')}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <h3 className="text-2xl font-bold text-white mb-3">{t('home.workshopsTrainings')}</h3>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('home.exploreNow')}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Kids Dance Courses */}
+          <div className="relative group overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-shadow md:col-span-2 lg:col-span-1">
+            <div className="relative h-64 overflow-hidden">
+              <img
+                src={kidsDanceCoursesImage}
+                alt={t('home.kidsDanceCourses')}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+              <div className="absolute bottom-0 left-0 right-0 p-6">
+                <h3 className="text-2xl font-bold text-white mb-3">{t('home.kidsDanceCourses')}</h3>
+                <Link
+                  to="/contact"
+                  className="inline-flex items-center bg-primary text-white px-6 py-2 rounded-md font-medium hover:bg-primary-dark transition-colors"
+                >
+                  {t('home.exploreNow')}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* <div className="bg-gray-100 py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div>
@@ -183,7 +304,7 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </div>
+      </div> */}
     </PublicLayout>
   );
 }

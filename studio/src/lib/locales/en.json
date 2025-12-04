@@ -50,7 +50,14 @@
     "flexibleSchedule": "Flexible Schedule",
     "flexibleScheduleDesc": "Classes throughout the day to fit your busy lifestyle",
     "smallClassSizes": "Small Class Sizes",
-    "smallClassSizesDesc": "Personalized attention in intimate group settings"
+    "smallClassSizesDesc": "Personalized attention in intimate group settings",
+    "ourServices": "Our Services",
+    "roomRental": "Room Rental",
+    "eventChoreography": "Event Choreography",
+    "stageProduction": "Stage Production",
+    "workshopsTrainings": "Workshops & Trainings",
+    "kidsDanceCourses": "Kids Dance Courses",
+    "exploreNow": "Explore Now"
   },
   "about": {
     "title": "About Us",

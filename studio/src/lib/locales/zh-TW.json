@@ -50,7 +50,14 @@
     "flexibleSchedule": "彈性時間表",
     "flexibleScheduleDesc": "全天候課程，適合您忙碌的生活方式",
     "smallClassSizes": "小班教學",
-    "smallClassSizesDesc": "在親密的小組環境中獲得個人化關注"
+    "smallClassSizesDesc": "在親密的小組環境中獲得個人化關注",
+    "ourServices": "我們的服務",
+    "roomRental": "場地租借",
+    "eventChoreography": "活動編舞",
+    "stageProduction": "舞台製作",
+    "workshopsTrainings": "工作坊與培訓",
+    "kidsDanceCourses": "兒童舞蹈課程",
+    "exploreNow": "立即探索"
   },
   "about": {
     "title": "關於我們",
