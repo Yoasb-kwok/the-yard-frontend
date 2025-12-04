@@ -2,8 +2,9 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, BookOpen, Users, BarChart, Settings, Menu, X } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import logoImage from '../assets/images/the-yard-logo.png';
 
 interface LayoutProps {
   children: ReactNode;
@@ -48,8 +49,7 @@ export default function Layout({ children }: LayoutProps) {
                 <Menu className="h-6 w-6" />
               </button>
               <Link to={isAdmin ? '/admin' : '/dashboard'} className="flex items-center">
-                <BookOpen className="h-8 w-8 text-primary" />
-                <span className="ml-2 text-xl font-semibold text-gray-900">Studio</span>
+                <img src={logoImage} alt="The Yard Logo" className="h-8 w-auto" />
               </Link>
             </div>
 

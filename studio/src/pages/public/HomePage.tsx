@@ -2,8 +2,11 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
+import BannerSlider from '../../components/BannerSlider';
 import { formatDateTime } from '../../lib/utils';
 import { Calendar, Clock, Users } from 'lucide-react';
+import greenBgImage from '../../assets/images/green_bg.jpg';
+import roomRentalImage from '../../assets/images/room_rental.jpg';
 
 interface TodayClass {
   id: string;
@@ -62,27 +65,40 @@ export default function HomePage() {
     setLoading(false);
   }
 
+  const bannerSlides = [
+    {
+      image: greenBgImage,
+      alt: 'The Yard - Modern Studio Space',
+    },
+    {
+      image: roomRentalImage,
+      alt: 'The Yard - Premium Facilities',
+    },
+  ];
+
   return (
     <PublicLayout>
-      <div className="relative bg-gradient-to-br from-primary to-primary-dark text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24">
-          <div className="text-center">
-            <h1 className="text-5xl font-bold mb-6">
+      <div className="relative">
+        <BannerSlider slides={bannerSlides} autoPlayInterval={5000} />
+        {/* Content Overlay */}
+        <div className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <div className="text-center px-4 sm:px-6 lg:px-8 pointer-events-auto">
+            <h1 className="text-5xl font-bold mb-6 text-white drop-shadow-lg">
               {t('home.title')}
             </h1>
-            <p className="text-xl mb-8 text-white/90 max-w-2xl mx-auto">
+            <p className="text-xl mb-8 text-white/90 max-w-2xl mx-auto drop-shadow-md">
               {t('home.subtitle')}
             </p>
-            <div className="flex justify-center gap-4">
+            <div className="flex justify-center gap-4 flex-wrap">
               <Link
                 to="/trial"
-                className="bg-white text-primary px-8 py-3 rounded-lg font-semibold hover:bg-primary-lighter transition-colors"
+                className="bg-white text-primary px-8 py-3 rounded-lg font-semibold hover:bg-primary-lighter transition-colors shadow-lg"
               >
                 {t('home.bookTrial')}
               </Link>
               <Link
                 to="/login"
-                className="bg-primary-dark text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary transition-colors border border-primary"
+                className="bg-primary-dark text-white px-8 py-3 rounded-lg font-semibold hover:bg-primary transition-colors border border-white/50 shadow-lg"
               >
                 {t('home.signIn')}
               </Link>
@@ -124,6 +140,21 @@ export default function HomePage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* YouTube Video Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="aspect-video w-full">
+            <iframe
+              className="w-full h-full"
+              src={`https://www.youtube.com/embed/SkokGSUZx-M?si=8TuYLt-98erWl62m`}
+              title="YouTube video player"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            ></iframe>
+          </div>
+        </div>
       </div>
 
       <div className="bg-gray-100 py-16">

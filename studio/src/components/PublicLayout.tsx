@@ -1,8 +1,9 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { BookOpen, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import logoImage from '../assets/images/the-yard-logo.png';
 
 interface PublicLayoutProps {
   children: ReactNode;
@@ -30,8 +31,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <Link to="/" className="flex items-center">
-                <BookOpen className="h-8 w-8 text-primary" />
-                <span className="ml-2 text-xl font-semibold text-gray-900">Studio</span>
+                <img src={logoImage} alt="The Yard Logo" className="h-8 w-auto" />
               </Link>
             </div>
 
