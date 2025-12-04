@@ -62,6 +62,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
     { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
     { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
+    { path: '/admin/purchase-history', icon: Receipt, label: t('nav.purchaseHistory') },
     { path: '/admin/reports', icon: BarChart, label: t('nav.reports') },
     { path: '/admin/settings', icon: Settings, label: t('nav.settings') },
   ];

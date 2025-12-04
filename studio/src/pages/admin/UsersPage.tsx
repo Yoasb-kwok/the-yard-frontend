@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
-import { Search, Edit, Mail, Calendar } from 'lucide-react';
+import { Search, Edit, Mail, Calendar, Package } from 'lucide-react';
 
 interface UserToken {
   remaining_tokens: number;
@@ -63,6 +64,7 @@ const MOCK_USERS: User[] = [
 
 export default function UsersPage() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -242,9 +244,19 @@ export default function UsersPage() {
                         <button
                           onClick={() => openEditModal(user)}
                           className="text-primary hover:text-primary-dark mr-3"
+                          title={t('admin.users.edit')}
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        {totalTokens > 0 && (
+                          <button
+                            onClick={() => navigate(`/admin/users/${user.id}/assign-tokens`)}
+                            className="text-green-600 hover:text-green-800 mr-3"
+                            title={t('admin.users.assignTokens')}
+                          >
+                            <Package className="h-4 w-4" />
+                          </button>
+                        )}
                         <button
                           onClick={() => sendPasswordReset(user.id)}
                           className="text-gray-600 hover:text-gray-800"
