@@ -180,7 +180,32 @@
     "signIn": "Sign in",
     "invalidCredentials": "Invalid email or password",
     "dontHaveAccount": "Don't have an account?",
-    "register": "Register"
+    "register": "Register",
+    "forgotPassword": "Forgot Password?"
+  },
+  "forgotPassword": {
+    "title": "Forgot Password",
+    "subtitle": "Enter your email address and we'll send you an OTP code to reset your password",
+    "email": "Email Address",
+    "emailPlaceholder": "Enter your email",
+    "emailRequired": "Email is required",
+    "sendOTP": "Send OTP Code",
+    "sending": "Sending...",
+    "backToLogin": "Back to Login"
+  },
+  "otpVerification": {
+    "title": "Verify OTP Code",
+    "subtitle": "We've sent a 6-digit code to {{email}}",
+    "enterOTP": "Enter the 6-digit code",
+    "verify": "Verify",
+    "verifying": "Verifying...",
+    "invalidOTP": "Please enter a valid 6-digit code",
+    "verificationFailed": "OTP verification failed. Please try again.",
+    "success": "OTP verified successfully!",
+    "redirecting": "Redirecting to login...",
+    "didntReceive": "Didn't receive the code?",
+    "resend": "Resend",
+    "backToLogin": "Back to Login"
   },
   "register": {
     "title": "Create your account",

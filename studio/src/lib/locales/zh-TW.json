@@ -180,7 +180,32 @@
     "signIn": "登入",
     "invalidCredentials": "電子郵件或密碼無效",
     "dontHaveAccount": "還沒有帳戶？",
-    "register": "註冊"
+    "register": "註冊",
+    "forgotPassword": "忘記密碼？"
+  },
+  "forgotPassword": {
+    "title": "忘記密碼",
+    "subtitle": "輸入您的電子郵件地址，我們將向您發送驗證碼以重置密碼",
+    "email": "電子郵件地址",
+    "emailPlaceholder": "輸入您的電子郵件",
+    "emailRequired": "需要輸入電子郵件",
+    "sendOTP": "發送驗證碼",
+    "sending": "發送中...",
+    "backToLogin": "返回登入"
+  },
+  "otpVerification": {
+    "title": "驗證驗證碼",
+    "subtitle": "我們已向 {{email}} 發送了一個6位數驗證碼",
+    "enterOTP": "輸入6位數驗證碼",
+    "verify": "驗證",
+    "verifying": "驗證中...",
+    "invalidOTP": "請輸入有效的6位數驗證碼",
+    "verificationFailed": "驗證碼驗證失敗。請重試。",
+    "success": "驗證碼驗證成功！",
+    "redirecting": "正在返回登入頁面...",
+    "didntReceive": "沒有收到驗證碼？",
+    "resend": "重新發送",
+    "backToLogin": "返回登入"
   },
   "register": {
     "title": "建立您的帳戶",

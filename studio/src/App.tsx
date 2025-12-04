@@ -15,6 +15,8 @@ import FAQPage from './pages/public/FAQPage';
 import TrialPage from './pages/public/TrialPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
+import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
+import OTPVerificationPage from './pages/auth/OTPVerificationPage';
 
 import DashboardPage from './pages/student/DashboardPage';
 import SchedulePage from './pages/student/SchedulePage';
@@ -45,6 +47,8 @@ function App() {
           <Route path="/trial" element={<TrialPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/verify-otp" element={<OTPVerificationPage />} />
 
           <Route
             path="/dashboard"

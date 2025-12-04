@@ -180,7 +180,32 @@
     "signIn": "登录",
     "invalidCredentials": "电子邮件或密码无效",
     "dontHaveAccount": "还没有账户？",
-    "register": "注册"
+    "register": "注册",
+    "forgotPassword": "忘记密码？"
+  },
+  "forgotPassword": {
+    "title": "忘记密码",
+    "subtitle": "输入您的电子邮件地址，我们将向您发送验证码以重置密码",
+    "email": "电子邮件地址",
+    "emailPlaceholder": "输入您的电子邮件",
+    "emailRequired": "需要输入电子邮件",
+    "sendOTP": "发送验证码",
+    "sending": "发送中...",
+    "backToLogin": "返回登录"
+  },
+  "otpVerification": {
+    "title": "验证验证码",
+    "subtitle": "我们已向 {{email}} 发送了一个6位数验证码",
+    "enterOTP": "输入6位数验证码",
+    "verify": "验证",
+    "verifying": "验证中...",
+    "invalidOTP": "请输入有效的6位数验证码",
+    "verificationFailed": "验证码验证失败。请重试。",
+    "success": "验证码验证成功！",
+    "redirecting": "正在返回登录页面...",
+    "didntReceive": "没有收到验证码？",
+    "resend": "重新发送",
+    "backToLogin": "返回登录"
   },
   "register": {
     "title": "创建您的账户",

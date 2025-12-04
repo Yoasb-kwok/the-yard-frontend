@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, User, CreditCard, Phone, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import PublicLayout from '../../components/PublicLayout';
 
@@ -76,34 +76,44 @@ export default function RegisterPage() {
                 <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
                   {t('register.fullName')}
                 </label>
-                <input
-                  id="fullName"
-                  name="fullName"
-                  type="text"
-                  autoComplete="name"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                  placeholder={t('register.fullName')}
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                    <User className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <input
+                    id="fullName"
+                    name="fullName"
+                    type="text"
+                    autoComplete="name"
+                    required
+                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    placeholder={t('register.fullName')}
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
+                </div>
               </div>
               <div>
                 <label htmlFor="idLastFour" className="block text-sm font-medium text-gray-700 mb-1">
                   {t('register.idLastFour')}
                 </label>
-                <input
-                  id="idLastFour"
-                  name="idLastFour"
-                  type="text"
-                  maxLength={4}
-                  pattern="[A-Za-z0-9]{4}"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm uppercase"
-                  placeholder={t('register.idLastFour')}
-                  value={idLastFour}
-                  onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                    <CreditCard className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <input
+                    id="idLastFour"
+                    name="idLastFour"
+                    type="text"
+                    maxLength={4}
+                    pattern="[A-Za-z0-9]{4}"
+                    required
+                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm uppercase"
+                    placeholder={t('register.idLastFour')}
+                    value={idLastFour}
+                    onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                  />
+                </div>
               </div>
               <div>
                 <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
@@ -115,53 +125,66 @@ export default function RegisterPage() {
                     name="countryCode"
                     value={countryCode}
                     onChange={(e) => setCountryCode(e.target.value)}
-                    className="appearance-none relative block px-3 py-2 border border-gray-300 border-r-0 rounded-l-md bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-primary focus:border-primary focus:z-10"
+                    className="appearance-none relative block px-3 py-2 border border-gray-300 border-r-0 rounded-l-md bg-gray-50 text-gray-700 text-sm focus:outline-none focus:ring-primary focus:border-primary"
                   >
                     <option value="852">+852</option>
                     <option value="86">+86</option>
                     <option value="853">+853</option>
                   </select>
-                  <input
-                    id="mobile"
-                    name="mobile"
-                    type="tel"
-                    autoComplete="tel"
-                    required
-                    className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-r-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                    placeholder={t('register.mobile')}
-                    value={mobile}
-                    onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
-                  />
+                  <div className="relative flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                      <Phone className="h-5 w-5 text-gray-500" />
+                    </div>
+                    <input
+                      id="mobile"
+                      name="mobile"
+                      type="tel"
+                      autoComplete="tel"
+                      required
+                      className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-r-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                      placeholder={t('register.mobile')}
+                      value={mobile}
+                      onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
+                    />
+                  </div>
                 </div>
               </div>
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                   {t('register.email')}
                 </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                  placeholder={t('register.email')}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                    <Mail className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    required
+                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    placeholder={t('register.email')}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
               </div>
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
                   {t('register.password')}
                 </label>
                 <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                    <Lock className="h-5 w-5 text-gray-500" />
+                  </div>
                   <input
                     id="password"
                     name="password"
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="new-password"
                     required
-                    className="appearance-none relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                    className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                     placeholder={t('register.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -169,7 +192,7 @@ export default function RegisterPage() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 focus:outline-none"
+                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 focus:outline-none z-10"
                     aria-label={showPassword ? t('register.hidePassword') : t('register.showPassword')}
                   >
                     {showPassword ? (
