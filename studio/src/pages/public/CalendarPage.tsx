@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { Calendar, ChevronLeft, ChevronRight, Clock, Users, MapPin, Filter } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X } from 'lucide-react';
 
 interface Lesson {
   id: string;
@@ -71,6 +71,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [showLessonModal, setShowLessonModal] = useState(false);
 
   useEffect(() => {
     loadLessons();
@@ -135,29 +137,32 @@ export default function CalendarPage() {
   };
 
   const getLessonsForDate = (date: Date): Lesson[] => {
-    const dateStr = date.toISOString().split('T')[0];
+    // Use local date strings to avoid timezone issues
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const day = date.getDate();
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
     return lessons.filter(lesson => {
-      const lessonDate = new Date(lesson.start_time).toISOString().split('T')[0];
-      const dateMatches = lessonDate === dateStr;
+      const lessonDate = new Date(lesson.start_time);
+      const lessonYear = lessonDate.getFullYear();
+      const lessonMonth = lessonDate.getMonth();
+      const lessonDay = lessonDate.getDate();
+      const lessonDateStr = `${lessonYear}-${String(lessonMonth + 1).padStart(2, '0')}-${String(lessonDay).padStart(2, '0')}`;
+      
+      const dateMatches = lessonDateStr === dateStr;
       const locationMatches = locationFilter === 'all' || lesson.location === locationFilter;
       return dateMatches && locationMatches;
     });
   };
 
-  const getLessonsForWeek = (startDate: Date): Lesson[] => {
-    const endDate = getEndOfWeek(startDate);
-    return lessons.filter(lesson => {
-      const lessonDate = new Date(lesson.start_time);
-      return lessonDate >= startDate && lessonDate <= endDate;
-    });
-  };
 
   const formatDate = (date: Date): string => {
     return date.toLocaleDateString(i18n.language, { month: 'long', year: 'numeric' });
   };
 
   const formatDay = (date: Date): string => {
-    return date.toLocaleDateString(i18n.language, { weekday: 'long', month: 'long', day: 'numeric' });
+    return date.toLocaleDateString(i18n.language, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
   const formatTime = (date: Date): string => {
@@ -387,6 +392,11 @@ export default function CalendarPage() {
     );
   };
 
+  const handleLessonClick = (lesson: Lesson) => {
+    setSelectedLesson(lesson);
+    setShowLessonModal(true);
+  };
+
   const renderWeekView = () => {
     const startOfWeek = getStartOfWeek(currentDate);
     const weekDays = Array.from({ length: 7 }, (_, i) => {
@@ -394,52 +404,110 @@ export default function CalendarPage() {
       d.setDate(startOfWeek.getDate() + i);
       return d;
     });
-    const weekLessons = getLessonsForWeek(startOfWeek);
+    const locations: { value: LocationFilter; label: string }[] = [
+      { value: 'all', label: t('calendar.allLocations') },
+      { value: 'sanpokong', label: t('home.locations.sanpokong') },
+      { value: 'causewaybay', label: t('home.locations.causewaybay') },
+      { value: 'fotan', label: t('home.locations.fotan') },
+      { value: 'sheungshui', label: t('home.locations.sheungshui') },
+    ];
 
     return (
-      <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="grid grid-cols-7 border-b">
-          {weekDays.map((day, idx) => (
-            <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
-              <div className="text-sm font-medium text-gray-600">
-                {day.toLocaleDateString(i18n.language, { weekday: 'short' })}
-              </div>
-              <div className={`text-lg font-semibold mt-1 ${
-                day.toDateString() === new Date().toDateString() 
-                  ? 'text-primary' 
-                  : 'text-gray-900'
-              }`}>
-                {day.getDate()}
-              </div>
-            </div>
-          ))}
+      <div className="space-y-4">
+        {/* Location Filter */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Filter className="h-5 w-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {locations.map((loc) => {
+              const isActive = locationFilter === loc.value;
+              const colors = loc.value === 'all' 
+                ? { primary: '#007257', dark: '#005a44' }
+                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
+              
+              return (
+                <button
+                  key={loc.value}
+                  onClick={() => setLocationFilter(loc.value)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  style={isActive ? {
+                    backgroundColor: colors.primary,
+                  } : {}}
+                >
+                  {loc.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <div className="grid grid-cols-7 min-h-[400px]">
-          {weekDays.map((day, idx) => {
-            const dayLessons = getLessonsForDate(day);
-            const isToday = day.toDateString() === new Date().toDateString();
-            
-            return (
-              <div
-                key={idx}
-                className={`border-r last:border-r-0 p-2 ${
-                  isToday ? 'bg-primary-lighter' : ''
-                }`}
-              >
-                {dayLessons.map((lesson) => (
-                  <div
-                    key={lesson.id}
-                    className="mb-2 p-2 bg-primary text-white rounded text-xs cursor-pointer hover:bg-primary-dark transition-colors"
-                  >
-                    <div className="font-medium truncate">{lesson.name}</div>
-                    <div className="text-white/80 text-xs mt-1">
-                      {formatTime(new Date(lesson.start_time))}
-                    </div>
-                  </div>
-                ))}
+
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="grid grid-cols-7 border-b">
+            {weekDays.map((day, idx) => (
+              <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
+                <div className="text-sm font-medium text-gray-600">
+                  {day.toLocaleDateString(i18n.language, { weekday: 'short' })}
+                </div>
+                <div className={`text-lg font-semibold mt-1 ${
+                  day.toDateString() === new Date().toDateString() 
+                    ? 'text-primary' 
+                    : 'text-gray-900'
+                }`}>
+                  {day.getDate()}
+                </div>
               </div>
-            );
-          })}
+            ))}
+          </div>
+          <div className="grid grid-cols-7 min-h-[400px]">
+            {weekDays.map((day, idx) => {
+              const dayLessons = getLessonsForDate(day);
+              const isToday = day.toDateString() === new Date().toDateString();
+              
+              return (
+                <div
+                  key={idx}
+                  className={`border-r last:border-r-0 p-2 ${
+                    isToday ? 'bg-primary-lighter' : ''
+                  }`}
+                >
+                  {dayLessons.map((lesson) => {
+                    const locationColors = getLocationColors(lesson.location);
+                    
+                    return (
+                      <div
+                        key={lesson.id}
+                        className="mb-2 p-2 text-white rounded text-xs cursor-pointer transition-all hover:shadow-md"
+                        style={{
+                          backgroundColor: locationColors.primary,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.dark;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.primary;
+                        }}
+                        onClick={() => handleLessonClick(lesson)}
+                      >
+                        <div className="font-medium truncate">{lesson.name}</div>
+                        <div className="text-white/70 text-xs mt-1 truncate">
+                          {lesson.instructor}
+                        </div>
+                        <div className="text-white/80 text-xs mt-0.5">
+                          {formatTime(new Date(lesson.start_time))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -486,15 +554,33 @@ export default function CalendarPage() {
                   {day.getDate()}
                 </div>
                 <div className="space-y-1">
-                  {dayLessons.slice(0, 3).map((lesson) => (
-                    <div
-                      key={lesson.id}
-                      className="text-xs p-1 bg-primary text-white rounded truncate cursor-pointer hover:bg-primary-dark transition-colors"
-                      title={`${lesson.name} - ${formatTime(new Date(lesson.start_time))}`}
-                    >
-                      {formatTime(new Date(lesson.start_time))} {lesson.name}
-                    </div>
-                  ))}
+                  {dayLessons.slice(0, 3).map((lesson) => {
+                    const locationColors = getLocationColors(lesson.location);
+                    return (
+                      <div
+                        key={lesson.id}
+                        className="text-xs p-1 text-white rounded cursor-pointer transition-colors"
+                        style={{
+                          backgroundColor: locationColors.primary,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.dark;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.primary;
+                        }}
+                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}`}
+                        onClick={() => handleLessonClick(lesson)}
+                      >
+                        <div className="truncate">
+                          {formatTime(new Date(lesson.start_time))} {lesson.name}
+                        </div>
+                        <div className="truncate text-white/80">
+                          {lesson.instructor}
+                        </div>
+                      </div>
+                    );
+                  })}
                   {dayLessons.length > 3 && (
                     <div className="text-xs text-gray-500">
                       +{dayLessons.length - 3} more
@@ -601,6 +687,173 @@ export default function CalendarPage() {
           {view === 'month' && renderMonthView()}
         </div>
       </div>
+
+      {/* Lesson Details Modal */}
+      {showLessonModal && selectedLesson && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            {/* Background overlay */}
+            <div
+              className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75"
+              onClick={() => setShowLessonModal(false)}
+            ></div>
+
+            {/* Modal panel */}
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              {(() => {
+                const locationColors = getLocationColors(selectedLesson.location);
+                
+                return (
+                  <div className="bg-white">
+                    {/* Header with location color accent */}
+                    <div
+                      className="h-2"
+                      style={{
+                        background: `linear-gradient(to right, ${locationColors.primary}, ${locationColors.light})`,
+                      }}
+                    ></div>
+                    
+                    <div className="p-6">
+                      {/* Close button */}
+                      <div className="flex justify-end mb-4">
+                        <button
+                          onClick={() => setShowLessonModal(false)}
+                          className="text-gray-400 hover:text-gray-600 transition-colors"
+                        >
+                          <X className="h-6 w-6" />
+                        </button>
+                      </div>
+
+                      {/* Class Name and Program Code */}
+                      <div className="flex items-start justify-between mb-6">
+                        <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">
+                          {selectedLesson.name}
+                        </h3>
+                        <span
+                          className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
+                          style={{
+                            backgroundColor: locationColors.primary,
+                          }}
+                        >
+                          {selectedLesson.program_code}
+                        </span>
+                      </div>
+
+                      {/* Tutor Profile */}
+                      <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
+                        <img
+                          src={getTutorImageUrl(selectedLesson.instructor)}
+                          alt={selectedLesson.instructor}
+                          className="w-20 h-20 rounded-full object-cover mr-4 border-4"
+                          style={{
+                            borderColor: locationColors.lighter,
+                          }}
+                        />
+                        <div>
+                          <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
+                          <p className="text-lg font-bold text-gray-900">{selectedLesson.instructor}</p>
+                        </div>
+                      </div>
+
+                      {/* Class Details */}
+                      <div className="space-y-4 mb-6">
+                        <div
+                          className="flex items-center text-gray-800 rounded-lg p-3"
+                          style={{
+                            backgroundColor: locationColors.lighter,
+                          }}
+                        >
+                          <Calendar
+                            className="h-5 w-5 mr-3 flex-shrink-0"
+                            style={{ color: locationColors.primary }}
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
+                            <p className="text-base font-semibold">
+                              {new Date(selectedLesson.start_time).toLocaleDateString(i18n.language, {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                                weekday: 'long',
+                              })}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          className="flex items-center text-gray-800 rounded-lg p-3"
+                          style={{
+                            backgroundColor: locationColors.lighter,
+                          }}
+                        >
+                          <Clock
+                            className="h-5 w-5 mr-3 flex-shrink-0"
+                            style={{ color: locationColors.primary }}
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classTime')}</p>
+                            <p className="text-base font-semibold">
+                              {formatTime(new Date(selectedLesson.start_time))} - {formatTime(new Date(selectedLesson.end_time))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div
+                          className="flex items-center text-gray-800 rounded-lg p-3"
+                          style={{
+                            backgroundColor: locationColors.lighter,
+                          }}
+                        >
+                          <MapPin
+                            className="h-5 w-5 mr-3 flex-shrink-0"
+                            style={{ color: locationColors.primary }}
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-gray-500 mb-1">{t('home.location')}</p>
+                            <p className="text-base font-semibold">
+                              {t(`home.locations.${selectedLesson.location}`)}
+                            </p>
+                          </div>
+                        </div>
+
+                      </div>
+
+                      {/* Book Trial Button */}
+                      <Link
+                        to={`/trial?classId=${selectedLesson.id}`}
+                        state={{
+                          classData: {
+                            id: selectedLesson.id,
+                            name: selectedLesson.name,
+                            instructor: selectedLesson.instructor,
+                            start_time: selectedLesson.start_time,
+                            end_time: selectedLesson.end_time,
+                            location: selectedLesson.location,
+                            program_code: selectedLesson.program_code,
+                          }
+                        }}
+                        className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                        style={{
+                          backgroundColor: locationColors.primary,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.dark;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.primary;
+                        }}
+                        onClick={() => setShowLessonModal(false)}
+                      >
+                        {t('home.bookTrial')}
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
     </PublicLayout>
   );
 }

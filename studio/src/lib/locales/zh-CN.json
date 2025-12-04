@@ -327,7 +327,8 @@
     "today": "今天",
     "noLessons": "没有课程",
     "filterByLocation": "按地点筛选",
-    "allLocations": "所有地点"
+    "allLocations": "所有地点",
+    "enrollment": "报名人数"
   },
   "faq": {
     "title": "常见问题",

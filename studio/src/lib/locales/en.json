@@ -327,7 +327,8 @@
     "today": "Today",
     "noLessons": "No lessons scheduled",
     "filterByLocation": "Filter by Location",
-    "allLocations": "All Locations"
+    "allLocations": "All Locations",
+    "enrollment": "Enrollment"
   },
   "faq": {
     "title": "Frequently Asked Questions",
