@@ -356,9 +356,6 @@ export default function UsersPage() {
                   <div key={index} className="border rounded-lg p-4 space-y-3">
                     <div className="flex justify-between items-center">
                       <div>
-                        <p className="text-sm font-medium text-gray-700">
-                          {t('admin.users.tokenPackage')} #{index + 1}
-                        </p>
                         <p className="text-sm text-gray-500">
                           {t('admin.users.remainingTokens')}: {token.remaining_tokens}
                         </p>
