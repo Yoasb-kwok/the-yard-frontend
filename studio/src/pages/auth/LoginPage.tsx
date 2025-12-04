@@ -96,6 +96,18 @@ export default function LoginPage() {
                 {loading ? t('login.signingIn') : t('login.signIn')}
               </button>
             </div>
+
+            <div className="text-center">
+              <p className="text-sm text-gray-600">
+                {t('login.dontHaveAccount')}{' '}
+                <Link
+                  to="/register"
+                  className="font-medium text-primary hover:text-primary-dark"
+                >
+                  {t('login.register')}
+                </Link>
+              </p>
+            </div>
           </form>
         </div>
       </div>

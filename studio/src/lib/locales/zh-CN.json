@@ -168,7 +168,27 @@
     "password": "密码",
     "signingIn": "登录中...",
     "signIn": "登录",
-    "invalidCredentials": "电子邮件或密码无效"
+    "invalidCredentials": "电子邮件或密码无效",
+    "dontHaveAccount": "还没有账户？",
+    "register": "注册"
+  },
+  "register": {
+    "title": "创建您的账户",
+    "subtitle": "注册以开始使用",
+    "fullName": "全名",
+    "idLastFour": "身份证后4位字",
+    "mobile": "手机号码",
+    "email": "电子邮件地址",
+    "password": "密码",
+    "passwordMin": "至少6个字符",
+    "register": "注册",
+    "registering": "注册中...",
+    "alreadyHaveAccount": "已有账户？",
+    "signIn": "登录",
+    "success": "注册成功！请登录。",
+    "invalidIdCard": "请输入4位字母或数字",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "dashboard": {
     "title": "仪表板",

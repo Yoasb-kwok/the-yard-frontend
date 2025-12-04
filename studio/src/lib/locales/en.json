@@ -168,7 +168,27 @@
     "password": "Password",
     "signingIn": "Signing in...",
     "signIn": "Sign in",
-    "invalidCredentials": "Invalid email or password"
+    "invalidCredentials": "Invalid email or password",
+    "dontHaveAccount": "Don't have an account?",
+    "register": "Register"
+  },
+  "register": {
+    "title": "Create your account",
+    "subtitle": "Sign up to get started",
+    "fullName": "Full Name",
+    "idLastFour": "Last 4 characters of ID Card",
+    "mobile": "Mobile Number",
+    "email": "Email address",
+    "password": "Password",
+    "passwordMin": "Minimum 6 characters",
+    "register": "Register",
+    "registering": "Registering...",
+    "alreadyHaveAccount": "Already have an account?",
+    "signIn": "Sign in",
+    "success": "Registration successful! Please sign in.",
+    "invalidIdCard": "Please enter exactly 4 alphanumeric characters for ID card number",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password"
   },
   "dashboard": {
     "title": "Dashboard",
