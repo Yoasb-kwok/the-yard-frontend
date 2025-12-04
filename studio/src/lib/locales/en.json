@@ -74,7 +74,25 @@
   },
   "news": {
     "title": "Latest News",
-    "noNews": "No news posts available"
+    "noNews": "No news posts available",
+    "backToNews": "Back to News",
+    "posts": {
+      "1": {
+        "title": "New Class Schedule Available",
+        "content": "The new class schedule for next month is now available.",
+        "fullContent": "The new class schedule for next month is now available.\n\nWe look forward to seeing you in our classes!"
+      },
+      "2": {
+        "title": "Welcome Our New Instructor",
+        "content": "Please join us in welcoming ABC to our team! ABC brings over 10 years of teaching experience.",
+        "fullContent": "Please join us in welcoming ABC to our team! ABC brings over 10 years of teaching experience.\n\nABC has trained with some of the best instructors in the world and brings a unique perspective to our studio.\n\nWe are thrilled to have ABC join us and look forward to the positive impact they will have on our students."
+      },
+      "3": {
+        "title": "Holiday Special Promotion",
+        "content": "This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.",
+        "fullContent": "This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.\n\nDon't miss out on these amazing deals! Visit our shop or contact us for more information."
+      }
+    }
   },
   "contact": {
     "title": "Contact Us",

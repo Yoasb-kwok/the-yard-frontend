@@ -6,6 +6,7 @@ import HomePage from './pages/public/HomePage';
 import AboutPage from './pages/public/AboutPage';
 import CalendarPage from './pages/public/CalendarPage';
 import NewsPage from './pages/public/NewsPage';
+import NewsDetailPage from './pages/public/NewsDetailPage';
 import ContactPage from './pages/public/ContactPage';
 import TermsPage from './pages/public/TermsPage';
 import PrivacyPage from './pages/public/PrivacyPage';
@@ -32,6 +33,7 @@ function App() {
           <Route path="/about" element={<AboutPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
           <Route path="/news" element={<NewsPage />} />
+          <Route path="/news/:id" element={<NewsDetailPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
