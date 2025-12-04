@@ -35,8 +35,37 @@ export default function TermsPage() {
     <PublicLayout>
       <div className="max-w-4xl mx-auto px-4 py-16">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">{content.title}</h1>
-        <div className="prose prose-lg max-w-none bg-white rounded-lg shadow-md p-8">
-          <p className="text-gray-700 whitespace-pre-line">{content.content}</p>
+        <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="prose prose-lg max-w-none text-gray-700 whitespace-pre-line leading-relaxed">
+            {content.content.split('\n').map((line, index) => {
+              // Check if line starts with a section letter (A., B., C., D.)
+              if (/^[A-D]\./.test(line.trim())) {
+                return (
+                  <h2 key={index} className="text-2xl font-bold text-gray-900 mt-8 mb-4 first:mt-0">
+                    {line}
+                  </h2>
+                );
+              }
+              // Check if line starts with a number (numbered list items)
+              if (/^\d+\./.test(line.trim())) {
+                return (
+                  <p key={index} className="mb-3 ml-4">
+                    {line}
+                  </p>
+                );
+              }
+              // Regular paragraph
+              if (line.trim()) {
+                return (
+                  <p key={index} className="mb-3">
+                    {line}
+                  </p>
+                );
+              }
+              // Empty line
+              return <br key={index} />;
+            })}
+          </div>
         </div>
       </div>
     </PublicLayout>
