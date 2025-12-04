@@ -338,6 +338,7 @@
       "mobile": "手机",
       "role": "角色",
       "tokens": "代币",
+      "tokenExpiryDate": "代币到期日",
       "joined": "加入时间",
       "actions": "操作",
       "editUser": "编辑用户",
@@ -345,7 +346,17 @@
       "saveChanges": "保存变更",
       "passwordReset": "发送密码重置",
       "passwordResetSent": "密码重置电子邮件已发送（模拟）",
-      "userUpdated": "用户已成功更新"
+      "userUpdated": "用户已成功更新",
+      "student": "学生",
+      "admin": "管理员",
+      "editTokenExpiryDate": "编辑代币到期日",
+      "editTokenExpiryDateTitle": "编辑代币到期日 - {{name}}",
+      "remainingTokens": "剩余代币",
+      "currentExpiryDate": "当前到期日",
+      "newExpiryDate": "新到期日",
+      "tokenPackage": "代币套票",
+      "tokenExpiryDateUpdated": "代币到期日已成功更新",
+      "noTokens": "没有代币套票"
     },
     "classes": {
       "title": "课程管理",

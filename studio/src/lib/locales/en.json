@@ -338,6 +338,7 @@
       "mobile": "Mobile",
       "role": "Role",
       "tokens": "Tokens",
+      "tokenExpiryDate": "Token Expiry Date",
       "joined": "Joined",
       "actions": "Actions",
       "editUser": "Edit User",
@@ -345,7 +346,17 @@
       "saveChanges": "Save Changes",
       "passwordReset": "Send password reset",
       "passwordResetSent": "Password reset email sent (mock)",
-      "userUpdated": "User updated successfully"
+      "userUpdated": "User updated successfully",
+      "student": "Student",
+      "admin": "Admin",
+      "editTokenExpiryDate": "Edit Token Expiry Date",
+      "editTokenExpiryDateTitle": "Edit Token Expiry Date - {{name}}",
+      "remainingTokens": "Remaining Tokens",
+      "currentExpiryDate": "Current Expiry Date",
+      "newExpiryDate": "New Expiry Date",
+      "tokenPackage": "Token Package",
+      "tokenExpiryDateUpdated": "Token expiry date updated successfully",
+      "noTokens": "No token packages"
     },
     "classes": {
       "title": "Class Management",
