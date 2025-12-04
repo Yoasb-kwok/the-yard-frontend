@@ -44,6 +44,7 @@
     "signIn": "Sign In",
     "todaysClasses": "Today's Classes",
     "noClassesToday": "No classes scheduled for today",
+    "viewMore": "View More",
     "enrolled": "enrolled",
     "expertInstructors": "Expert Instructors",
     "expertInstructorsDesc": "Learn from certified professionals with years of experience",
@@ -57,7 +58,15 @@
     "stageProduction": "Stage Production",
     "workshopsTrainings": "Workshops & Trainings",
     "kidsDanceCourses": "Kids Dance Courses",
-    "exploreNow": "Explore Now"
+    "exploreNow": "Explore Now",
+    "tutor": "Tutor",
+    "location": "Location",
+    "locations": {
+      "sanpokong": "San Po Kong",
+      "causewaybay": "Causeway Bay",
+      "fotan": "Fo Tan",
+      "sheungshui": "Sheung Shui"
+    }
   },
   "about": {
     "title": "About Us",

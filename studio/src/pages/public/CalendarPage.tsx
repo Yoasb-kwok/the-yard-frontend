@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react';
 
@@ -56,13 +57,23 @@ const DUMMY_LESSONS = generateDummyLessons();
 
 export default function CalendarPage() {
   const { t } = useTranslation();
-  const [view, setView] = useState<ViewType>('month');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewParam = searchParams.get('view') as ViewType | null;
+  const [view, setView] = useState<ViewType>(viewParam && ['day', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
 
   useEffect(() => {
     loadLessons();
   }, [currentDate, view]);
+
+  // Update view when URL parameter changes
+  useEffect(() => {
+    const viewParam = searchParams.get('view') as ViewType | null;
+    if (viewParam && ['day', 'week', 'month'].includes(viewParam)) {
+      setView(viewParam);
+    }
+  }, [searchParams]);
 
   async function loadLessons() {
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -326,7 +337,10 @@ export default function CalendarPage() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setView('day')}
+                onClick={() => {
+                  setView('day');
+                  setSearchParams({ view: 'day' });
+                }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   view === 'day'
                     ? 'bg-primary text-white'
@@ -336,7 +350,10 @@ export default function CalendarPage() {
                 {t('calendar.day')}
               </button>
               <button
-                onClick={() => setView('week')}
+                onClick={() => {
+                  setView('week');
+                  setSearchParams({ view: 'week' });
+                }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   view === 'week'
                     ? 'bg-primary text-white'
@@ -346,7 +363,10 @@ export default function CalendarPage() {
                 {t('calendar.week')}
               </button>
               <button
-                onClick={() => setView('month')}
+                onClick={() => {
+                  setView('month');
+                  setSearchParams({ view: 'month' });
+                }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   view === 'month'
                     ? 'bg-primary text-white'

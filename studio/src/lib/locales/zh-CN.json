@@ -44,6 +44,7 @@
     "signIn": "登录",
     "todaysClasses": "今日课程",
     "noClassesToday": "今日没有安排课程",
+    "viewMore": "查看更多",
     "enrolled": "已报名",
     "expertInstructors": "专业导师",
     "expertInstructorsDesc": "向拥有多年经验的认证专业人士学习",
@@ -57,7 +58,15 @@
     "stageProduction": "舞台制作",
     "workshopsTrainings": "工作坊与培训",
     "kidsDanceCourses": "儿童舞蹈课程",
-    "exploreNow": "立即探索"
+    "exploreNow": "立即探索",
+    "tutor": "导师",
+    "location": "分店",
+    "locations": {
+      "sanpokong": "新蒲岗",
+      "causewaybay": "铜锣湾",
+      "fotan": "火炭",
+      "sheungshui": "上水"
+    }
   },
   "about": {
     "title": "关于我们",
