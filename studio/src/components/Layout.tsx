@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -60,6 +60,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin', icon: Home, label: t('nav.dashboard') },
     { path: '/admin/users', icon: Users, label: t('nav.users') },
     { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
+    { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
     { path: '/admin/reports', icon: BarChart, label: t('nav.reports') },
     { path: '/admin/settings', icon: Settings, label: t('nav.settings') },
   ];
@@ -83,7 +84,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="lg:hidden mr-3 p-2 text-gray-600 hover:text-gray-900"
+                className="xl:hidden mr-3 p-2 text-gray-600 hover:text-gray-900"
               >
                 <PanelLeft className="h-6 w-6" />
               </button>
@@ -315,7 +316,7 @@ export default function Layout({ children }: LayoutProps) {
 
       <div className="flex pt-16">
         {/* Desktop Sidebar */}
-        <aside className="hidden lg:block w-64 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
+        <aside className="hidden xl:block w-64 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
           <nav className="mt-5 px-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -345,10 +346,10 @@ export default function Layout({ children }: LayoutProps) {
         {sidebarOpen && (
           <>
             <div
-              className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 xl:hidden"
               onClick={() => setSidebarOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:hidden">
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out xl:hidden">
               <div className="flex items-center justify-between h-16 px-4 border-b">
                 <span className="text-xl font-semibold text-gray-900">{t('nav.menu')}</span>
                 <button
@@ -386,7 +387,7 @@ export default function Layout({ children }: LayoutProps) {
           </>
         )}
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 p-4 sm:p-6 xl:p-8">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>

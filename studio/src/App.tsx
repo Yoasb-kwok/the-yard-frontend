@@ -28,6 +28,7 @@ import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
 import ReportsPage from './pages/admin/ReportsPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import CouponsPage from './pages/admin/CouponsPage';
 
 function App() {
   return (
@@ -120,6 +121,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/coupons"
+            element={
+              <ProtectedRoute requireAdmin>
+                <CouponsPage />
               </ProtectedRoute>
             }
           />
