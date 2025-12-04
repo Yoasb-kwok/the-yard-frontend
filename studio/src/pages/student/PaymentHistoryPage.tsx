@@ -46,7 +46,17 @@ const MOCK_PAYMENTS: Payment[] = [
 ];
 
 export default function PaymentHistoryPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  
+  // Map i18n language codes to locale strings for date formatting
+  const getLocale = (): string => {
+    const langMap: { [key: string]: string } = {
+      'en': 'en-US',
+      'zh-CN': 'zh-CN',
+      'zh-TW': 'zh-TW',
+    };
+    return langMap[i18n.language] || i18n.language || 'en-US';
+  };
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -144,7 +154,7 @@ export default function PaymentHistoryPage() {
                   {payments.map((payment) => (
                     <tr key={payment.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDateTime(payment.date)}
+                        {formatDateTime(payment.date, getLocale())}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         <div>

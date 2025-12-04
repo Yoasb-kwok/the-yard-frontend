@@ -8,7 +8,7 @@
     "contact": "Contact",
     "login": "Sign In",
     "dashboard": "Dashboard",
-    "schedule": "Schedule",
+    "schedule": "My Schedule",
     "shop": "Shop",
     "paymentHistory": "Payment History",
     "profile": "Profile",
@@ -216,9 +216,29 @@
   "schedule": {
     "title": "My Schedule",
     "noUpcomingClasses": "No upcoming classes scheduled",
+    "upcomingLessons": "Upcoming Lessons",
+    "pastLessons": "Past Lessons",
     "instructor": "Instructor",
     "start": "Start",
-    "end": "End"
+    "end": "End",
+    "class": "Class",
+    "date": "Date",
+    "applyExtension": "Apply for Extension",
+    "applySickLeave": "Apply for Sick Leave",
+    "extension": "Extension",
+    "sickLeave": "Sick Leave",
+    "reason": "Reason",
+    "reasonPlaceholder": "Please provide a reason for your application...",
+    "extensionApplied": "Extension application submitted successfully! Waiting for approval.",
+    "sickLeaveApplied": "Sick leave application submitted successfully! Waiting for approval.",
+    "status": {
+      "enrolled": "Enrolled",
+      "attended": "Attended",
+      "missed": "Missed",
+      "pending": "Pending Approval",
+      "approved": "Approved",
+      "rejected": "Rejected"
+    }
   },
   "shop": {
     "title": "Token Shop",

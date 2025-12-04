@@ -8,7 +8,7 @@
     "contact": "聯絡我們",
     "login": "登入",
     "dashboard": "儀表板",
-    "schedule": "課程表",
+    "schedule": "我的課程表",
     "shop": "商店",
     "paymentHistory": "付款記錄",
     "profile": "個人資料",
@@ -216,9 +216,29 @@
   "schedule": {
     "title": "我的課程表",
     "noUpcomingClasses": "沒有即將到來的課程",
+    "upcomingLessons": "即將到來的課程",
+    "pastLessons": "過去的課程",
     "instructor": "導師",
     "start": "開始",
-    "end": "結束"
+    "end": "結束",
+    "class": "課程",
+    "date": "日期",
+    "applyExtension": "申請延期",
+    "applySickLeave": "申請病假",
+    "extension": "延期",
+    "sickLeave": "病假",
+    "reason": "原因",
+    "reasonPlaceholder": "請提供申請原因...",
+    "extensionApplied": "延期申請已提交！等待審核。",
+    "sickLeaveApplied": "病假申請已提交！等待審核。",
+    "status": {
+      "enrolled": "已報名",
+      "attended": "已參加",
+      "missed": "缺席",
+      "pending": "待審核",
+      "approved": "已批准",
+      "rejected": "已拒絕"
+    }
   },
   "shop": {
     "title": "代幣商店",

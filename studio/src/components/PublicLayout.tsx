@@ -1,7 +1,7 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User } from 'lucide-react';
+import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Receipt, Home, Newspaper, Package, Phone, LogOut } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from '../assets/images/the-yard-logo.png';
@@ -40,13 +40,13 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
   // Check if student is logged in
   const isStudent = user && profile?.role === 'student';
 
-  // Build navigation items
+  // Build navigation items with icons
   const navItems = [
-    { path: '/', label: t('nav.home') },
-    { path: '/calendar', label: t('nav.calendar') },
-    { path: '/news', label: t('nav.news') },
-    { path: '/token-package', label: t('nav.tokenPackage') },
-    { path: '/contact', label: t('nav.contact') },
+    { path: '/', label: t('nav.home'), icon: Home },
+    { path: '/calendar', label: t('nav.calendar'), icon: Calendar },
+    { path: '/news', label: t('nav.news'), icon: Newspaper },
+    { path: '/token-package', label: t('nav.tokenPackage'), icon: Package },
+    { path: '/contact', label: t('nav.contact'), icon: Phone },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -107,17 +107,56 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                   {userMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
                       {isStudent && (
-                        <Link
-                          to="/dashboard"
-                          onClick={() => setUserMenuOpen(false)}
-                          className={`block px-4 py-2 text-sm transition-colors ${
-                            isActive('/dashboard')
-                              ? 'bg-primary-lighter text-primary'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          {t('nav.dashboard')}
-                        </Link>
+                        <>
+                          <Link
+                            to="/dashboard"
+                            onClick={() => setUserMenuOpen(false)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                              isActive('/dashboard')
+                                ? 'bg-primary-lighter text-primary'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            <Home className="h-4 w-4" />
+                            {t('nav.dashboard')}
+                          </Link>
+                          <Link
+                            to="/schedule"
+                            onClick={() => setUserMenuOpen(false)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                              isActive('/schedule')
+                                ? 'bg-primary-lighter text-primary'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            <Calendar className="h-4 w-4" />
+                            {t('nav.schedule')}
+                          </Link>
+                          <Link
+                            to="/payment-history"
+                            onClick={() => setUserMenuOpen(false)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                              isActive('/payment-history')
+                                ? 'bg-primary-lighter text-primary'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            <Receipt className="h-4 w-4" />
+                            {t('nav.paymentHistory')}
+                          </Link>
+                          <Link
+                            to="/profile"
+                            onClick={() => setUserMenuOpen(false)}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                              isActive('/profile')
+                                ? 'bg-primary-lighter text-primary'
+                                : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                          >
+                            <User className="h-4 w-4" />
+                            {t('nav.profile')}
+                          </Link>
+                        </>
                       )}
                       <button
                         onClick={handleSignOut}
@@ -152,55 +191,109 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
 
           {/* Mobile menu dropdown */}
           {mobileMenuOpen && (
-            <div className="md:hidden border-t">
-              <div className="px-2 pt-2 pb-3 space-y-1">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
-                      isActive(item.path)
-                        ? 'bg-primary-lighter text-primary'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
-                {user ? (
-                  <>
-                    {isStudent && (
+            <div className="md:hidden border-t bg-gray-50">
+              <div className="px-3 pt-4 pb-4 space-y-2">
+                {/* Public Navigation Items */}
+                <div className="space-y-1">
+                  {navItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
                       <Link
-                        to="/dashboard"
+                        key={item.path}
+                        to={item.path}
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
-                          isActive('/dashboard')
-                            ? 'bg-primary-lighter text-primary'
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                          isActive(item.path)
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
                         }`}
                       >
-                        {t('nav.dashboard')}
+                        <Icon className={`h-5 w-5 ${isActive(item.path) ? 'text-white' : 'text-gray-500'}`} />
+                        {item.label}
                       </Link>
-                    )}
-                    <button
-                      onClick={() => {
-                        handleSignOut();
-                        setMobileMenuOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
-                    >
-                      {t('nav.signOut')}
-                    </button>
+                    );
+                  })}
+                </div>
+
+                {/* User Menu Items */}
+                {user && isStudent && (
+                  <>
+                    <div className="pt-2 border-t border-gray-200">
+                      <div className="space-y-1">
+                        <Link
+                          to="/dashboard"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/dashboard')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <Home className={`h-5 w-5 ${isActive('/dashboard') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.dashboard')}
+                        </Link>
+                        <Link
+                          to="/schedule"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/schedule')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <Calendar className={`h-5 w-5 ${isActive('/schedule') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.schedule')}
+                        </Link>
+                        <Link
+                          to="/payment-history"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/payment-history')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <Receipt className={`h-5 w-5 ${isActive('/payment-history') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.paymentHistory')}
+                        </Link>
+                        <Link
+                          to="/profile"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/profile')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <User className={`h-5 w-5 ${isActive('/profile') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.profile')}
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => {
+                          handleSignOut();
+                          setMobileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-base font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 transition-all shadow-sm"
+                      >
+                        <LogOut className="h-5 w-5" />
+                        {t('nav.signOut')}
+                      </button>
+                    </div>
                   </>
-                ) : (
-                  <Link
-                    to="/login"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="block px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
-                  >
-                    {t('nav.login')}
-                  </Link>
+                )}
+                {!user && (
+                  <div className="pt-2">
+                    <Link
+                      to="/login"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block w-full text-center px-4 py-3 text-base font-medium text-white bg-primary rounded-lg hover:bg-primary-dark active:bg-primary transition-all shadow-sm"
+                    >
+                      {t('nav.login')}
+                    </Link>
+                  </div>
                 )}
               </div>
             </div>

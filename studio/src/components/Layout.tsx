@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -11,7 +11,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { profile, signOut, isAdmin } = useAuth();
+  const { profile, signOut, isAdmin, user } = useAuth();
   const { t } = useTranslation();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -54,13 +54,13 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;
 
-  // Public navigation items for top menu bar
+  // Public navigation items for top menu bar with icons
   const publicNavItems = [
-    { path: '/', label: t('nav.home') },
-    { path: '/calendar', label: t('nav.calendar') },
-    { path: '/news', label: t('nav.news') },
-    { path: '/token-package', label: t('nav.tokenPackage') },
-    { path: '/contact', label: t('nav.contact') },
+    { path: '/', label: t('nav.home'), icon: Home },
+    { path: '/calendar', label: t('nav.calendar'), icon: Calendar },
+    { path: '/news', label: t('nav.news'), icon: Newspaper },
+    { path: '/token-package', label: t('nav.tokenPackage'), icon: Package },
+    { path: '/contact', label: t('nav.contact'), icon: Phone },
   ];
 
   return (
@@ -108,6 +108,58 @@ export default function Layout({ children }: LayoutProps) {
                 </button>
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                    {user && !isAdmin && (
+                      <>
+                        <Link
+                          to="/dashboard"
+                          onClick={() => setUserMenuOpen(false)}
+                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                            isActive('/dashboard')
+                              ? 'bg-primary-lighter text-primary'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <Home className="h-4 w-4" />
+                          {t('nav.dashboard')}
+                        </Link>
+                        <Link
+                          to="/schedule"
+                          onClick={() => setUserMenuOpen(false)}
+                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                            isActive('/schedule')
+                              ? 'bg-primary-lighter text-primary'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <Calendar className="h-4 w-4" />
+                          {t('nav.schedule')}
+                        </Link>
+                        <Link
+                          to="/payment-history"
+                          onClick={() => setUserMenuOpen(false)}
+                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                            isActive('/payment-history')
+                              ? 'bg-primary-lighter text-primary'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <Receipt className="h-4 w-4" />
+                          {t('nav.paymentHistory')}
+                        </Link>
+                        <Link
+                          to="/profile"
+                          onClick={() => setUserMenuOpen(false)}
+                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                            isActive('/profile')
+                              ? 'bg-primary-lighter text-primary'
+                              : 'text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          <User className="h-4 w-4" />
+                          {t('nav.profile')}
+                        </Link>
+                      </>
+                    )}
                     <button
                       onClick={() => {
                         signOut();
@@ -136,45 +188,113 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Mobile menu dropdown */}
           {mobileMenuOpen && (
-            <div className="md:hidden border-t">
-              <div className="px-2 pt-2 pb-3 space-y-1">
+            <div className="md:hidden border-t bg-gray-50">
+              <div className="px-3 pt-4 pb-4 space-y-2">
                 {/* Public Navigation Items */}
-                {publicNavItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
-                      isActive(item.path)
-                        ? 'bg-primary-lighter text-primary'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                ))}
+                <div className="space-y-1">
+                  {publicNavItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                          isActive(item.path)
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                        }`}
+                      >
+                        <Icon className={`h-5 w-5 ${isActive(item.path) ? 'text-white' : 'text-gray-500'}`} />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                {/* User Menu Items */}
                 {!isAdmin && (
-                  <Link
-                    to="/dashboard"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={`block px-3 py-2 text-base font-medium rounded-md transition-colors ${
-                      isActive('/dashboard')
-                        ? 'bg-primary-lighter text-primary'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                    }`}
-                  >
-                    {t('nav.dashboard')}
-                  </Link>
+                  <>
+                    <div className="pt-2 border-t border-gray-200">
+                      <div className="space-y-1">
+                        <Link
+                          to="/dashboard"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/dashboard')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <Home className={`h-5 w-5 ${isActive('/dashboard') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.dashboard')}
+                        </Link>
+                        <Link
+                          to="/schedule"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/schedule')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <Calendar className={`h-5 w-5 ${isActive('/schedule') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.schedule')}
+                        </Link>
+                        <Link
+                          to="/payment-history"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/payment-history')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <Receipt className={`h-5 w-5 ${isActive('/payment-history') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.paymentHistory')}
+                        </Link>
+                        <Link
+                          to="/profile"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
+                            isActive('/profile')
+                              ? 'bg-primary text-white shadow-sm'
+                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
+                          }`}
+                        >
+                          <User className={`h-5 w-5 ${isActive('/profile') ? 'text-white' : 'text-gray-500'}`} />
+                          {t('nav.profile')}
+                        </Link>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => {
+                          signOut();
+                          setMobileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-base font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 transition-all shadow-sm"
+                      >
+                        <LogOut className="h-5 w-5" />
+                        {t('nav.signOut')}
+                      </button>
+                    </div>
+                  </>
                 )}
-                <button
-                  onClick={() => {
-                    signOut();
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-base font-medium text-white bg-primary rounded-md hover:bg-primary-dark transition-colors"
-                >
-                  {t('nav.signOut')}
-                </button>
+                {isAdmin && (
+                  <div className="pt-2">
+                    <button
+                      onClick={() => {
+                        signOut();
+                        setMobileMenuOpen(false);
+                      }}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 text-base font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 transition-all shadow-sm"
+                    >
+                      <X className="h-5 w-5" />
+                      {t('nav.signOut')}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

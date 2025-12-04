@@ -157,16 +157,26 @@ export default function CalendarPage() {
   };
 
 
+  // Map i18n language codes to locale strings for date formatting
+  const getLocale = (): string => {
+    const langMap: { [key: string]: string } = {
+      'en': 'en-US',
+      'zh-CN': 'zh-CN',
+      'zh-TW': 'zh-TW',
+    };
+    return langMap[i18n.language] || i18n.language || 'en-US';
+  };
+
   const formatDate = (date: Date): string => {
-    return date.toLocaleDateString(i18n.language, { month: 'long', year: 'numeric' });
+    return date.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
   };
 
   const formatDay = (date: Date): string => {
-    return date.toLocaleDateString(i18n.language, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    return date.toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   };
 
   const formatTime = (date: Date): string => {
-    return date.toLocaleTimeString(i18n.language, {
+    return date.toLocaleTimeString(getLocale(), {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -452,7 +462,7 @@ export default function CalendarPage() {
             {weekDays.map((day, idx) => (
               <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
                 <div className="text-sm font-medium text-gray-600">
-                  {day.toLocaleDateString(i18n.language, { weekday: 'short' })}
+                  {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
                 </div>
                 <div className={`text-lg font-semibold mt-1 ${
                   day.toDateString() === new Date().toDateString() 
@@ -519,7 +529,7 @@ export default function CalendarPage() {
     const weekDays = Array.from({ length: 7 }, (_, i) => {
       // January 7, 2024 is a Sunday
       const date = new Date(2024, 0, 7 + i);
-      return date.toLocaleDateString(i18n.language, { weekday: 'short' });
+      return date.toLocaleDateString(getLocale(), { weekday: 'short' });
     });
 
     return (
@@ -770,7 +780,7 @@ export default function CalendarPage() {
                           <div>
                             <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
                             <p className="text-base font-semibold">
-                              {new Date(selectedLesson.start_time).toLocaleDateString(i18n.language, {
+                              {new Date(selectedLesson.start_time).toLocaleDateString(getLocale(), {
                                 year: 'numeric',
                                 month: 'long',
                                 day: 'numeric',

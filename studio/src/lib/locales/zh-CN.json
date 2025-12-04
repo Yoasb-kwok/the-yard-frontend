@@ -8,7 +8,7 @@
     "contact": "联系我们",
     "login": "登录",
     "dashboard": "仪表板",
-    "schedule": "课程表",
+    "schedule": "我的课程表",
     "shop": "商店",
     "paymentHistory": "付款记录",
     "profile": "个人资料",
@@ -216,9 +216,29 @@
   "schedule": {
     "title": "我的课程表",
     "noUpcomingClasses": "没有即将到来的课程",
+    "upcomingLessons": "即将到来的课程",
+    "pastLessons": "过去的课程",
     "instructor": "导师",
     "start": "开始",
-    "end": "结束"
+    "end": "结束",
+    "class": "课程",
+    "date": "日期",
+    "applyExtension": "申请延期",
+    "applySickLeave": "申请病假",
+    "extension": "延期",
+    "sickLeave": "病假",
+    "reason": "原因",
+    "reasonPlaceholder": "请提供申请原因...",
+    "extensionApplied": "延期申请已提交！等待审核。",
+    "sickLeaveApplied": "病假申请已提交！等待审核。",
+    "status": {
+      "enrolled": "已报名",
+      "attended": "已参加",
+      "missed": "缺席",
+      "pending": "待审核",
+      "approved": "已批准",
+      "rejected": "已拒绝"
+    }
   },
   "shop": {
     "title": "代币商店",
