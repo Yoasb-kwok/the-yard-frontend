@@ -12,6 +12,8 @@ interface Payment {
   payment_method: string;
   description: string;
   order_id?: string;
+  package_id?: string; // Package ID for translation
+  token_count?: number; // Token count for display
 }
 
 // Mock data
@@ -22,7 +24,9 @@ const MOCK_PAYMENTS: Payment[] = [
     amount: 1600,
     status: 'completed',
     payment_method: 'credit_card',
-    description: 'Premium Pack - 20 tokens',
+    description: 'Premium Pack - 20 tokens', // Fallback description
+    package_id: '3', // Premium Pack
+    token_count: 20,
     order_id: 'ORD-001',
   },
   {
@@ -31,7 +35,9 @@ const MOCK_PAYMENTS: Payment[] = [
     amount: 900,
     status: 'completed',
     payment_method: 'fps',
-    description: 'Regular Pack - 10 tokens',
+    description: 'Regular Pack - 10 tokens', // Fallback description
+    package_id: '2', // Regular Pack
+    token_count: 10,
     order_id: 'ORD-002',
   },
   {
@@ -40,7 +46,9 @@ const MOCK_PAYMENTS: Payment[] = [
     amount: 500,
     status: 'pending',
     payment_method: 'cash',
-    description: 'Starter Pack - 5 tokens',
+    description: 'Starter Pack - 5 tokens', // Fallback description
+    package_id: '1', // Starter Pack
+    token_count: 5,
     order_id: 'ORD-003',
   },
 ];
@@ -104,6 +112,16 @@ export default function PaymentHistoryPage() {
     }
   };
 
+  const getPackageDescription = (payment: Payment) => {
+    if (payment.package_id && payment.token_count !== undefined) {
+      const packageNameKey = `tokenPackage.packages.${payment.package_id}.name`;
+      const packageName = t(packageNameKey, { defaultValue: payment.description.split(' - ')[0] });
+      const tokensLabel = t('tokenPackage.tokens', { defaultValue: 'tokens' });
+      return `${packageName} - ${payment.token_count} ${tokensLabel}`;
+    }
+    return payment.description;
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -116,10 +134,10 @@ export default function PaymentHistoryPage() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <div className="flex items-center gap-3">
-          <Receipt className="h-8 w-8 text-primary" />
-          <h1 className="text-3xl font-bold text-gray-900">{t('paymentHistory.title')}</h1>
+          <Receipt className="h-6 w-6 md:h-8 md:w-8 text-primary" />
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('paymentHistory.title')}</h1>
         </div>
 
         {payments.length === 0 ? (
@@ -128,62 +146,115 @@ export default function PaymentHistoryPage() {
             <p className="text-gray-600 text-lg">{t('paymentHistory.noPayments')}</p>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('paymentHistory.date')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('paymentHistory.description')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('paymentHistory.paymentMethod')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('paymentHistory.amount')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('paymentHistory.status')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {payments.map((payment) => (
-                    <tr key={payment.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          <>
+            {/* Mobile View - Card Layout */}
+            <div className="md:hidden space-y-4">
+              {payments.map((payment) => (
+                <div key={payment.id} className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="font-semibold text-base text-gray-900 mb-1">
+                        {getPackageDescription(payment)}
+                      </div>
+                      {payment.order_id && (
+                        <div className="text-gray-500 text-xs">
+                          {t('paymentHistory.orderId')}: {payment.order_id}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 ml-2">
+                      {getStatusIcon(payment.status)}
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2 pt-3 border-t border-gray-100">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">{t('paymentHistory.date')}</span>
+                      <span className="text-sm font-medium text-gray-900">
                         {formatDateTime(payment.date, getLocale())}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        <div>
-                          <div className="font-medium">{payment.description}</div>
-                          {payment.order_id && (
-                            <div className="text-gray-500 text-xs mt-1">
-                              {t('paymentHistory.orderId')}: {payment.order_id}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">{t('paymentHistory.paymentMethod')}</span>
+                      <span className="text-sm text-gray-900">
                         {getPaymentMethodLabel(payment.payment_method)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">{t('paymentHistory.amount')}</span>
+                      <span className="text-base font-semibold text-gray-900">
                         {formatCurrency(payment.amount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(payment.status)}
-                          <span className="text-sm text-gray-900">{getStatusLabel(payment.status)}</span>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                      <span className="text-sm text-gray-600">{t('paymentHistory.status')}</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {getStatusLabel(payment.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+
+            {/* Desktop View - Table Layout */}
+            <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('paymentHistory.date')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('paymentHistory.description')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('paymentHistory.paymentMethod')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('paymentHistory.amount')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('paymentHistory.status')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {payments.map((payment) => (
+                      <tr key={payment.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {formatDateTime(payment.date, getLocale())}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-900">
+                          <div>
+                            <div className="font-medium">{getPackageDescription(payment)}</div>
+                            {payment.order_id && (
+                              <div className="text-gray-500 text-xs mt-1">
+                                {t('paymentHistory.orderId')}: {payment.order_id}
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {getPaymentMethodLabel(payment.payment_method)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {formatCurrency(payment.amount)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(payment.status)}
+                            <span className="text-sm text-gray-900">{getStatusLabel(payment.status)}</span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </Layout>
