@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { Calendar, ChevronLeft, ChevronRight, Clock, Users } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, Users, MapPin, Filter } from 'lucide-react';
 
 interface Lesson {
   id: string;
@@ -12,6 +12,8 @@ interface Lesson {
   end_time: string;
   capacity: number;
   enrolled_count: number;
+  location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+  program_code: string;
 }
 
 type ViewType = 'day' | 'week' | 'month';
@@ -35,8 +37,10 @@ const generateDummyLessons = (): Lesson[] => {
       const endTime = new Date(startTime);
       endTime.setHours(hour + 1, 0, 0, 0);
       
-      const classNames = ['Yoga Basics', 'Pilates Core', 'Morning Stretch', 'Evening Flow', 'Power Yoga', 'Gentle Yoga'];
-      const instructors = ['Jane Smith', 'John Doe', 'Sarah Johnson', 'Mike Chen'];
+      const classNames = ['幼兒街舞入門班', '初階街舞基礎班', '韓風小明星KPOP班', 'Yoga Basics', 'Pilates Core', 'Morning Stretch'];
+      const instructors = ['Wawa', 'C+', 'Shirley', 'Jane Smith', 'John Doe', 'Sarah Johnson'];
+      const locations: ('sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui')[] = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'];
+      const programCodes = ['PSW6R3', 'BSW6R9', 'KPW1L1-FT', 'YG001', 'PL002', 'MS003'];
       
       lessons.push({
         id: `lesson-${i}-${j}`,
@@ -46,6 +50,8 @@ const generateDummyLessons = (): Lesson[] => {
         end_time: endTime.toISOString(),
         capacity: 15,
         enrolled_count: Math.floor(Math.random() * 10) + 5,
+        location: locations[Math.floor(Math.random() * locations.length)],
+        program_code: programCodes[Math.floor(Math.random() * programCodes.length)],
       });
     }
   }
@@ -55,13 +61,16 @@ const generateDummyLessons = (): Lesson[] => {
 
 const DUMMY_LESSONS = generateDummyLessons();
 
+type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+
 export default function CalendarPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(viewParam && ['day', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
 
   useEffect(() => {
     loadLessons();
@@ -129,7 +138,9 @@ export default function CalendarPage() {
     const dateStr = date.toISOString().split('T')[0];
     return lessons.filter(lesson => {
       const lessonDate = new Date(lesson.start_time).toISOString().split('T')[0];
-      return lessonDate === dateStr;
+      const dateMatches = lessonDate === dateStr;
+      const locationMatches = locationFilter === 'all' || lesson.location === locationFilter;
+      return dateMatches && locationMatches;
     });
   };
 
@@ -142,15 +153,55 @@ export default function CalendarPage() {
   };
 
   const formatDate = (date: Date): string => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    return date.toLocaleDateString(i18n.language, { month: 'long', year: 'numeric' });
   };
 
   const formatDay = (date: Date): string => {
-    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return date.toLocaleDateString(i18n.language, { weekday: 'long', month: 'long', day: 'numeric' });
   };
 
   const formatTime = (date: Date): string => {
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(i18n.language, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  };
+
+  // Generate tutor profile image URL from UI Avatars
+  const getTutorImageUrl = (name: string): string => {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
+  };
+
+  // Get location-specific colors
+  const getLocationColors = (location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui') => {
+    const colorMap = {
+      sanpokong: {
+        primary: '#007257', // Primary green for 新蒲崗
+        dark: '#005a44',
+        light: '#008a6a',
+        lighter: '#e6f5f2',
+      },
+      causewaybay: {
+        primary: '#2563eb', // Blue
+        dark: '#1e40af',
+        light: '#3b82f6',
+        lighter: '#dbeafe',
+      },
+      fotan: {
+        primary: '#7c3aed', // Purple
+        dark: '#5b21b6',
+        light: '#8b5cf6',
+        lighter: '#ede9fe',
+      },
+      sheungshui: {
+        primary: '#ea580c', // Orange
+        dark: '#c2410c',
+        light: '#f97316',
+        lighter: '#ffedd5',
+      },
+    };
+    return colorMap[location];
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
@@ -171,41 +222,167 @@ export default function CalendarPage() {
 
   const renderDayView = () => {
     const dayLessons = getLessonsForDate(currentDate);
-    const hours = Array.from({ length: 12 }, (_, i) => i + 8);
+    const locations: { value: LocationFilter; label: string }[] = [
+      { value: 'all', label: t('calendar.allLocations') },
+      { value: 'sanpokong', label: t('home.locations.sanpokong') },
+      { value: 'causewaybay', label: t('home.locations.causewaybay') },
+      { value: 'fotan', label: t('home.locations.fotan') },
+      { value: 'sheungshui', label: t('home.locations.sheungshui') },
+    ];
 
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h3 className="text-xl font-semibold text-gray-900 mb-4">
-            {formatDay(currentDate)}
-          </h3>
-          <div className="space-y-3">
-            {dayLessons.length === 0 ? (
-              <p className="text-gray-600 text-center py-8">{t('calendar.noLessons')}</p>
-            ) : (
-              dayLessons.map((lesson) => (
-                <div key={lesson.id} className="border-l-4 border-primary p-4 bg-primary-lighter rounded">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{lesson.name}</h4>
-                      <p className="text-sm text-gray-600 mt-1">with {lesson.instructor}</p>
-                      <div className="flex items-center text-sm text-gray-500 mt-2">
-                        <Clock className="h-4 w-4 mr-1" />
-                        {formatTime(new Date(lesson.start_time))} - {formatTime(new Date(lesson.end_time))}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="flex items-center text-sm text-gray-600">
-                        <Users className="h-4 w-4 mr-1" />
-                        {lesson.enrolled_count} / {lesson.capacity}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+        {/* Location Filter */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Filter className="h-5 w-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {locations.map((loc) => {
+              const isActive = locationFilter === loc.value;
+              const colors = loc.value === 'all' 
+                ? { primary: '#007257', dark: '#005a44' }
+                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
+              
+              return (
+                <button
+                  key={loc.value}
+                  onClick={() => setLocationFilter(loc.value)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  style={isActive ? {
+                    backgroundColor: colors.primary,
+                  } : {}}
+                >
+                  {loc.label}
+                </button>
+              );
+            })}
           </div>
         </div>
+
+        {dayLessons.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <p className="text-gray-600 text-center py-8">{t('calendar.noLessons')}</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {dayLessons.map((lesson) => {
+              const locationColors = getLocationColors(lesson.location);
+              
+              return (
+                <div 
+                  key={lesson.id} 
+                  className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 hover:shadow-2xl transition-all duration-300 flex flex-col transform hover:-translate-y-1"
+                  style={{
+                    borderColor: locationColors.lighter,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.borderColor = locationColors.primary;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = locationColors.lighter;
+                  }}
+                >
+                  {/* Top accent border */}
+                  <div 
+                    className="h-1 rounded-t-xl -mx-8 -mt-8 mb-6"
+                    style={{
+                      background: `linear-gradient(to right, ${locationColors.primary}, ${locationColors.light})`,
+                    }}
+                  ></div>
+                  
+                  <div className="flex items-start justify-between mb-6">
+                    <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">{lesson.name}</h3>
+                    <span 
+                      className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
+                      style={{
+                        backgroundColor: locationColors.primary,
+                      }}
+                    >
+                      {lesson.program_code}
+                    </span>
+                  </div>
+
+                  {/* Tutor Profile */}
+                  <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
+                    <img
+                      src={getTutorImageUrl(lesson.instructor)}
+                      alt={lesson.instructor}
+                      className="w-20 h-20 rounded-full object-cover mr-4 border-4"
+                      style={{
+                        borderColor: locationColors.lighter,
+                      }}
+                    />
+                    <div>
+                      <p className="text-base font-bold text-gray-900">{lesson.instructor}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 mb-6 flex-1">
+                    <div 
+                      className="flex items-center text-gray-800 rounded-lg p-3"
+                      style={{
+                        backgroundColor: locationColors.lighter,
+                      }}
+                    >
+                      <Clock 
+                        className="h-5 w-5 mr-3 flex-shrink-0" 
+                        style={{ color: locationColors.primary }}
+                      />
+                      <span className="text-base font-semibold">
+                        {formatTime(new Date(lesson.start_time))} - {formatTime(new Date(lesson.end_time))}
+                      </span>
+                    </div>
+                    <div 
+                      className="flex items-center text-gray-800 rounded-lg p-3"
+                      style={{
+                        backgroundColor: locationColors.lighter,
+                      }}
+                    >
+                      <MapPin 
+                        className="h-5 w-5 mr-3 flex-shrink-0" 
+                        style={{ color: locationColors.primary }}
+                      />
+                      <span className="text-base font-semibold">{t(`home.locations.${lesson.location}`)}</span>
+                    </div>
+                  </div>
+
+                  <Link
+                    to={`/trial?classId=${lesson.id}`}
+                    state={{
+                      classData: {
+                        id: lesson.id,
+                        name: lesson.name,
+                        instructor: lesson.instructor,
+                        start_time: lesson.start_time,
+                        end_time: lesson.end_time,
+                        location: lesson.location,
+                        program_code: lesson.program_code,
+                      }
+                    }}
+                    className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105"
+                    style={{
+                      backgroundColor: locationColors.primary,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = locationColors.dark;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = locationColors.primary;
+                    }}
+                  >
+                    {t('home.bookTrial')}
+                  </Link>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -225,7 +402,7 @@ export default function CalendarPage() {
           {weekDays.map((day, idx) => (
             <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
               <div className="text-sm font-medium text-gray-600">
-                {day.toLocaleDateString('en-US', { weekday: 'short' })}
+                {day.toLocaleDateString(i18n.language, { weekday: 'short' })}
               </div>
               <div className={`text-lg font-semibold mt-1 ${
                 day.toDateString() === new Date().toDateString() 
@@ -270,13 +447,18 @@ export default function CalendarPage() {
 
   const renderMonthView = () => {
     const days = getDaysInMonth(currentDate);
-    const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    // Generate weekday labels based on current locale (starting from Sunday)
+    const weekDays = Array.from({ length: 7 }, (_, i) => {
+      // January 7, 2024 is a Sunday
+      const date = new Date(2024, 0, 7 + i);
+      return date.toLocaleDateString(i18n.language, { weekday: 'short' });
+    });
 
     return (
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-7 border-b">
-          {weekDays.map((day) => (
-            <div key={day} className="p-3 text-center bg-gray-50 font-medium text-gray-700 border-r last:border-r-0">
+          {weekDays.map((day, idx) => (
+            <div key={idx} className="p-3 text-center bg-gray-50 font-medium text-gray-700 border-r last:border-r-0">
               {day}
             </div>
           ))}

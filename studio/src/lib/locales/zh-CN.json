@@ -325,7 +325,9 @@
     "week": "周",
     "month": "月",
     "today": "今天",
-    "noLessons": "没有安排的课程"
+    "noLessons": "没有课程",
+    "filterByLocation": "按地点筛选",
+    "allLocations": "所有地点"
   },
   "faq": {
     "title": "常见问题",
