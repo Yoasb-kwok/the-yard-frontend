@@ -305,7 +305,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
 
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('footer.company')}</h3>
               <ul className="space-y-2">
@@ -327,7 +327,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 <li><Link to="/privacy" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.privacyPolicy')}</Link></li>
               </ul>
             </div>
-            <div>
+            <div className="sm:col-span-2 lg:col-span-1">
               <h3 className="text-sm font-semibold text-gray-900 mb-3">
                 {t('footer.hotline')} {t('footer.hotlineNumber')}
               </h3>
