@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, BarChart, Settings, Menu, X, PanelLeft, ChevronDown, Receipt } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -40,7 +40,7 @@ export default function Layout({ children }: LayoutProps) {
   const studentNavItems = [
     { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
-    { path: '/shop', icon: ShoppingBag, label: t('nav.shop') },
+    { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
     { path: '/profile', icon: User, label: t('nav.profile') },
   ];
 

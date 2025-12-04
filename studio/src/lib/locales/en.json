@@ -10,6 +10,7 @@
     "dashboard": "Dashboard",
     "schedule": "Schedule",
     "shop": "Shop",
+    "paymentHistory": "Payment History",
     "profile": "Profile",
     "users": "Users",
     "classes": "Classes",
@@ -242,6 +243,21 @@
     "checkout": "Checkout",
     "processing": "Processing...",
     "orderPlaced": "Order placed successfully! Awaiting payment confirmation from admin."
+  },
+  "paymentHistory": {
+    "title": "Payment History",
+    "noPayments": "No payment history available",
+    "date": "Date",
+    "description": "Description",
+    "paymentMethod": "Payment Method",
+    "amount": "Amount",
+    "status": "Status",
+    "orderId": "Order ID",
+    "statusLabels": {
+      "completed": "Completed",
+      "pending": "Pending",
+      "failed": "Failed"
+    }
   },
   "profile": {
     "title": "My Profile",

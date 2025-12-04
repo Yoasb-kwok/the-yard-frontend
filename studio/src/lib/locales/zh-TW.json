@@ -10,6 +10,7 @@
     "dashboard": "儀表板",
     "schedule": "課程表",
     "shop": "商店",
+    "paymentHistory": "付款記錄",
     "profile": "個人資料",
     "users": "用戶",
     "classes": "課程",
@@ -242,6 +243,21 @@
     "checkout": "結帳",
     "processing": "處理中...",
     "orderPlaced": "訂單已成功下達！等待管理員確認付款。"
+  },
+  "paymentHistory": {
+    "title": "付款記錄",
+    "noPayments": "暫無付款記錄",
+    "date": "日期",
+    "description": "描述",
+    "paymentMethod": "付款方式",
+    "amount": "金額",
+    "status": "狀態",
+    "orderId": "訂單號",
+    "statusLabels": {
+      "completed": "已完成",
+      "pending": "待處理",
+      "failed": "失敗"
+    }
   },
   "profile": {
     "title": "我的個人資料",

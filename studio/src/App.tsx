@@ -18,7 +18,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 
 import DashboardPage from './pages/student/DashboardPage';
 import SchedulePage from './pages/student/SchedulePage';
-import ShopPage from './pages/student/ShopPage';
+import PaymentHistoryPage from './pages/student/PaymentHistoryPage';
 import ProfilePage from './pages/student/ProfilePage';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -63,10 +63,10 @@ function App() {
             }
           />
           <Route
-            path="/shop"
+            path="/payment-history"
             element={
               <ProtectedRoute>
-                <ShopPage />
+                <PaymentHistoryPage />
               </ProtectedRoute>
             }
           />
