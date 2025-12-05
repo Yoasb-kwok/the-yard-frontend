@@ -18,7 +18,7 @@ interface Lesson {
   program_code: string;
 }
 
-type ViewType = 'day' | 'week' | 'month';
+type ViewType = 'day' | 'threeDay' | 'week' | 'month';
 
 // Dummy lesson data for the next 30 days
 const generateDummyLessons = (): Lesson[] => {
@@ -70,7 +70,7 @@ export default function CalendarPage() {
   const { user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
-  const [view, setView] = useState<ViewType>(viewParam && ['day', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
+  const [view, setView] = useState<ViewType>(viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
@@ -86,10 +86,42 @@ export default function CalendarPage() {
   // Update view when URL parameter changes
   useEffect(() => {
     const viewParam = searchParams.get('view') as ViewType | null;
-    if (viewParam && ['day', 'week', 'month'].includes(viewParam)) {
-      setView(viewParam);
+    if (viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam)) {
+      const isMobile = window.innerWidth < 768; // md breakpoint
+      // On mobile, only allow day and threeDay views
+      if (isMobile && (viewParam === 'week' || viewParam === 'month')) {
+        setView('day');
+        setSearchParams({ view: 'day' });
+      } 
+      // On desktop, don't allow threeDay view
+      else if (!isMobile && viewParam === 'threeDay') {
+        setView('day');
+        setSearchParams({ view: 'day' });
+      } else {
+        setView(viewParam);
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
+
+  // Handle window resize - switch views based on screen size
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobile = window.innerWidth < 768; // md breakpoint
+      // On mobile, switch from week/month to day
+      if (isMobile && (view === 'week' || view === 'month')) {
+        setView('day');
+        setSearchParams({ view: 'day' });
+      }
+      // On desktop, switch from threeDay to day
+      else if (!isMobile && view === 'threeDay') {
+        setView('day');
+        setSearchParams({ view: 'day' });
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [view, setSearchParams]);
 
   async function loadLessons() {
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -230,6 +262,8 @@ export default function CalendarPage() {
       newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
     } else if (view === 'week') {
       newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
+    } else if (view === 'threeDay') {
+      newDate.setDate(currentDate.getDate() + (direction === 'next' ? 3 : -3));
     } else {
       newDate.setDate(currentDate.getDate() + (direction === 'next' ? 1 : -1));
     }
@@ -427,6 +461,121 @@ export default function CalendarPage() {
   const handleLessonClick = (lesson: Lesson) => {
     setSelectedLesson(lesson);
     setShowLessonModal(true);
+  };
+
+  const renderThreeDayView = () => {
+    const threeDays = Array.from({ length: 3 }, (_, i) => {
+      const d = new Date(currentDate);
+      d.setDate(currentDate.getDate() + i);
+      return d;
+    });
+    const locations: { value: LocationFilter; label: string }[] = [
+      { value: 'all', label: t('calendar.allLocations') },
+      { value: 'sanpokong', label: t('home.locations.sanpokong') },
+      { value: 'causewaybay', label: t('home.locations.causewaybay') },
+      { value: 'fotan', label: t('home.locations.fotan') },
+      { value: 'sheungshui', label: t('home.locations.sheungshui') },
+    ];
+
+    return (
+      <div className="space-y-4">
+        {/* Location Filter */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Filter className="h-5 w-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {locations.map((loc) => {
+              const isActive = locationFilter === loc.value;
+              const colors = loc.value === 'all' 
+                ? { primary: '#007257', dark: '#005a44' }
+                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
+              
+              return (
+                <button
+                  key={loc.value}
+                  onClick={() => setLocationFilter(loc.value)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  style={isActive ? {
+                    backgroundColor: colors.primary,
+                  } : {}}
+                >
+                  {loc.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          <div className="grid grid-cols-3 border-b">
+            {threeDays.map((day, idx) => (
+              <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
+                <div className="text-sm font-medium text-gray-600">
+                  {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+                </div>
+                <div className={`text-lg font-semibold mt-1 ${
+                  day.toDateString() === new Date().toDateString() 
+                    ? 'text-primary' 
+                    : 'text-gray-900'
+                }`}>
+                  {day.getDate()}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-3 min-h-[400px]">
+            {threeDays.map((day, idx) => {
+              const dayLessons = getLessonsForDate(day);
+              const isToday = day.toDateString() === new Date().toDateString();
+              
+              return (
+                <div
+                  key={idx}
+                  className={`border-r last:border-r-0 p-2 ${
+                    isToday ? 'bg-primary-lighter' : ''
+                  }`}
+                >
+                  {dayLessons.map((lesson) => {
+                    const locationColors = getLocationColors(lesson.location);
+                    
+                    return (
+                      <div
+                        key={lesson.id}
+                        className="mb-2 p-2 text-white rounded text-xs cursor-pointer transition-all hover:shadow-md"
+                        style={{
+                          backgroundColor: locationColors.primary,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.dark;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.primary;
+                        }}
+                        onClick={() => handleLessonClick(lesson)}
+                      >
+                        <div className="font-medium truncate">{lesson.name}</div>
+                        <div className="text-white/70 text-xs mt-1 truncate">
+                          {lesson.instructor}
+                        </div>
+                        <div className="text-white/80 text-xs mt-0.5">
+                          {formatTime(new Date(lesson.start_time))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderWeekView = () => {
@@ -692,12 +841,27 @@ export default function CalendarPage() {
               >
                 {t('calendar.day')}
               </button>
+              {/* Show 3 Days only on mobile */}
+              <button
+                onClick={() => {
+                  setView('threeDay');
+                  setSearchParams({ view: 'threeDay' });
+                }}
+                className={`md:hidden px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'threeDay'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('calendar.threeDay')}
+              </button>
+              {/* Hide week and month on mobile */}
               <button
                 onClick={() => {
                   setView('week');
                   setSearchParams({ view: 'week' });
                 }}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`hidden md:block px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   view === 'week'
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -710,7 +874,7 @@ export default function CalendarPage() {
                   setView('month');
                   setSearchParams({ view: 'month' });
                 }}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`hidden md:block px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   view === 'month'
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -749,6 +913,13 @@ export default function CalendarPage() {
                 ? formatDate(currentDate)
                 : view === 'week'
                 ? `${formatDay(getStartOfWeek(currentDate))} - ${formatDay(getEndOfWeek(currentDate))}`
+                : view === 'threeDay'
+                ? (() => {
+                    const day1 = new Date(currentDate);
+                    const day3 = new Date(currentDate);
+                    day3.setDate(currentDate.getDate() + 2);
+                    return `${formatDay(day1)} - ${formatDay(day3)}`;
+                  })()
                 : formatDay(currentDate)
               }
             </h2>
@@ -758,6 +929,7 @@ export default function CalendarPage() {
         {/* Calendar View */}
         <div>
           {view === 'day' && renderDayView()}
+          {view === 'threeDay' && renderThreeDayView()}
           {view === 'week' && renderWeekView()}
           {view === 'month' && renderMonthView()}
         </div>

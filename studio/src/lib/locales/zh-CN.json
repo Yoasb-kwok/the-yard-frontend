@@ -638,6 +638,7 @@
   "calendar": {
     "title": "课程表",
     "day": "日",
+    "threeDay": "3天",
     "week": "周",
     "month": "月",
     "today": "今天",

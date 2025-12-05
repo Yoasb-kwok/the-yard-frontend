@@ -638,6 +638,7 @@
   "calendar": {
     "title": "Calendar",
     "day": "Day",
+    "threeDay": "3 Days",
     "week": "Week",
     "month": "Month",
     "today": "Today",
