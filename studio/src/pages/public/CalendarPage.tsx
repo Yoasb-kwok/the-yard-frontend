@@ -4,6 +4,7 @@ import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X } from 'lucide-react';
 import { theme } from '../../lib/theme';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Lesson {
   id: string;
@@ -66,6 +67,7 @@ type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshu
 
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
+  const { user, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(viewParam && ['day', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
@@ -74,6 +76,8 @@ export default function CalendarPage() {
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
+  
+  const isStudent = user && profile?.role === 'student';
 
   useEffect(() => {
     loadLessons();
@@ -355,32 +359,62 @@ export default function CalendarPage() {
                     </div>
                   </div>
 
-                  <Link
-                    to={`/trial?classId=${lesson.id}`}
-                    state={{
-                      classData: {
-                        id: lesson.id,
-                        name: lesson.name,
-                        instructor: lesson.instructor,
-                        start_time: lesson.start_time,
-                        end_time: lesson.end_time,
-                        location: lesson.location,
-                        program_code: lesson.program_code,
-                      }
-                    }}
-                    className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105"
-                    style={{
-                      backgroundColor: theme.colors.primary,
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = theme.colors.primaryDark;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = theme.colors.primary;
-                    }}
-                  >
-                    {t('home.bookTrial')}
-                  </Link>
+                  <div className="space-y-3">
+                    <Link
+                      to={`/trial?classId=${lesson.id}`}
+                      state={{
+                        classData: {
+                          id: lesson.id,
+                          name: lesson.name,
+                          instructor: lesson.instructor,
+                          start_time: lesson.start_time,
+                          end_time: lesson.end_time,
+                          location: lesson.location,
+                          program_code: lesson.program_code,
+                        }
+                      }}
+                      className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                      style={{
+                        backgroundColor: theme.colors.primary,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = theme.colors.primaryDark;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = theme.colors.primary;
+                      }}
+                    >
+                      {t('home.bookTrial')}
+                    </Link>
+                    {isStudent && (
+                      <Link
+                        to="/token-package"
+                        state={{
+                          classData: {
+                            id: lesson.id,
+                            name: lesson.name,
+                            instructor: lesson.instructor,
+                            start_time: lesson.start_time,
+                            end_time: lesson.end_time,
+                            location: lesson.location,
+                            program_code: lesson.program_code,
+                          }
+                        }}
+                        className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                        style={{
+                          backgroundColor: locationColors.primary,
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.dark;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = locationColors.primary;
+                        }}
+                      >
+                        {t('calendar.enroll')}
+                      </Link>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -842,33 +876,64 @@ export default function CalendarPage() {
                       </div>
 
                       {/* Book Trial Button */}
-                      <Link
-                        to={`/trial?classId=${selectedLesson.id}`}
-                        state={{
-                          classData: {
-                            id: selectedLesson.id,
-                            name: selectedLesson.name,
-                            instructor: selectedLesson.instructor,
-                            start_time: selectedLesson.start_time,
-                            end_time: selectedLesson.end_time,
-                            location: selectedLesson.location,
-                            program_code: selectedLesson.program_code,
-                          }
-                        }}
-                        className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
-                        style={{
-                          backgroundColor: locationColors.primary,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.dark;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.primary;
-                        }}
-                        onClick={() => setShowLessonModal(false)}
-                      >
-                        {t('home.bookTrial')}
-                      </Link>
+                      <div className="space-y-3">
+                        <Link
+                          to={`/trial?classId=${selectedLesson.id}`}
+                          state={{
+                            classData: {
+                              id: selectedLesson.id,
+                              name: selectedLesson.name,
+                              instructor: selectedLesson.instructor,
+                              start_time: selectedLesson.start_time,
+                              end_time: selectedLesson.end_time,
+                              location: selectedLesson.location,
+                              program_code: selectedLesson.program_code,
+                            }
+                          }}
+                          className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                          style={{
+                            backgroundColor: locationColors.primary,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = locationColors.dark;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = locationColors.primary;
+                          }}
+                          onClick={() => setShowLessonModal(false)}
+                        >
+                          {t('home.bookTrial')}
+                        </Link>
+                        {isStudent && (
+                          <Link
+                            to="/token-package"
+                            state={{
+                              classData: {
+                                id: selectedLesson.id,
+                                name: selectedLesson.name,
+                                instructor: selectedLesson.instructor,
+                                start_time: selectedLesson.start_time,
+                                end_time: selectedLesson.end_time,
+                                location: selectedLesson.location,
+                                program_code: selectedLesson.program_code,
+                              }
+                            }}
+                            className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                            style={{
+                              backgroundColor: locationColors.primary,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = locationColors.dark;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = locationColors.primary;
+                            }}
+                            onClick={() => setShowLessonModal(false)}
+                          >
+                            {t('calendar.enroll')}
+                          </Link>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

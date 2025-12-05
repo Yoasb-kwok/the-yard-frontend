@@ -644,7 +644,8 @@
     "noLessons": "No lessons scheduled",
     "filterByLocation": "Filter by Location",
     "allLocations": "All Locations",
-    "enrollment": "Enrollment"
+    "enrollment": "Enrollment",
+    "enroll": "Enroll"
   },
   "faq": {
     "title": "Frequently Asked Questions",

@@ -1,10 +1,20 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, calculateDiscount } from '../../lib/utils';
-import { ShoppingCart, Lock, Check } from 'lucide-react';
+import { ShoppingCart, Lock, Check, Calendar, Clock, MapPin } from 'lucide-react';
+
+interface ClassData {
+  id: string;
+  name: string;
+  instructor: string;
+  start_time: string;
+  end_time: string;
+  location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+  program_code: string;
+}
 
 interface TokenPackage {
   id: string;
@@ -57,6 +67,8 @@ export default function TokenPackagePage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const classData = (location.state as { classData?: ClassData })?.classData;
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState('');
@@ -154,6 +166,39 @@ export default function TokenPackagePage() {
     : 0;
   const total = subtotal - discount;
 
+  // Helper functions for class data display
+  const getLocale = (): string => {
+    const langMap: { [key: string]: string } = {
+      'en': 'en-US',
+      'zh-CN': 'zh-CN',
+      'zh-TW': 'zh-TW',
+    };
+    return langMap[i18n.language] || i18n.language || 'en-US';
+  };
+
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString(getLocale(), {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    });
+  };
+
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString(getLocale(), {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  };
+
+  const getTutorImageUrl = (name: string): string => {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
+  };
+
   if (loading) {
     return (
       <PublicLayout>
@@ -171,6 +216,68 @@ export default function TokenPackagePage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <h1 className="text-4xl font-bold text-gray-900 mb-8">{t('tokenPackage.title')}</h1>
         <p className="text-lg text-gray-600 mb-12">{t('tokenPackage.subtitle')}</p>
+
+        {/* Class Information Section */}
+        {classData && (
+          <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">{t('trial.classInformation')}</h2>
+            
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Left: Tutor Info */}
+              <div className="flex items-center pb-6 border-b-2 border-gray-100 md:border-b-0 md:border-r-2 md:pr-6">
+                <img
+                  src={getTutorImageUrl(classData.instructor)}
+                  alt={classData.instructor}
+                  className="w-20 h-20 rounded-full object-cover mr-4 border-4"
+                  style={{ borderColor: '#d1fae5' }}
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
+                  <p className="text-lg font-bold text-gray-900">{classData.instructor}</p>
+                </div>
+              </div>
+
+              {/* Right: Class Details */}
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.className')}</p>
+                  <p className="text-lg font-semibold text-gray-900">{classData.name}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classCode')}</p>
+                  <p className="text-lg font-semibold text-primary">{classData.program_code}</p>
+                </div>
+
+                <div className="flex items-center text-gray-800">
+                  <Calendar className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
+                    <p className="text-base font-semibold">{formatDate(classData.start_time)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center text-gray-800">
+                  <Clock className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classTime')}</p>
+                    <p className="text-base font-semibold">
+                      {formatTime(classData.start_time)} - {formatTime(classData.end_time)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center text-gray-800">
+                  <MapPin className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('home.location')}</p>
+                    <p className="text-base font-semibold">{t(`home.locations.${classData.location}`)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {user ? (
           // Logged in: Show shopping cart flow

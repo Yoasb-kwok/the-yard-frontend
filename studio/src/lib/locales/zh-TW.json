@@ -644,7 +644,8 @@
     "noLessons": "沒有課程",
     "filterByLocation": "按地點篩選",
     "allLocations": "所有地點",
-    "enrollment": "報名人數"
+    "enrollment": "報名人數",
+    "enroll": "報名"
   },
   "faq": {
     "title": "常見問題",
