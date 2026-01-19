@@ -77,8 +77,8 @@ export default function Layout({ children }: LayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-cream">
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-cream shadow-sm border-b border-primary/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -201,7 +201,7 @@ export default function Layout({ children }: LayoutProps) {
 
           {/* Mobile menu dropdown */}
           {mobileMenuOpen && (
-            <div className="md:hidden border-t bg-gray-50">
+            <div className="md:hidden border-t bg-cream">
               <div className="px-3 pt-4 pb-4 space-y-2">
                 {/* Public Navigation Items */}
                 <div className="space-y-1">
@@ -316,7 +316,7 @@ export default function Layout({ children }: LayoutProps) {
 
       <div className="flex pt-16 min-h-screen">
         {/* Desktop Sidebar */}
-        <aside className="hidden xl:block w-64 flex-shrink-0 bg-white shadow-sm min-h-[calc(100vh-4rem)]">
+        <aside className="hidden xl:block w-64 flex-shrink-0 bg-white/80 backdrop-blur shadow-sm min-h-[calc(100vh-4rem)] border-r border-primary/10">
           <nav className="mt-5 px-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -394,35 +394,35 @@ export default function Layout({ children }: LayoutProps) {
         </main>
       </div>
 
-      <footer className="bg-white border-t mt-12">
+      <footer className="bg-primary-dark text-white border-t border-primary mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('footer.company')}</h3>
+              <h3 className="text-sm font-semibold text-white mb-3">{t('footer.company')}</h3>
               <ul className="space-y-2">
-                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-gray-600 hover:text-gray-900">{t('nav.about')}</a></li>
-                <li><Link to="/contact" className="text-sm text-gray-600 hover:text-gray-900">{t('nav.contact')}</Link></li>
+                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-white/90 hover:text-accent transition-colors">{t('nav.about')}</a></li>
+                <li><Link to="/contact" className="text-sm text-white/90 hover:text-accent transition-colors">{t('nav.contact')}</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('footer.resources')}</h3>
+              <h3 className="text-sm font-semibold text-white mb-3">{t('footer.resources')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/news" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.latestNews')}</Link></li>
-                <li><Link to="/faq" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.faq')}</Link></li>
+                <li><Link to="/news" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.latestNews')}</Link></li>
+                <li><Link to="/faq" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.faq')}</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">{t('footer.legal')}</h3>
+              <h3 className="text-sm font-semibold text-white mb-3">{t('footer.legal')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/terms" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.termsConditions')}</Link></li>
-                <li><Link to="/privacy" className="text-sm text-gray-600 hover:text-gray-900">{t('footer.privacyPolicy')}</Link></li>
+                <li><Link to="/terms" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.termsConditions')}</Link></li>
+                <li><Link to="/privacy" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.privacyPolicy')}</Link></li>
               </ul>
             </div>
             <div className="sm:col-span-2 lg:col-span-1">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">
+              <h3 className="text-sm font-semibold text-white mb-3">
                 {t('footer.hotline')} {t('footer.hotlineNumber')}
               </h3>
-              <div className="text-sm text-gray-600 space-y-2">
+              <div className="text-sm text-white/90 space-y-2">
                 <p className="font-medium">{t('footer.hotlineTitle')}</p>
                 <p>{t('footer.hotlineWeekday')}</p>
                 <p>{t('footer.hotlineWeekend')}</p>
@@ -432,14 +432,14 @@ export default function Layout({ children }: LayoutProps) {
                     href="http://wa.me/+85292299875"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary hover:text-primary-dark transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors"
                     aria-label="WhatsApp"
                   >
                     <WhatsAppIcon className="h-5 w-5" />
                   </a>
                   <a
                     href="mailto:info@theyard.com.hk"
-                    className="text-primary hover:text-primary-dark transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors"
                     aria-label="Email"
                   >
                     <Mail className="h-5 w-5" />
@@ -448,7 +448,7 @@ export default function Layout({ children }: LayoutProps) {
                     href="https://facebook.com/theyardltd"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary hover:text-primary-dark transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors"
                     aria-label="Facebook"
                   >
                     <Facebook className="h-5 w-5" />
@@ -457,7 +457,7 @@ export default function Layout({ children }: LayoutProps) {
                     href="https://instagram.com/theyardhk"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-primary hover:text-primary-dark transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors"
                     aria-label="Instagram"
                   >
                     <Instagram className="h-5 w-5" />
@@ -466,7 +466,7 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t text-center text-sm text-gray-500">
+          <div className="mt-8 pt-8 border-t border-white/20 text-center text-sm text-white/70">
             {t('footer.copyright')}
           </div>
         </div>

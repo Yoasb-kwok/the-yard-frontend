@@ -39,7 +39,18 @@ export default function RegisterPage() {
     try {
       // Combine country code with mobile number
       const fullMobile = `${countryCode}${mobile}`;
-      await signUp(email, password, fullName, idLastFour, fullMobile);
+      await signUp(
+        email,
+        password,
+        fullName,
+        null, // nickName
+        null, // dateOfBirth
+        null, // sex
+        null, // parentsName
+        fullMobile, // contactNumber
+        null, // residentialDistrict
+        null // hasJoinedCourses
+      );
       // Navigate to login page after successful registration
       navigate('/login');
     } catch (err: unknown) {

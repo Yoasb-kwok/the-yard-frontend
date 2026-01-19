@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
+import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
 import { formatDateTime } from '../../lib/utils';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
 
@@ -93,6 +94,77 @@ const MOCK_CLASSES: Class[] = [
   },
 ];
 
+// Mock enrollments for attendance (class_id matches MOCK_CLASSES)
+const MOCK_ENROLLMENTS: Enrollment[] = [
+  {
+    id: '1',
+    class_id: '1',
+    user_id: 'user1',
+    user_name: '張三',
+    user_mobile: '91234567',
+    status: 'attended',
+    check_in_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
+    check_out_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
+    sick_leave_document_url: null,
+    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '2',
+    class_id: '1',
+    user_id: 'user2',
+    user_name: '李四',
+    user_mobile: '98765432',
+    status: 'attended',
+    check_in_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 25 * 60 * 1000).toISOString(),
+    check_out_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 55 * 60 * 1000).toISOString(),
+    sick_leave_document_url: null,
+    created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '3',
+    class_id: '1',
+    user_id: 'user3',
+    user_name: '王五',
+    user_mobile: '92345678',
+    status: 'absent',
+    check_in_time: null,
+    check_out_time: null,
+    sick_leave_document_url: null,
+    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '4',
+    class_id: '1',
+    user_id: 'user4',
+    user_name: '陳六',
+    user_mobile: '93456789',
+    status: 'sick_leave',
+    check_in_time: null,
+    check_out_time: null,
+    sick_leave_document_url: 'https://example.com/sick-leave-doc.pdf',
+    created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  {
+    id: '5',
+    class_id: '1',
+    user_id: 'user5',
+    user_name: '劉七',
+    user_mobile: '94567890',
+    status: 'enrolled',
+    check_in_time: null,
+    check_out_time: null,
+    sick_leave_document_url: null,
+    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    reassigned_to_class_id: '2',
+    reassigned_to_class_name: 'Pilates Intermediate',
+    reassigned_to_class_code: 'PI002',
+    reassigned_to_class_start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    reassigned_to_class_end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
+  },
+];
+
+const MOCK_ATTENDANCE_CONFIRMED: Record<string, boolean> = { '2': true };
+
 // Location labels will be retrieved from translations
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
@@ -122,11 +194,36 @@ export default function ClassesPage() {
     repeat_weekly: false,
     repeat_until: '',
   });
+  const [expandedAttendanceClassId, setExpandedAttendanceClassId] = useState<string | null>(null);
+  const [attendanceData, setAttendanceData] = useState<{
+    class: ClassWithAttendance;
+    enrollments: Enrollment[];
+  } | null>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
 
   useEffect(() => {
     loadClasses();
     loadInstructors();
   }, []);
+
+  useEffect(() => {
+    if (!expandedAttendanceClassId) {
+      setAttendanceData(null);
+      setAttendanceLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setAttendanceData(null);
+    setAttendanceLoading(true);
+    loadAttendanceData(expandedAttendanceClassId).then((data) => {
+      if (cancelled) return;
+      if (data) setAttendanceData(data);
+      setAttendanceLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedAttendanceClassId]);
 
   // Handle mobile view restrictions
   useEffect(() => {
@@ -170,6 +267,62 @@ export default function ClassesPage() {
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 300));
     setInstructors(MOCK_INSTRUCTORS);
+  }
+
+  async function loadAttendanceData(
+    classId: string
+  ): Promise<{ class: ClassWithAttendance; enrollments: Enrollment[] } | null> {
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const c = classes.find((x) => x.id === classId);
+    if (!c) return null;
+    const classWithAttendance: ClassWithAttendance = {
+      ...c,
+      attendance_confirmed: MOCK_ATTENDANCE_CONFIRMED[classId] ?? false,
+    };
+    const enrollments = MOCK_ENROLLMENTS.filter((e) => e.class_id === classId);
+    return { class: classWithAttendance, enrollments };
+  }
+
+  function toggleAttendance(classId: string) {
+    setExpandedAttendanceClassId((prev) => (prev === classId ? null : classId));
+  }
+
+  async function updateAttendanceStatus(
+    enrollmentId: string,
+    newStatus: 'enrolled' | 'attended' | 'absent' | 'sick_leave'
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    setAttendanceData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        enrollments: prev.enrollments.map((e) =>
+          e.id === enrollmentId
+            ? {
+                ...e,
+                status: newStatus,
+                check_in_time: newStatus === 'attended' ? e.check_in_time || new Date().toISOString() : e.check_in_time,
+                check_out_time: newStatus === 'attended' ? e.check_out_time || new Date().toISOString() : e.check_out_time,
+              }
+            : e
+        ),
+      };
+    });
+  }
+
+  function toggleAttendanceConfirmation() {
+    setAttendanceData((prev) =>
+      prev ? { ...prev, class: { ...prev.class, attendance_confirmed: !prev.class.attendance_confirmed } } : prev
+    );
+  }
+
+  async function handleCancelClass(classId: string) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    setClasses((prev) => prev.map((c) => (c.id === classId ? { ...c, is_cancelled: true } : c)));
+    setAttendanceData((prev) =>
+      prev && prev.class.id === classId ? { ...prev, class: { ...prev.class, is_cancelled: true } } : prev
+    );
+    alert(t('admin.attendance.classCancelled'));
   }
 
   function findRepeatedClasses(classItem: Class): Class[] {
@@ -654,8 +807,12 @@ export default function ClassesPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => navigate(`/admin/classes/${classItem.id}/attendance`)}
-                      className="px-4 py-2 rounded-md text-sm font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 flex items-center"
+                      onClick={() => toggleAttendance(classItem.id)}
+                      className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
+                        expandedAttendanceClassId === classItem.id
+                          ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
+                          : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                      }`}
                     >
                       <Users className="h-4 w-4 mr-1" />
                       {t('admin.classes.attendance')}
@@ -679,6 +836,27 @@ export default function ClassesPage() {
                     </button>
                   </div>
                 </div>
+                {expandedAttendanceClassId === classItem.id && (
+                  attendanceLoading ? (
+                    <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                    </div>
+                  ) : (
+                    attendanceData &&
+                    attendanceData.class.id === classItem.id && (
+                      <ClassAttendancePanel
+                        class={attendanceData.class}
+                        enrollments={attendanceData.enrollments}
+                        onUpdateStatus={updateAttendanceStatus}
+                        onToggleConfirmation={toggleAttendanceConfirmation}
+                        onCancelClass={() => handleCancelClass(classItem.id)}
+                        onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
+                        onClose={() => setExpandedAttendanceClassId(null)}
+                        inline
+                      />
+                    )
+                  )
+                )}
               </div>
             ))}
           </div>
@@ -1139,8 +1317,12 @@ export default function ClassesPage() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => navigate(`/admin/classes/${classItem.id}/attendance`)}
-                    className="px-4 py-2 rounded-md text-sm font-medium bg-purple-100 text-purple-700 hover:bg-purple-200 flex items-center"
+                    onClick={() => toggleAttendance(classItem.id)}
+                    className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
+                      expandedAttendanceClassId === classItem.id
+                        ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
+                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+                    }`}
                   >
                     <Users className="h-4 w-4 mr-1" />
                     {t('admin.classes.attendance')}
@@ -1164,6 +1346,27 @@ export default function ClassesPage() {
                   </button>
                 </div>
               </div>
+              {expandedAttendanceClassId === classItem.id && (
+                attendanceLoading ? (
+                  <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                  </div>
+                ) : (
+                  attendanceData &&
+                  attendanceData.class.id === classItem.id && (
+                    <ClassAttendancePanel
+                      class={attendanceData.class}
+                      enrollments={attendanceData.enrollments}
+                      onUpdateStatus={updateAttendanceStatus}
+                      onToggleConfirmation={toggleAttendanceConfirmation}
+                      onCancelClass={() => handleCancelClass(classItem.id)}
+                      onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
+                      onClose={() => setExpandedAttendanceClassId(null)}
+                      inline
+                    />
+                  )
+                )
+              )}
             </div>
             ))
           )}

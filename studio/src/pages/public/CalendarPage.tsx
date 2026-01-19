@@ -296,7 +296,7 @@ export default function CalendarPage() {
             {locations.map((loc) => {
               const isActive = locationFilter === loc.value;
               const colors = loc.value === 'all' 
-                ? { primary: '#007257', dark: '#005a44' }
+                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
                 : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
               
               return (
@@ -489,7 +489,7 @@ export default function CalendarPage() {
             {locations.map((loc) => {
               const isActive = locationFilter === loc.value;
               const colors = loc.value === 'all' 
-                ? { primary: '#007257', dark: '#005a44' }
+                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
                 : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
               
               return (
@@ -605,7 +605,7 @@ export default function CalendarPage() {
             {locations.map((loc) => {
               const isActive = locationFilter === loc.value;
               const colors = loc.value === 'all' 
-                ? { primary: '#007257', dark: '#005a44' }
+                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
                 : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
               
               return (
@@ -723,7 +723,7 @@ export default function CalendarPage() {
             {locations.map((loc) => {
               const isActive = locationFilter === loc.value;
               const colors = loc.value === 'all' 
-                ? { primary: '#007257', dark: '#005a44' }
+                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
                 : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
               
               return (

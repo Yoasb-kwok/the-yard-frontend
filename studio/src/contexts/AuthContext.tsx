@@ -3,6 +3,14 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 interface Profile {
   id: string;
   full_name: string;
+  nick_name: string | null;
+  date_of_birth: string | null;
+  sex: boolean | null;
+  parents_name: string | null;
+  contact_number: string | null;
+  residential_district: string | null;
+  has_joined_courses: boolean | null;
+  student_id: string | null;
   role: 'student' | 'admin';
   mobile: string | null;
   id_first_four: string | null;
@@ -23,7 +31,18 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, idFirstFour: string, mobile: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    nickName: string | null,
+    dateOfBirth: string | null,
+    sex: boolean | null,
+    parentsName: string | null,
+    contactNumber: string | null,
+    residentialDistrict: string | null,
+    hasJoinedCourses: boolean | null
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
 }
@@ -34,13 +53,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const HARDCODED_ACCOUNTS = {
   'admin@admin.com': {
     password: 'admin123',
-    profile: {
-      id: 'admin-001',
-      full_name: 'Admin User',
-      role: 'admin' as const,
-      mobile: '12345678',
-      id_first_four: 'A123',
-    },
+      profile: {
+        id: 'admin-001',
+        full_name: 'Admin User',
+        role: 'admin' as const,
+        mobile: '12345678',
+        id_first_four: 'A123',
+        student_id: null,
+        nick_name: null,
+        date_of_birth: null,
+        sex: null,
+        parents_name: null,
+        contact_number: null,
+        residential_district: null,
+        has_joined_courses: null,
+      },
   },
   'student@student.com': {
     password: 'student123',
@@ -50,6 +77,14 @@ const HARDCODED_ACCOUNTS = {
       role: 'student' as const,
       mobile: '85287654321',
       id_first_four: 'S123',
+      student_id: 'std123456',
+      nick_name: null,
+      date_of_birth: null,
+      sex: null,
+      parents_name: null,
+      contact_number: '85287654321',
+      residential_district: null,
+      has_joined_courses: null,
     },
   },
 };
@@ -80,44 +115,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function signIn(email: string, password: string) {
     const account = HARDCODED_ACCOUNTS[email as keyof typeof HARDCODED_ACCOUNTS];
     
-    if (!account || account.password !== password) {
-      throw new Error('Invalid email or password');
+    // Check hardcoded accounts first
+    if (account && account.password === password) {
+      const userObj: User = {
+        id: account.profile.id,
+        email: email,
+      };
+
+      const sessionObj: Session = {
+        user: userObj,
+      };
+
+      setUser(userObj);
+      setProfile(account.profile);
+      setSession(sessionObj);
+
+      // Store in localStorage
+      localStorage.setItem('auth_session', JSON.stringify({
+        user: userObj,
+        profile: account.profile,
+        session: sessionObj,
+      }));
+      return;
     }
 
-    const userObj: User = {
-      id: account.profile.id,
-      email: email,
-    };
+    // Check for dynamically created accounts (from trial applications)
+    const storedPassword = localStorage.getItem(`user_password_${email}`);
+    const storedSession = localStorage.getItem('auth_session');
+    
+    if (storedPassword === password && storedSession) {
+      try {
+        const parsed = JSON.parse(storedSession);
+        if (parsed.user && parsed.user.email === email) {
+          setUser(parsed.user);
+          setProfile(parsed.profile);
+          setSession(parsed.session);
+          return;
+        }
+      } catch (error) {
+        console.error('Error parsing stored session:', error);
+      }
+    }
 
-    const sessionObj: Session = {
-      user: userObj,
-    };
-
-    setUser(userObj);
-    setProfile(account.profile);
-    setSession(sessionObj);
-
-    // Store in localStorage
-    localStorage.setItem('auth_session', JSON.stringify({
-      user: userObj,
-      profile: account.profile,
-      session: sessionObj,
-    }));
+    throw new Error('Invalid email or password');
   }
 
-  async function signUp(email: string, _password: string, fullName: string, idFirstFour: string, mobile: string) {
+  // Generate unique Student ID (format: std + 6 random digits)
+  function generateStudentId(): string {
+    // Generate 6 random digits
+    const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
+    return `std${randomDigits}`;
+  }
+
+  async function signUp(
+    email: string,
+    password: string,
+    fullName: string,
+    nickName: string | null,
+    dateOfBirth: string | null,
+    sex: boolean | null,
+    parentsName: string | null,
+    contactNumber: string | null,
+    residentialDistrict: string | null,
+    hasJoinedCourses: boolean | null
+  ) {
     // For demo purposes, create a student account
     const userObj: User = {
       id: `user-${Date.now()}`,
       email: email,
     };
 
+    // Generate unique Student ID for students
+    const studentId = generateStudentId();
+
     const profileObj: Profile = {
       id: userObj.id,
       full_name: fullName,
+      nick_name: nickName,
+      date_of_birth: dateOfBirth,
+      sex: sex,
+      parents_name: parentsName,
+      contact_number: contactNumber,
+      residential_district: residentialDistrict,
+      has_joined_courses: hasJoinedCourses,
+      student_id: studentId,
       role: 'student',
-      mobile: mobile,
-      id_first_four: idFirstFour,
+      mobile: contactNumber, // Keep for backward compatibility
+      id_first_four: null, // No longer used
     };
 
     const sessionObj: Session = {
@@ -134,6 +218,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profile: profileObj,
       session: sessionObj,
     }));
+
+    // Store password in localStorage for demo purposes (in production, this would be handled by backend)
+    if (password) {
+      localStorage.setItem(`user_password_${email}`, password);
+    }
   }
 
   async function signOut() {

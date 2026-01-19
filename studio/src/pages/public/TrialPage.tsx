@@ -20,10 +20,15 @@ export default function TrialPage() {
   const location = useLocation();
   const classData = (location.state as { classData?: ClassData })?.classData;
   const [fullName, setFullName] = useState('');
-  const [idLastFour, setIdLastFour] = useState('');
+  const [nickName, setNickName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [sex, setSex] = useState<boolean | null>(null);
+  const [parentsName, setParentsName] = useState('');
   const [countryCode, setCountryCode] = useState('852');
-  const [mobile, setMobile] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [email, setEmail] = useState('');
+  const [residentialDistrict, setResidentialDistrict] = useState('');
+  const [hasJoinedCourses, setHasJoinedCourses] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -83,6 +88,16 @@ export default function TrialPage() {
     });
   };
 
+  // Generate password from date of birth (YYYYMMDD format)
+  const generatePasswordFromBirthdate = (birthdate: string): string => {
+    if (!birthdate) return '';
+    const date = new Date(birthdate);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}${month}${day}`;
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -118,18 +133,31 @@ export default function TrialPage() {
     }
 
     // For non-logged-in users, validate and register
-    if (idLastFour.length !== 4 || !/^[A-Za-z0-9]{4}$/.test(idLastFour)) {
-      setError(t('register.invalidIdCard'));
+    if (!dateOfBirth) {
+      setError(t('trial.dateOfBirthRequired'));
       return;
     }
 
     setLoading(true);
 
     try {
-      // Combine country code with mobile number
-      const fullMobile = `${countryCode}${mobile}`;
-      // For trial applications, we don't set a password - user will set it later
-      await signUp(email, '', fullName, idLastFour, fullMobile);
+      // Combine country code with contact number
+      const fullContactNumber = `${countryCode}${contactNumber}`;
+      // Generate password from date of birth (YYYYMMDD format)
+      const password = generatePasswordFromBirthdate(dateOfBirth);
+      
+      await signUp(
+        email,
+        password,
+        fullName,
+        nickName || null,
+        dateOfBirth || null,
+        sex,
+        parentsName || null,
+        fullContactNumber || null,
+        residentialDistrict || null,
+        hasJoinedCourses
+      );
 
       setSuccess(true);
       setTimeout(() => {
@@ -292,7 +320,7 @@ export default function TrialPage() {
                   <div className="rounded-md shadow-sm space-y-4">
                     <div>
                       <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('register.fullName')}
+                        {t('trial.fullName')} *
                       </label>
                       <input
                         id="fullName"
@@ -301,33 +329,92 @@ export default function TrialPage() {
                         autoComplete="name"
                         required
                         className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        placeholder={t('register.fullName')}
+                        placeholder={t('trial.fullName')}
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="idLastFour" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('register.idLastFour')}
+                      <label htmlFor="nickName" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.nickName')}
                       </label>
                       <input
-                        id="idLastFour"
-                        name="idLastFour"
+                        id="nickName"
+                        name="nickName"
                         type="text"
-                        maxLength={4}
-                        pattern="[A-Za-z0-9]{4}"
-                        required
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm uppercase"
-                        placeholder={t('register.idLastFour')}
-                        value={idLastFour}
-                        onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('trial.nickName')}
+                        value={nickName}
+                        onChange={(e) => setNickName(e.target.value)}
                       />
                     </div>
 
                     <div>
-                      <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('register.mobile')}
+                      <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.dateOfBirth')} *
+                      </label>
+                      <input
+                        id="dateOfBirth"
+                        name="dateOfBirth"
+                        type="date"
+                        required
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        value={dateOfBirth}
+                        onChange={(e) => setDateOfBirth(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.sex')} *
+                      </label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="sex"
+                            value="male"
+                            checked={sex === true}
+                            onChange={() => setSex(true)}
+                            className="mr-2"
+                            required
+                          />
+                          {t('trial.male')}
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="sex"
+                            value="female"
+                            checked={sex === false}
+                            onChange={() => setSex(false)}
+                            className="mr-2"
+                            required
+                          />
+                          {t('trial.female')}
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="parentsName" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.parentsName')}
+                      </label>
+                      <input
+                        id="parentsName"
+                        name="parentsName"
+                        type="text"
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('trial.parentsName')}
+                        value={parentsName}
+                        onChange={(e) => setParentsName(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.contactNumber')} *
                       </label>
                       <div className="flex rounded-md shadow-sm">
                         <select
@@ -342,22 +429,22 @@ export default function TrialPage() {
                           <option value="853">+853</option>
                         </select>
                         <input
-                          id="mobile"
-                          name="mobile"
+                          id="contactNumber"
+                          name="contactNumber"
                           type="tel"
                           autoComplete="tel"
                           required
                           className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-r-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                          placeholder={t('register.mobile')}
-                          value={mobile}
-                          onChange={(e) => setMobile(e.target.value.replace(/\D/g, ''))}
+                          placeholder={t('trial.contactNumber')}
+                          value={contactNumber}
+                          onChange={(e) => setContactNumber(e.target.value.replace(/\D/g, ''))}
                         />
                       </div>
                     </div>
 
                     <div>
                       <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('register.email')}
+                        {t('trial.email')} *
                       </label>
                       <input
                         id="email"
@@ -366,10 +453,55 @@ export default function TrialPage() {
                         autoComplete="email"
                         required
                         className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        placeholder={t('register.email')}
+                        placeholder={t('trial.email')}
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                       />
+                    </div>
+
+                    <div>
+                      <label htmlFor="residentialDistrict" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.residentialDistrict')}
+                      </label>
+                      <input
+                        id="residentialDistrict"
+                        name="residentialDistrict"
+                        type="text"
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('trial.residentialDistrict')}
+                        value={residentialDistrict}
+                        onChange={(e) => setResidentialDistrict(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.hasJoinedCourses')}
+                      </label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="hasJoinedCourses"
+                            value="yes"
+                            checked={hasJoinedCourses === true}
+                            onChange={() => setHasJoinedCourses(true)}
+                            className="mr-2"
+                          />
+                          {t('common.yes')}
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="hasJoinedCourses"
+                            value="no"
+                            checked={hasJoinedCourses === false}
+                            onChange={() => setHasJoinedCourses(false)}
+                            className="mr-2"
+                          />
+                          {t('common.no')}
+                        </label>
+                      </div>
                     </div>
                   </div>
                 )}
