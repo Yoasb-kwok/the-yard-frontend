@@ -12,6 +12,7 @@ interface Class {
   name: string;
   class_code: string;
   instructor: string;
+  substitute_instructor?: string | null;
   start_time: string;
   end_time: string;
   capacity: number;
@@ -191,6 +192,7 @@ export default function ClassesPage() {
     name: '',
     class_code: '',
     instructor: '',
+    substitute_instructor: '',
     start_time: '',
     end_time: '',
     capacity: 10,
@@ -380,6 +382,7 @@ export default function ClassesPage() {
       name: classItem.name,
       class_code: classItem.class_code,
       instructor: classItem.instructor,
+      substitute_instructor: classItem.substitute_instructor ?? '',
       start_time: startDateTime,
       end_time: endDateTime,
       capacity: classItem.capacity,
@@ -398,6 +401,7 @@ export default function ClassesPage() {
       name: '',
       class_code: '',
       instructor: '',
+      substitute_instructor: '',
       start_time: '',
       end_time: '',
       capacity: 10,
@@ -445,6 +449,7 @@ export default function ClassesPage() {
               name: form.name,
               class_code: form.class_code,
               instructor: form.instructor,
+              substitute_instructor: form.substitute_instructor || null,
               start_time: newClassStart.toISOString(),
               end_time: newClassEnd.toISOString(),
               capacity: form.capacity,
@@ -463,6 +468,7 @@ export default function ClassesPage() {
           name: form.name,
           class_code: form.class_code,
           instructor: form.instructor,
+          substitute_instructor: form.substitute_instructor || null,
           start_time: form.start_time,
           end_time: form.end_time,
           capacity: form.capacity,
@@ -482,6 +488,7 @@ export default function ClassesPage() {
         name: '',
         class_code: '',
         instructor: '',
+        substitute_instructor: '',
         start_time: '',
         end_time: '',
         capacity: 10,
@@ -602,6 +609,7 @@ export default function ClassesPage() {
       name: '',
       class_code: '',
       instructor: '',
+      substitute_instructor: '',
       start_time: '',
       end_time: '',
       capacity: 10,
@@ -847,6 +855,9 @@ export default function ClassesPage() {
                       <p className="text-gray-600 mb-1 text-sm font-medium">{classItem.class_code}</p>
                     )}
                     <p className="text-gray-600 mb-1">{classItem.instructor}</p>
+                    {classItem.substitute_instructor && (
+                      <p className="text-gray-500 mb-1 text-sm">{t('admin.classes.substituteShort')}: {classItem.substitute_instructor}</p>
+                    )}
                     <div className="flex items-center text-sm text-gray-600 mb-1">
                       <Calendar className="h-4 w-4 mr-1" />
                       {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
@@ -1392,6 +1403,9 @@ export default function ClassesPage() {
                     <p className="text-gray-600 mb-1 text-sm font-medium">{classItem.class_code}</p>
                   )}
                   <p className="text-gray-600 mb-1">{classItem.instructor}</p>
+                  {classItem.substitute_instructor && (
+                    <p className="text-gray-500 mb-1 text-sm">{t('admin.classes.substituteShort')}: {classItem.substitute_instructor}</p>
+                  )}
                   <div className="flex items-center text-sm text-gray-600 mb-1">
                     <Calendar className="h-4 w-4 mr-1" />
                     {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
@@ -1550,6 +1564,22 @@ export default function ClassesPage() {
                   ))}
                 </select>
               </div>
+              {editingClass && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.substituteInstructor')}</label>
+                  <select
+                    value={form.substitute_instructor}
+                    onChange={(e) => setForm({ ...form, substitute_instructor: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">{t('admin.classes.noSubstitute')}</option>
+                    {instructors.map((inst) => (
+                      <option key={inst.id} value={inst.name}>{inst.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">{t('admin.classes.substituteInstructorHint')}</p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.level')}</label>
                 <select

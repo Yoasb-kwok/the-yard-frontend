@@ -26,6 +26,7 @@ export interface ClassWithAttendance {
   name: string;
   class_code: string;
   instructor: string;
+  substitute_instructor?: string | null;
   start_time: string;
   end_time: string;
   capacity: number;
@@ -465,6 +466,14 @@ export default function ClassAttendancePanel({
               <p className="text-sm text-gray-600">
                 {selectedClass.name} ({selectedClass.class_code})
               </p>
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">{t('admin.attendance.instructor')}:</span> {selectedClass.instructor}
+              </p>
+              {selectedClass.substitute_instructor && (
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">{t('admin.attendance.substituteInstructor')}:</span> {selectedClass.substitute_instructor}
+                </p>
+              )}
               <p className="text-sm text-gray-600">
                 {formatDateTime(selectedClass.start_time, getLocale())} - {formatDateTime(selectedClass.end_time, getLocale())}
               </p>

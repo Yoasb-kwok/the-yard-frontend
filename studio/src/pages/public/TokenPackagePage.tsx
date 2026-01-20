@@ -35,6 +35,9 @@ const MOCK_COUPONS: { [key: string]: { id: string; discount_type: 'percentage' |
   'SAVE50': { id: '2', discount_type: 'fixed', discount_value: 50 },
 };
 
+// Student ID format: std + digits (e.g. std123456). Valid codes get 10% off for testing.
+const REFERRAL_CODE_REGEX = /^std\d+$/i;
+
 // Mock data - same as ShopPage
 const MOCK_PACKAGES: TokenPackage[] = [
   {
@@ -72,6 +75,7 @@ export default function TokenPackagePage() {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<{
     id: string;
     discount_type: 'percentage' | 'fixed';
@@ -156,6 +160,7 @@ export default function TokenPackagePage() {
     setCart([]);
     setAppliedCoupon(null);
     setCouponCode('');
+    setReferralCode('');
     navigate('/dashboard');
     setSubmitting(false);
   }
@@ -164,7 +169,9 @@ export default function TokenPackagePage() {
   const discount = appliedCoupon
     ? calculateDiscount(subtotal, appliedCoupon.discount_type, appliedCoupon.discount_value)
     : 0;
-  const total = subtotal - discount;
+  const referralValid = REFERRAL_CODE_REGEX.test(referralCode.trim());
+  const referralDiscount = referralValid ? subtotal * 0.1 : 0;
+  const total = subtotal - discount - referralDiscount;
 
   // Helper functions for class data display
   const getLocale = (): string => {
@@ -384,6 +391,21 @@ export default function TokenPackagePage() {
                           {t('shop.couponApplied')}
                         </div>
                       )}
+                      <div>
+                        <input
+                          type="text"
+                          placeholder={t('shop.referralCode')}
+                          value={referralCode}
+                          onChange={(e) => setReferralCode(e.target.value)}
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        {referralValid && (
+                          <div className="flex items-center text-green-600 text-sm mt-1">
+                            <Check className="h-4 w-4 mr-1" />
+                            {t('shop.referralApplied')}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-2 mb-4 pt-4 border-t">
@@ -395,6 +417,12 @@ export default function TokenPackagePage() {
                         <div className="flex justify-between text-sm text-green-600">
                           <span>{t('shop.discount')}:</span>
                           <span>-{formatCurrency(discount)}</span>
+                        </div>
+                      )}
+                      {referralDiscount > 0 && (
+                        <div className="flex justify-between text-sm text-green-600">
+                          <span>{t('shop.referralDiscount')}:</span>
+                          <span>-{formatCurrency(referralDiscount)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-lg font-bold">
