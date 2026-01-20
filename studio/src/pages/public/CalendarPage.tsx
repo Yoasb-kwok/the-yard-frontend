@@ -5,6 +5,8 @@ import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
+import { getHongKongHolidayName } from '../../lib/utils';
+import { CourseLevel } from '../../contexts/AuthContext';
 
 interface Lesson {
   id: string;
@@ -16,6 +18,7 @@ interface Lesson {
   enrolled_count: number;
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   program_code: string;
+  level: CourseLevel;
 }
 
 type ViewType = 'day' | 'threeDay' | 'week' | 'month';
@@ -39,21 +42,33 @@ const generateDummyLessons = (): Lesson[] => {
       const endTime = new Date(startTime);
       endTime.setHours(hour + 1, 0, 0, 0);
       
-      const classNames = ['幼兒街舞入門班', '初階街舞基礎班', '韓風小明星KPOP班', 'Yoga Basics', 'Pilates Core', 'Morning Stretch'];
+      const classData = [
+        { name: '幼兒街舞入門班', level: 'entry' as CourseLevel, programCode: 'PSW6R3' },
+        { name: '初階街舞基礎班', level: 'entry' as CourseLevel, programCode: 'BSW6R9' },
+        { name: '韓風小明星KPOP班', level: 'intermediate' as CourseLevel, programCode: 'KPW1L1-FT' },
+        { name: 'Yoga Basics', level: 'entry' as CourseLevel, programCode: 'YG001' },
+        { name: 'Pilates Core', level: 'intermediate' as CourseLevel, programCode: 'PL002' },
+        { name: 'Morning Stretch', level: 'entry' as CourseLevel, programCode: 'MS003' },
+        { name: 'Advanced Street Dance', level: 'advanced' as CourseLevel, programCode: 'ASD001' },
+        { name: 'Intermediate KPOP', level: 'intermediate' as CourseLevel, programCode: 'IKP001' },
+        { name: 'Advanced Yoga', level: 'advanced' as CourseLevel, programCode: 'AYG001' },
+      ];
       const instructors = ['Wawa', 'C+', 'Shirley', 'Jane Smith', 'John Doe', 'Sarah Johnson'];
       const locations: ('sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui')[] = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'];
-      const programCodes = ['PSW6R3', 'BSW6R9', 'KPW1L1-FT', 'YG001', 'PL002', 'MS003'];
+      
+      const selectedClass = classData[Math.floor(Math.random() * classData.length)];
       
       lessons.push({
         id: `lesson-${i}-${j}`,
-        name: classNames[Math.floor(Math.random() * classNames.length)],
+        name: selectedClass.name,
         instructor: instructors[Math.floor(Math.random() * instructors.length)],
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         capacity: 15,
         enrolled_count: Math.floor(Math.random() * 10) + 5,
         location: locations[Math.floor(Math.random() * locations.length)],
-        program_code: programCodes[Math.floor(Math.random() * programCodes.length)],
+        program_code: selectedClass.programCode,
+        level: selectedClass.level,
       });
     }
   }
@@ -81,7 +96,7 @@ export default function CalendarPage() {
 
   useEffect(() => {
     loadLessons();
-  }, [currentDate, view]);
+  }, [currentDate, view, profile]);
 
   // Update view when URL parameter changes
   useEffect(() => {
@@ -125,7 +140,14 @@ export default function CalendarPage() {
 
   async function loadLessons() {
     await new Promise(resolve => setTimeout(resolve, 300));
-    setLessons(DUMMY_LESSONS);
+    let filteredLessons = DUMMY_LESSONS;
+    
+    // Filter lessons by student level if student is logged in
+    if (isStudent && profile?.level) {
+      filteredLessons = DUMMY_LESSONS.filter(lesson => lesson.level === profile.level);
+    }
+    
+    setLessons(filteredLessons);
   }
 
   const getStartOfWeek = (date: Date): Date => {
@@ -191,6 +213,25 @@ export default function CalendarPage() {
       const locationMatches = locationFilter === 'all' || lesson.location === locationFilter;
       return dateMatches && locationMatches;
     });
+  };
+
+  // Get level tag styling
+  const getLevelTag = (level: CourseLevel) => {
+    const levelConfig = {
+      entry: {
+        label: t('calendar.level.entry'),
+        className: 'bg-blue-100 text-blue-800 border-blue-200',
+      },
+      intermediate: {
+        label: t('calendar.level.intermediate'),
+        className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+      },
+      advanced: {
+        label: t('calendar.level.advanced'),
+        className: 'bg-purple-100 text-purple-800 border-purple-200',
+      },
+    };
+    return levelConfig[level];
   };
 
 
@@ -276,6 +317,7 @@ export default function CalendarPage() {
 
   const renderDayView = () => {
     const dayLessons = getLessonsForDate(currentDate);
+    const holidayName = getHongKongHolidayName(currentDate);
     const locations: { value: LocationFilter; label: string }[] = [
       { value: 'all', label: t('calendar.allLocations') },
       { value: 'sanpokong', label: t('home.locations.sanpokong') },
@@ -286,6 +328,14 @@ export default function CalendarPage() {
 
     return (
       <div className="space-y-4">
+        {/* Holiday Banner */}
+        {holidayName && (
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderColor: '#d1d5db' }}>
+            <div className="text-sm text-gray-400 italic">
+              {holidayName}
+            </div>
+          </div>
+        )}
         {/* Location Filter */}
         <div className="bg-white rounded-lg shadow-md p-4">
           <div className="flex items-center gap-3 mb-3">
@@ -352,14 +402,19 @@ export default function CalendarPage() {
                   
                   <div className="flex items-start justify-between mb-6">
                     <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">{lesson.name}</h3>
-                    <span 
-                      className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
-                      style={{
-                        backgroundColor: locationColors.primary,
-                      }}
-                    >
-                      {lesson.program_code}
-                    </span>
+                    <div className="flex flex-col gap-2 items-end">
+                      <span 
+                        className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
+                        style={{
+                          backgroundColor: locationColors.primary,
+                        }}
+                      >
+                        {lesson.program_code}
+                      </span>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(lesson.level).className}`}>
+                        {getLevelTag(lesson.level).label}
+                      </span>
+                    </div>
                   </div>
 
                   {/* Tutor Profile */}
@@ -405,6 +460,7 @@ export default function CalendarPage() {
                           end_time: lesson.end_time,
                           location: lesson.location,
                           program_code: lesson.program_code,
+                          level: lesson.level,
                         }
                       }}
                       className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
@@ -514,25 +570,34 @@ export default function CalendarPage() {
 
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-3 border-b">
-            {threeDays.map((day, idx) => (
-              <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
-                <div className="text-sm font-medium text-gray-600">
-                  {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+            {threeDays.map((day, idx) => {
+              const holidayName = getHongKongHolidayName(day);
+              return (
+                <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
+                  <div className="text-sm font-medium text-gray-600">
+                    {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+                  </div>
+                  <div className={`text-lg font-semibold mt-1 ${
+                    day.toDateString() === new Date().toDateString() 
+                      ? 'text-primary' 
+                      : 'text-gray-900'
+                  }`}>
+                    {day.getDate()}
+                  </div>
+                  {holidayName && (
+                    <div className="text-xs text-gray-400 mt-1 italic truncate" title={holidayName}>
+                      {holidayName}
+                    </div>
+                  )}
                 </div>
-                <div className={`text-lg font-semibold mt-1 ${
-                  day.toDateString() === new Date().toDateString() 
-                    ? 'text-primary' 
-                    : 'text-gray-900'
-                }`}>
-                  {day.getDate()}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="grid grid-cols-3 min-h-[400px]">
             {threeDays.map((day, idx) => {
               const dayLessons = getLessonsForDate(day);
               const isToday = day.toDateString() === new Date().toDateString();
+              const holidayName = getHongKongHolidayName(day);
               
               return (
                 <div
@@ -541,8 +606,14 @@ export default function CalendarPage() {
                     isToday ? 'bg-primary-lighter' : ''
                   }`}
                 >
+                  {holidayName && (
+                    <div className="text-xs text-gray-400 mb-2 italic truncate" title={holidayName}>
+                      {holidayName}
+                    </div>
+                  )}
                   {dayLessons.map((lesson) => {
                     const locationColors = getLocationColors(lesson.location);
+                    const levelTag = getLevelTag(lesson.level);
                     
                     return (
                       <div
@@ -565,6 +636,9 @@ export default function CalendarPage() {
                         </div>
                         <div className="text-white/80 text-xs mt-0.5">
                           {formatTime(new Date(lesson.start_time))}
+                        </div>
+                        <div className={`text-xs mt-1 px-1.5 py-0.5 rounded ${levelTag.className}`}>
+                          {levelTag.label}
                         </div>
                       </div>
                     );
@@ -630,25 +704,34 @@ export default function CalendarPage() {
 
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-7 border-b">
-            {weekDays.map((day, idx) => (
-              <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
-                <div className="text-sm font-medium text-gray-600">
-                  {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+            {weekDays.map((day, idx) => {
+              const holidayName = getHongKongHolidayName(day);
+              return (
+                <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
+                  <div className="text-sm font-medium text-gray-600">
+                    {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+                  </div>
+                  <div className={`text-lg font-semibold mt-1 ${
+                    day.toDateString() === new Date().toDateString() 
+                      ? 'text-primary' 
+                      : 'text-gray-900'
+                  }`}>
+                    {day.getDate()}
+                  </div>
+                  {holidayName && (
+                    <div className="text-xs text-gray-400 mt-1 italic truncate" title={holidayName}>
+                      {holidayName}
+                    </div>
+                  )}
                 </div>
-                <div className={`text-lg font-semibold mt-1 ${
-                  day.toDateString() === new Date().toDateString() 
-                    ? 'text-primary' 
-                    : 'text-gray-900'
-                }`}>
-                  {day.getDate()}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="grid grid-cols-7 min-h-[400px]">
             {weekDays.map((day, idx) => {
               const dayLessons = getLessonsForDate(day);
               const isToday = day.toDateString() === new Date().toDateString();
+              const holidayName = getHongKongHolidayName(day);
               
               return (
                 <div
@@ -657,8 +740,14 @@ export default function CalendarPage() {
                     isToday ? 'bg-primary-lighter' : ''
                   }`}
                 >
+                  {holidayName && (
+                    <div className="text-xs text-gray-400 mb-2 italic truncate" title={holidayName}>
+                      {holidayName}
+                    </div>
+                  )}
                   {dayLessons.map((lesson) => {
                     const locationColors = getLocationColors(lesson.location);
+                    const levelTag = getLevelTag(lesson.level);
                     
                     return (
                       <div
@@ -681,6 +770,9 @@ export default function CalendarPage() {
                         </div>
                         <div className="text-white/80 text-xs mt-0.5">
                           {formatTime(new Date(lesson.start_time))}
+                        </div>
+                        <div className={`text-xs mt-1 px-1.5 py-0.5 rounded ${levelTag.className}`}>
+                          {levelTag.label}
                         </div>
                       </div>
                     );
@@ -759,6 +851,7 @@ export default function CalendarPage() {
             const dayLessons = getLessonsForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isCurrentMonth = day.getMonth() === currentDate.getMonth();
+            const holidayName = getHongKongHolidayName(day);
             
             return (
               <div
@@ -776,9 +869,15 @@ export default function CalendarPage() {
                 }`}>
                   {day.getDate()}
                 </div>
+                {holidayName && (
+                  <div className="text-xs text-gray-400 mb-1 italic truncate" title={holidayName}>
+                    {holidayName}
+                  </div>
+                )}
                 <div className="space-y-1">
                   {dayLessons.slice(0, 3).map((lesson) => {
                     const locationColors = getLocationColors(lesson.location);
+                    const levelTag = getLevelTag(lesson.level);
                     return (
                       <div
                         key={lesson.id}
@@ -792,7 +891,7 @@ export default function CalendarPage() {
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         }}
-                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}`}
+                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))} - ${levelTag.label}`}
                         onClick={() => handleLessonClick(lesson)}
                       >
                         <div className="truncate">
@@ -800,6 +899,9 @@ export default function CalendarPage() {
                         </div>
                         <div className="truncate text-white/80">
                           {lesson.instructor}
+                        </div>
+                        <div className={`text-xs mt-0.5 px-1 py-0.5 rounded ${levelTag.className}`}>
+                          {levelTag.label}
                         </div>
                       </div>
                     );
@@ -976,14 +1078,19 @@ export default function CalendarPage() {
                         <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">
                           {selectedLesson.name}
                         </h3>
-                        <span
-                          className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
-                          style={{
-                            backgroundColor: locationColors.primary,
-                          }}
-                        >
-                          {selectedLesson.program_code}
-                        </span>
+                        <div className="flex flex-col gap-2 items-end">
+                          <span
+                            className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
+                            style={{
+                              backgroundColor: locationColors.primary,
+                            }}
+                          >
+                            {selectedLesson.program_code}
+                          </span>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(selectedLesson.level).className}`}>
+                            {getLevelTag(selectedLesson.level).label}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Tutor Profile */}
@@ -1060,6 +1167,7 @@ export default function CalendarPage() {
                               end_time: selectedLesson.end_time,
                               location: selectedLesson.location,
                               program_code: selectedLesson.program_code,
+                              level: selectedLesson.level,
                             }
                           }}
                           className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"

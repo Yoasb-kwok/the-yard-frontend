@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { ArrowLeft, Search, X, AlertTriangle, Users } from 'lucide-react';
+import { ArrowLeft, Search, X, AlertTriangle, Users, RefreshCw } from 'lucide-react';
 
 interface Class {
   id: string;
@@ -148,6 +148,12 @@ export default function ClassAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [cancelModal, setCancelModal] = useState(false);
+  const [refundModal, setRefundModal] = useState<{
+    isOpen: boolean;
+    enrollmentId: string;
+    userId: string;
+    userName: string;
+  }>({ isOpen: false, enrollmentId: '', userId: '', userName: '' });
 
   useEffect(() => {
     if (classId) {
@@ -194,6 +200,20 @@ export default function ClassAttendancePage() {
       }
       return e;
     }));
+  }
+
+  async function handleRefundToken(enrollmentId: string, userId: string, userName: string) {
+    // Simulate API call to refund token
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    
+    // In a real application, this would call an API to:
+    // 1. Add 1 token back to the user's token balance
+    // 2. Log the refund transaction
+    
+    alert(t('admin.attendance.tokenRefunded', { name: userName }));
+    
+    // Optionally, you could refresh the enrollment data here
+    // if you want to show updated information
   }
 
   async function toggleAttendanceConfirmation() {
@@ -474,6 +494,7 @@ export default function ClassAttendancePage() {
                         {!selectedClass.attendance_confirmed && (
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.actions')}</th>
                         )}
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.refund')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -523,6 +544,21 @@ export default function ClassAttendancePage() {
                               </select>
                             </td>
                           )}
+                          <td className="px-4 py-3 text-sm">
+                            <button
+                              onClick={() => setRefundModal({
+                                isOpen: true,
+                                enrollmentId: enrollment.id,
+                                userId: enrollment.user_id,
+                                userName: enrollment.user_name,
+                              })}
+                              className="px-3 py-1.5 text-sm font-medium bg-green-100 text-green-700 hover:bg-green-200 rounded-md flex items-center gap-1.5 transition-colors"
+                              title={t('admin.attendance.refundToken')}
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                              {t('admin.attendance.refund')}
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -594,12 +630,79 @@ export default function ClassAttendancePage() {
                             </select>
                           </div>
                         )}
+                        <div className="pt-2 border-t border-gray-200">
+                          <button
+                            onClick={() => setRefundModal({
+                              isOpen: true,
+                              enrollmentId: enrollment.id,
+                              userId: enrollment.user_id,
+                              userName: enrollment.user_name,
+                            })}
+                            className="w-full px-3 py-2 text-sm font-medium bg-green-100 text-green-700 hover:bg-green-200 rounded-md flex items-center justify-center gap-1.5 transition-colors"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                            {t('admin.attendance.refund')}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {/* Refund Token Confirmation Modal */}
+        {refundModal.isOpen && selectedClass && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-6 max-w-md w-full">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded-full">
+                    <RefreshCw className="h-6 w-6 text-green-600" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900">{t('admin.attendance.refundToken')}</h3>
+                </div>
+                <button
+                  onClick={() => setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '' })}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800 font-medium mb-2">{t('admin.attendance.refundWarning')}</p>
+                <p className="text-sm text-yellow-700">{t('admin.attendance.refundWarningDesc')}</p>
+              </div>
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">{t('admin.attendance.studentInfo')}</h4>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">{t('admin.attendance.studentName')}:</span> {refundModal.userName}
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  <span className="font-medium">{t('admin.attendance.class')}:</span> {selectedClass.name} ({selectedClass.class_code})
+                </p>
+              </div>
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <button
+                  onClick={() => setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '' })}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 rounded-md transition-colors"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={async () => {
+                    await handleRefundToken(refundModal.enrollmentId, refundModal.userId, refundModal.userName);
+                    setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '' });
+                  }}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 transition-colors"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {t('admin.attendance.confirmRefund')}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

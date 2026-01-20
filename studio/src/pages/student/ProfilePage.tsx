@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import Layout from '../../components/Layout';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth, CourseLevel } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { User, Copy, Check } from 'lucide-react';
 
@@ -91,40 +91,69 @@ export default function ProfilePage() {
           <div className="space-y-3 md:space-y-4">
             {/* Student ID - Show prominently for students */}
             {profile.role === 'student' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('profile.studentId')}
-                </label>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 px-3 py-2 border rounded-md bg-primary/5 text-sm md:text-base font-mono font-semibold text-primary">
-                    {profile.student_id || t('profile.notProvided')}
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('profile.studentId')}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 px-3 py-2 border rounded-md bg-primary/5 text-sm md:text-base font-mono font-semibold text-primary">
+                      {profile.student_id || t('profile.notProvided')}
+                    </div>
+                    {profile.student_id && (
+                      <button
+                        onClick={copyStudentId}
+                        className="px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-gray-700 transition-colors flex items-center gap-2"
+                        title={t('profile.copyStudentId')}
+                      >
+                        {copied ? (
+                          <>
+                            <Check className="h-4 w-4 text-green-600" />
+                            <span className="text-xs text-green-600">{t('profile.copied')}</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-4 w-4" />
+                            <span className="text-xs">{t('profile.copy')}</span>
+                          </>
+                        )}
+                      </button>
+                    )}
                   </div>
                   {profile.student_id && (
-                    <button
-                      onClick={copyStudentId}
-                      className="px-3 py-2 border border-gray-300 rounded-md bg-white hover:bg-gray-50 text-gray-700 transition-colors flex items-center gap-2"
-                      title={t('profile.copyStudentId')}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-4 w-4 text-green-600" />
-                          <span className="text-xs text-green-600">{t('profile.copied')}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4" />
-                          <span className="text-xs">{t('profile.copy')}</span>
-                        </>
-                      )}
-                    </button>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('profile.studentIdHint')}
+                    </p>
                   )}
                 </div>
-                {profile.student_id && (
-                  <p className="mt-1 text-xs text-gray-500">
-                    {t('profile.studentIdHint')}
-                  </p>
-                )}
-              </div>
+
+                {/* Level Tag - Show for students */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('profile.level')}
+                  </label>
+                  <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
+                    {profile.level ? (
+                      <span className={`inline-block text-sm font-semibold px-3 py-1.5 rounded border ${
+                        profile.level === 'entry' 
+                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                          : profile.level === 'intermediate'
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          : 'bg-purple-100 text-purple-800 border-purple-200'
+                      }`}>
+                        {profile.level === 'entry' 
+                          ? t('calendar.level.entry')
+                          : profile.level === 'intermediate'
+                          ? t('calendar.level.intermediate')
+                          : t('calendar.level.advanced')
+                        }
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">{t('profile.notProvided')}</span>
+                    )}
+                  </div>
+                </div>
+              </>
             )}
 
             <div>

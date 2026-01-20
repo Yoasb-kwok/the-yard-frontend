@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth, CourseLevel } from '../../contexts/AuthContext';
 import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
 
 interface ClassData {
@@ -13,6 +13,7 @@ interface ClassData {
   end_time: string;
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   program_code: string;
+  level: CourseLevel;
 }
 
 export default function TrialPage() {
@@ -247,6 +248,24 @@ export default function TrialPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classCode')}</p>
                   <p className="text-lg font-semibold text-primary">{classData.program_code}</p>
+                </div>
+
+                <div>
+                  <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.level')}</p>
+                  <span className={`inline-block text-sm font-semibold px-3 py-1.5 rounded border ${
+                    classData.level === 'entry' 
+                      ? 'bg-blue-100 text-blue-800 border-blue-200'
+                      : classData.level === 'intermediate'
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                      : 'bg-purple-100 text-purple-800 border-purple-200'
+                  }`}>
+                    {classData.level === 'entry' 
+                      ? t('calendar.level.entry')
+                      : classData.level === 'intermediate'
+                      ? t('calendar.level.intermediate')
+                      : t('calendar.level.advanced')
+                    }
+                  </span>
                 </div>
 
                 <div className="flex items-center text-gray-800">

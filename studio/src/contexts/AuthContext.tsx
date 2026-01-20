@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
+export type CourseLevel = 'entry' | 'intermediate' | 'advanced';
+
 interface Profile {
   id: string;
   full_name: string;
@@ -14,6 +16,7 @@ interface Profile {
   role: 'student' | 'admin';
   mobile: string | null;
   id_first_four: string | null;
+  level: CourseLevel | null;
 }
 
 interface User {
@@ -67,24 +70,26 @@ const HARDCODED_ACCOUNTS = {
         contact_number: null,
         residential_district: null,
         has_joined_courses: null,
+        level: null,
       },
   },
   'student@student.com': {
     password: 'student123',
     profile: {
       id: 'student-001',
-      full_name: 'Student User',
+      full_name: '陳小明',
       role: 'student' as const,
-      mobile: '85287654321',
+      mobile: '85291234567',
       id_first_four: 'S123',
       student_id: 'std123456',
-      nick_name: null,
-      date_of_birth: null,
-      sex: null,
-      parents_name: null,
-      contact_number: '85287654321',
-      residential_district: null,
-      has_joined_courses: null,
+      nick_name: '小明',
+      date_of_birth: '2010-05-15',
+      sex: true, // true = male, false = female
+      parents_name: '陳大華',
+      contact_number: '85291234567',
+      residential_district: 'Kowloon',
+      has_joined_courses: true,
+      level: 'entry' as CourseLevel,
     },
   },
 };
@@ -202,6 +207,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: 'student',
       mobile: contactNumber, // Keep for backward compatibility
       id_first_four: null, // No longer used
+      level: null, // Default to null, can be set later
     };
 
     const sessionObj: Session = {

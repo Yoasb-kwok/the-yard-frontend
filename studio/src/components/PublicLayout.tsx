@@ -1,7 +1,7 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Receipt, Home, Newspaper, Package, Phone, LogOut } from 'lucide-react';
+import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Receipt, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from '../assets/images/the-yard-logo.png';
@@ -39,6 +39,8 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
 
   // Check if student is logged in
   const isStudent = user && profile?.role === 'student';
+  // Check if admin is logged in
+  const isAdmin = user && profile?.role === 'admin';
 
   // Build navigation items with icons
   const navItems = [
@@ -158,12 +160,27 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                           </Link>
                         </>
                       )}
-                      <button
-                        onClick={handleSignOut}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                      >
-                        {t('nav.signOut')}
-                      </button>
+                      {isAdmin && (
+                        <Link
+                          to="/admin"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          <LayoutDashboard className="h-4 w-4" />
+                          {t('nav.dashboard')}
+                        </Link>
+                      )}
+                      {user && (
+                        <>
+                          <div className="border-t border-gray-200 my-1"></div>
+                          <button
+                            onClick={handleSignOut}
+                            className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                          >
+                            {t('nav.signOut')}
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -269,6 +286,32 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                           {t('nav.profile')}
                         </Link>
                       </div>
+                    </div>
+                    <div className="pt-2">
+                      <button
+                        onClick={() => {
+                          handleSignOut();
+                          setMobileMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 text-base font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 active:bg-red-800 transition-all shadow-sm"
+                      >
+                        <LogOut className="h-5 w-5" />
+                        {t('nav.signOut')}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {user && isAdmin && (
+                  <>
+                    <div className="pt-2 border-t border-gray-200">
+                      <Link
+                        to="/admin"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+                      >
+                        <LayoutDashboard className="h-5 w-5 text-gray-500" />
+                        {t('nav.dashboard')}
+                      </Link>
                     </div>
                     <div className="pt-2">
                       <button

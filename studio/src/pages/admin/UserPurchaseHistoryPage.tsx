@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package } from 'lucide-react';
+import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package, X, Printer } from 'lucide-react';
 
 interface Purchase {
   id: string;
@@ -138,6 +138,7 @@ export default function UserPurchaseHistoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
 
   useEffect(() => {
     loadPurchases();
@@ -214,6 +215,240 @@ export default function UserPurchaseHistoryPage() {
     }
     
     return `+852 ${mobile}`;
+  };
+
+  const handlePrintReceipt = () => {
+    if (!selectedPurchase) return;
+    
+    // Create a new window with just the receipt content
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+    
+    const address = i18n.language === 'en' ? t('contact.addressEN') : t('contact.addressTC');
+    const receiptHTML = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Receipt - ${selectedPurchase.order_id}</title>
+          <meta charset="UTF-8">
+          <style>
+            * {
+              margin: 0;
+              padding: 0;
+              box-sizing: border-box;
+            }
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              padding: 40px;
+              color: #111827;
+              background: white;
+            }
+            .receipt-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+            }
+            .company-header {
+              text-align: center;
+              margin-bottom: 2rem;
+              padding-bottom: 1.5rem;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            .company-header h1 {
+              font-size: 2rem;
+              font-weight: bold;
+              margin-bottom: 0.5rem;
+              color: #111827;
+            }
+            .company-header p {
+              color: #4b5563;
+              margin-bottom: 0.25rem;
+            }
+            .section {
+              margin-bottom: 1.5rem;
+              padding-bottom: 1.5rem;
+              border-bottom: 1px solid #e5e7eb;
+            }
+            .section h3 {
+              font-size: 1.125rem;
+              font-weight: 600;
+              margin-bottom: 0.75rem;
+              color: #111827;
+            }
+            .section-title {
+              font-size: 1.5rem;
+              font-weight: 600;
+              margin-bottom: 0.5rem;
+              color: #111827;
+            }
+            .section-subtitle {
+              font-size: 0.875rem;
+              color: #6b7280;
+              margin-bottom: 1.5rem;
+            }
+            .info-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 1rem;
+              font-size: 0.875rem;
+            }
+            .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 0.5rem;
+              font-size: 0.875rem;
+            }
+            .info-label {
+              color: #4b5563;
+            }
+            .info-value {
+              font-weight: 500;
+              color: #111827;
+            }
+            .total-row {
+              display: flex;
+              justify-content: space-between;
+              padding-top: 0.5rem;
+              margin-top: 0.5rem;
+              border-top: 1px solid #e5e7eb;
+              font-size: 1rem;
+              font-weight: 600;
+            }
+            .footer {
+              text-align: center;
+              font-size: 0.875rem;
+              color: #6b7280;
+              margin-top: 2rem;
+              padding-top: 1.5rem;
+              border-top: 1px solid #e5e7eb;
+            }
+            .discount {
+              color: #dc2626;
+            }
+            .status-paid {
+              color: #16a34a;
+            }
+            @media print {
+              @page {
+                margin: 0.5in;
+              }
+              body {
+                padding: 20px;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-container">
+            <div class="company-header">
+              <h1>Yard</h1>
+              <p>Dance Academy</p>
+              <p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.5rem;">${address}</p>
+              <p style="font-size: 0.875rem; color: #6b7280; margin-top: 0.25rem;">${t('contact.email')}: info@theyard.com.hk</p>
+            </div>
+
+            <div class="section">
+              <h2 class="section-title">${t('admin.purchaseHistory.receipt')}</h2>
+              <p class="section-subtitle">${t('admin.purchaseHistory.receiptNumber')}: ${selectedPurchase.order_id}</p>
+            </div>
+
+            <div class="section">
+              <h3>${t('admin.purchaseHistory.customerInfo')}</h3>
+              <div class="info-grid">
+                <div>
+                  <span class="info-label">${t('admin.purchaseHistory.customerName')}:</span>
+                  <span class="info-value">${selectedPurchase.user_name}</span>
+                </div>
+                <div>
+                  <span class="info-label">${t('admin.purchaseHistory.contactNumber')}:</span>
+                  <span class="info-value">${formatMobile(selectedPurchase.user_mobile)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="section">
+              <h3>${t('admin.purchaseHistory.purchaseDetails')}</h3>
+              <div class="info-row">
+                <span class="info-label">${t('admin.purchaseHistory.package')}:</span>
+                <span class="info-value">${selectedPurchase.package_name}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">${t('admin.purchaseHistory.quantity')}:</span>
+                <span class="info-value">${selectedPurchase.quantity}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">${t('admin.purchaseHistory.tokens')}:</span>
+                <span class="info-value">${selectedPurchase.token_count * selectedPurchase.quantity} ${t('tokenPackage.tokens')}</span>
+              </div>
+              ${selectedPurchase.coupon_code ? `
+              <div class="info-row">
+                <span class="info-label">${t('admin.purchaseHistory.coupon')}:</span>
+                <span class="info-value">${selectedPurchase.coupon_code}</span>
+              </div>
+              ` : ''}
+            </div>
+
+            <div class="section">
+              <h3>${t('admin.purchaseHistory.paymentSummary')}</h3>
+              <div class="info-row">
+                <span class="info-label">${t('admin.purchaseHistory.subtotal')}:</span>
+                <span class="info-value">${formatCurrency(selectedPurchase.subtotal)}</span>
+              </div>
+              ${selectedPurchase.discount > 0 ? `
+              <div class="info-row">
+                <span class="info-label">${t('admin.purchaseHistory.discount')}:</span>
+                <span class="info-value discount">-${formatCurrency(selectedPurchase.discount)}</span>
+              </div>
+              ` : ''}
+              <div class="total-row">
+                <span>${t('admin.purchaseHistory.total')}:</span>
+                <span>${formatCurrency(selectedPurchase.total)}</span>
+              </div>
+            </div>
+
+            <div class="section">
+              <h3>${t('admin.purchaseHistory.paymentInfo')}</h3>
+              <div class="info-grid">
+                <div>
+                  <span class="info-label">${t('admin.purchaseHistory.paymentMethod')}:</span>
+                  <span class="info-value">${getPaymentMethodLabel(selectedPurchase.payment_method)}</span>
+                </div>
+                <div>
+                  <span class="info-label">${t('admin.purchaseHistory.paymentStatus')}:</span>
+                  <span class="info-value status-paid">${getStatusLabel(selectedPurchase.payment_status)}</span>
+                </div>
+                <div>
+                  <span class="info-label">${t('admin.purchaseHistory.purchaseDate')}:</span>
+                  <span class="info-value">${formatDateTime(selectedPurchase.created_at, getLocale())}</span>
+                </div>
+                ${selectedPurchase.paid_at ? `
+                <div>
+                  <span class="info-label">${t('admin.purchaseHistory.paidAt')}:</span>
+                  <span class="info-value">${formatDateTime(selectedPurchase.paid_at, getLocale())}</span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>${t('admin.purchaseHistory.receiptFooter')}</p>
+              <p style="margin-top: 0.5rem;">${t('admin.purchaseHistory.thankYou')}</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    printWindow.document.write(receiptHTML);
+    printWindow.document.close();
+    printWindow.focus();
+    
+    // Wait for content to load, then print
+    setTimeout(() => {
+      printWindow.print();
+      // Optionally close after printing
+      // printWindow.close();
+    }, 250);
   };
 
   const filteredPurchases = purchases.filter(purchase => {
@@ -389,7 +624,14 @@ export default function UserPurchaseHistoryPage() {
                       </span>
                     </div>
                     {purchase.payment_status === 'paid' && (
-                      <div className="pt-2 border-t border-gray-100">
+                      <div className="pt-2 border-t border-gray-100 space-y-2">
+                        <button
+                          onClick={() => setSelectedPurchase(purchase)}
+                          className="w-full px-4 py-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                        >
+                          <Receipt className="h-4 w-4" />
+                          {t('admin.purchaseHistory.receipt')}
+                        </button>
                         <button
                           onClick={() => navigate(`/admin/users/${purchase.user_id}/assign-tokens`)}
                           className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center justify-center gap-2 text-sm font-medium"
@@ -504,16 +746,28 @@ export default function UserPurchaseHistoryPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          {purchase.payment_status === 'paid' && (
-                            <button
-                              onClick={() => navigate(`/admin/users/${purchase.user_id}/assign-tokens`)}
-                              className="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2 text-sm font-medium"
-                              title={t('admin.users.assignTokens')}
-                            >
-                              <Package className="h-4 w-4" />
-                              {t('admin.users.assignTokens')}
-                            </button>
-                          )}
+                          <div className="flex items-center gap-2">
+                            {purchase.payment_status === 'paid' && (
+                              <>
+                                <button
+                                  onClick={() => setSelectedPurchase(purchase)}
+                                  className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors flex items-center gap-2 text-sm font-medium"
+                                  title={t('admin.purchaseHistory.receipt')}
+                                >
+                                  <Receipt className="h-4 w-4" />
+                                  {t('admin.purchaseHistory.receipt')}
+                                </button>
+                                <button
+                                  onClick={() => navigate(`/admin/users/${purchase.user_id}/assign-tokens`)}
+                                  className="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2 text-sm font-medium"
+                                  title={t('admin.users.assignTokens')}
+                                >
+                                  <Package className="h-4 w-4" />
+                                  {t('admin.users.assignTokens')}
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -524,6 +778,165 @@ export default function UserPurchaseHistoryPage() {
           </>
         )}
       </div>
+
+      {/* Receipt Modal */}
+      {selectedPurchase && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:hidden">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none">
+            {/* Receipt Content - Printable */}
+            <div id="receipt-content" className="p-8 print:p-6">
+              {/* Company Header */}
+              <div className="text-center mb-8 border-b border-gray-200 pb-6">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Yard</h1>
+                <p className="text-gray-600 mb-1">Dance Academy</p>
+                <p className="text-sm text-gray-500 mb-2">
+                  {i18n.language === 'en' ? t('contact.addressEN') : t('contact.addressTC')}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {t('contact.email')}: info@theyard.com.hk
+                </p>
+              </div>
+
+              {/* Receipt Title */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+                  {t('admin.purchaseHistory.receipt')}
+                </h2>
+                <p className="text-sm text-gray-500">
+                  {t('admin.purchaseHistory.receiptNumber')}: {selectedPurchase.order_id}
+                </p>
+              </div>
+
+              {/* Customer Information */}
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  {t('admin.purchaseHistory.customerInfo')}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">{t('admin.purchaseHistory.customerName')}:</span>
+                    <span className="ml-2 font-medium text-gray-900">{selectedPurchase.user_name}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">{t('admin.purchaseHistory.contactNumber')}:</span>
+                    <span className="ml-2 font-medium text-gray-900">{formatMobile(selectedPurchase.user_mobile)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Purchase Details */}
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  {t('admin.purchaseHistory.purchaseDetails')}
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{t('admin.purchaseHistory.package')}:</span>
+                    <span className="font-medium text-gray-900">{selectedPurchase.package_name}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{t('admin.purchaseHistory.quantity')}:</span>
+                    <span className="font-medium text-gray-900">{selectedPurchase.quantity}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{t('admin.purchaseHistory.tokens')}:</span>
+                    <span className="font-medium text-gray-900">
+                      {selectedPurchase.token_count * selectedPurchase.quantity} {t('tokenPackage.tokens')}
+                    </span>
+                  </div>
+                  {selectedPurchase.coupon_code && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">{t('admin.purchaseHistory.coupon')}:</span>
+                      <span className="font-medium text-gray-900">{selectedPurchase.coupon_code}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Payment Summary */}
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  {t('admin.purchaseHistory.paymentSummary')}
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">{t('admin.purchaseHistory.subtotal')}:</span>
+                    <span className="text-gray-900">{formatCurrency(selectedPurchase.subtotal)}</span>
+                  </div>
+                  {selectedPurchase.discount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">{t('admin.purchaseHistory.discount')}:</span>
+                      <span className="text-red-600">-{formatCurrency(selectedPurchase.discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-base font-semibold pt-2 border-t border-gray-200">
+                    <span className="text-gray-900">{t('admin.purchaseHistory.total')}:</span>
+                    <span className="text-gray-900">{formatCurrency(selectedPurchase.total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Information */}
+              <div className="mb-6 pb-6 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                  {t('admin.purchaseHistory.paymentInfo')}
+                </h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600">{t('admin.purchaseHistory.paymentMethod')}:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {getPaymentMethodLabel(selectedPurchase.payment_method)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">{t('admin.purchaseHistory.paymentStatus')}:</span>
+                    <span className="ml-2 font-medium text-green-600">
+                      {getStatusLabel(selectedPurchase.payment_status)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">{t('admin.purchaseHistory.purchaseDate')}:</span>
+                    <span className="ml-2 font-medium text-gray-900">
+                      {formatDateTime(selectedPurchase.created_at, getLocale())}
+                    </span>
+                  </div>
+                  {selectedPurchase.paid_at && (
+                    <div>
+                      <span className="text-gray-600">{t('admin.purchaseHistory.paidAt')}:</span>
+                      <span className="ml-2 font-medium text-gray-900">
+                        {formatDateTime(selectedPurchase.paid_at, getLocale())}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="text-center text-sm text-gray-500 mt-8 pt-6 border-t border-gray-200">
+                <p>{t('admin.purchaseHistory.receiptFooter')}</p>
+                <p className="mt-2">{t('admin.purchaseHistory.thankYou')}</p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4 flex justify-end gap-3 print:hidden">
+              <button
+                onClick={() => setSelectedPurchase(null)}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                {t('common.close')}
+              </button>
+              <button
+                onClick={handlePrintReceipt}
+                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2"
+              >
+                <Printer className="h-4 w-4" />
+                {t('admin.purchaseHistory.print')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

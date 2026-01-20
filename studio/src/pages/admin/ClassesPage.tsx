@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
-import { formatDateTime } from '../../lib/utils';
+import { formatDateTime, shouldPostponeClass, getHongKongHolidayName } from '../../lib/utils';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
+import { type CourseLevel } from '../../contexts/AuthContext';
 
 interface Class {
   id: string;
@@ -18,6 +19,7 @@ interface Class {
   is_internal: boolean;
   is_cancelled: boolean;
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+  level?: CourseLevel;
 }
 
 interface Instructor {
@@ -65,6 +67,7 @@ const MOCK_CLASSES: Class[] = [
     is_internal: false,
     is_cancelled: false,
     location: 'sanpokong',
+    level: 'entry',
   },
   {
     id: '2',
@@ -78,6 +81,7 @@ const MOCK_CLASSES: Class[] = [
     is_internal: false,
     is_cancelled: false,
     location: 'causewaybay',
+    level: 'intermediate',
   },
   {
     id: '3',
@@ -91,6 +95,7 @@ const MOCK_CLASSES: Class[] = [
     is_internal: true,
     is_cancelled: false,
     location: 'fotan',
+    level: 'entry',
   },
 ];
 
@@ -191,6 +196,7 @@ export default function ClassesPage() {
     capacity: 10,
     is_internal: false,
     location: 'sanpokong' as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui',
+    level: 'entry' as CourseLevel,
     repeat_weekly: false,
     repeat_until: '',
   });
@@ -325,6 +331,20 @@ export default function ClassesPage() {
     alert(t('admin.attendance.classCancelled'));
   }
 
+  async function handleRefundToken(enrollmentId: string, userId: string, userName: string) {
+    // Simulate API call to refund token
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    
+    // In a real application, this would call an API to:
+    // 1. Add 1 token back to the user's token balance
+    // 2. Log the refund transaction
+    
+    alert(t('admin.attendance.tokenRefunded', { name: userName }));
+    
+    // Optionally, you could refresh the attendance data here
+    // if you want to show updated information
+  }
+
   function findRepeatedClasses(classItem: Class): Class[] {
     // Find all classes that are part of the same repeat series
     // Criteria: same name, class_code, instructor, location, and is_internal
@@ -365,6 +385,7 @@ export default function ClassesPage() {
       capacity: classItem.capacity,
       is_internal: classItem.is_internal,
       location: classItem.location || 'sanpokong',
+      level: classItem.level || 'entry',
       repeat_weekly: false,
       repeat_until: '',
     });
@@ -382,6 +403,7 @@ export default function ClassesPage() {
       capacity: 10,
       is_internal: false,
       location: 'sanpokong',
+      level: 'entry',
       repeat_weekly: false,
       repeat_until: '',
     });
@@ -428,6 +450,7 @@ export default function ClassesPage() {
               capacity: form.capacity,
               is_internal: form.is_internal,
               location: form.location,
+              level: form.level,
             };
           }
           return c;
@@ -445,6 +468,7 @@ export default function ClassesPage() {
           capacity: form.capacity,
           is_internal: form.is_internal,
           location: form.location,
+          level: form.level,
         };
 
         setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
@@ -463,6 +487,7 @@ export default function ClassesPage() {
         capacity: 10,
         is_internal: false,
         location: 'sanpokong',
+        level: 'entry',
         repeat_weekly: false,
         repeat_until: '',
       });
@@ -502,45 +527,66 @@ export default function ClassesPage() {
 
       let currentDate = new Date(startDate);
       let classCounter = 0;
+      let maxIterations = 1000; // Safety limit to prevent infinite loops
+      let iterations = 0;
 
-      while (currentDate <= repeatUntilDate) {
-        const classStartTime = new Date(currentDate);
-        const classEndTime = new Date(classStartTime.getTime() + timeDiff);
+      while (currentDate <= repeatUntilDate && iterations < maxIterations) {
+        iterations++;
+        
+        // Check if current date is a public holiday and postpone if needed
+        const { shouldPostpone, newDate } = shouldPostponeClass(currentDate);
+        const adjustedStartDate = shouldPostpone ? newDate : currentDate;
+        
+        // Only create class if the adjusted date is still within the repeat_until range
+        if (adjustedStartDate <= repeatUntilDate) {
+          const classStartTime = new Date(adjustedStartDate);
+          const classEndTime = new Date(classStartTime.getTime() + timeDiff);
 
-        const newClass: Class = {
-          id: `${Date.now()}-${classCounter}`,
-          name: form.name,
-          class_code: form.class_code,
-          instructor: form.instructor,
-          start_time: classStartTime.toISOString(),
-          end_time: classEndTime.toISOString(),
-          capacity: form.capacity,
-          enrolled_count: 0,
-          is_internal: form.is_internal,
-          is_cancelled: false,
-          location: form.location,
-        };
+          const newClass: Class = {
+            id: `${Date.now()}-${classCounter}`,
+            name: form.name,
+            class_code: form.class_code,
+            instructor: form.instructor,
+            start_time: classStartTime.toISOString(),
+            end_time: classEndTime.toISOString(),
+            capacity: form.capacity,
+            enrolled_count: 0,
+            is_internal: form.is_internal,
+            is_cancelled: false,
+            location: form.location,
+            level: form.level,
+          };
 
-        newClasses.push(newClass);
+          newClasses.push(newClass);
+          classCounter++;
+        }
 
-        // Move to next week (7 days later)
+        // Move to next week (7 days later) from the original currentDate
+        // This ensures we maintain the weekly pattern even if a class was postponed
         currentDate.setDate(currentDate.getDate() + 7);
-        classCounter++;
       }
     } else {
-      // Create single class
+      // Create single class - check for holidays and postpone if needed
+      const startDate = new Date(form.start_time);
+      const { shouldPostpone, newDate } = shouldPostponeClass(startDate);
+      const adjustedStartDate = shouldPostpone ? newDate : startDate;
+      
+      const timeDiff = new Date(form.end_time).getTime() - startDate.getTime();
+      const adjustedEndDate = new Date(adjustedStartDate.getTime() + timeDiff);
+      
       const newClass: Class = {
         id: Date.now().toString(),
         name: form.name,
         class_code: form.class_code,
         instructor: form.instructor,
-        start_time: form.start_time,
-        end_time: form.end_time,
+        start_time: adjustedStartDate.toISOString(),
+        end_time: adjustedEndDate.toISOString(),
         capacity: form.capacity,
         enrolled_count: 0,
         is_internal: form.is_internal,
         is_cancelled: false,
         location: form.location,
+        level: form.level,
       };
       newClasses.push(newClass);
     }
@@ -561,6 +607,7 @@ export default function ClassesPage() {
       capacity: 10,
       is_internal: false,
       location: 'sanpokong',
+      level: 'entry',
       repeat_weekly: false,
       repeat_until: '',
     });
@@ -753,9 +800,18 @@ export default function ClassesPage() {
 
   const renderDayView = () => {
     const dayClasses = getClassesForDate(currentDate);
+    const holidayName = getHongKongHolidayName(currentDate);
 
     return (
       <div className="space-y-4">
+        {/* Holiday Banner */}
+        {holidayName && (
+          <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderColor: '#d1d5db' }}>
+            <div className="text-sm text-gray-400 italic">
+              {holidayName}
+            </div>
+          </div>
+        )}
         {dayClasses.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-6">
             <p className="text-gray-600 text-center py-8">
@@ -851,6 +907,7 @@ export default function ClassesPage() {
                         onToggleConfirmation={toggleAttendanceConfirmation}
                         onCancelClass={() => handleCancelClass(classItem.id)}
                         onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
+                        onRefundToken={handleRefundToken}
                         onClose={() => setExpandedAttendanceClassId(null)}
                         inline
                       />
@@ -875,26 +932,35 @@ export default function ClassesPage() {
     return (
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-3 border-b">
-          {threeDays.map((day, idx) => (
-            <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
-              <div className="text-sm font-medium text-gray-600">
-                {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+          {threeDays.map((day, idx) => {
+            const holidayName = getHongKongHolidayName(day);
+            return (
+              <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
+                <div className="text-sm font-medium text-gray-600">
+                  {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+                </div>
+                <div className={`text-lg font-semibold mt-1 ${
+                  day.toDateString() === new Date().toDateString() 
+                    ? 'text-primary' 
+                    : 'text-gray-900'
+                }`}>
+                  {day.getDate()}
+                </div>
+                {holidayName && (
+                  <div className="text-xs text-gray-400 mt-1 italic truncate" title={holidayName}>
+                    {holidayName}
+                  </div>
+                )}
               </div>
-              <div className={`text-lg font-semibold mt-1 ${
-                day.toDateString() === new Date().toDateString() 
-                  ? 'text-primary' 
-                  : 'text-gray-900'
-              }`}>
-                {day.getDate()}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="grid grid-cols-3 min-h-[400px]">
           {threeDays.map((day, idx) => {
             const dayClasses = getClassesForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
+            const holidayName = getHongKongHolidayName(day);
             
             return (
               <div
@@ -904,6 +970,11 @@ export default function ClassesPage() {
                 } ${isSelected ? 'bg-primary/20 ring-2 ring-primary' : 'hover:bg-gray-50'}`}
                 onClick={() => handleDateClick(day)}
               >
+                {holidayName && (
+                  <div className="text-xs text-gray-400 mb-2 italic truncate" title={holidayName}>
+                    {holidayName}
+                  </div>
+                )}
                 {dayClasses.map((classItem) => (
                   <div
                     key={classItem.id}
@@ -947,26 +1018,35 @@ export default function ClassesPage() {
     return (
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-7 border-b">
-          {weekDays.map((day, idx) => (
-            <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
-              <div className="text-sm font-medium text-gray-600">
-                {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+          {weekDays.map((day, idx) => {
+            const holidayName = getHongKongHolidayName(day);
+            return (
+              <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
+                <div className="text-sm font-medium text-gray-600">
+                  {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+                </div>
+                <div className={`text-lg font-semibold mt-1 ${
+                  day.toDateString() === new Date().toDateString() 
+                    ? 'text-primary' 
+                    : 'text-gray-900'
+                }`}>
+                  {day.getDate()}
+                </div>
+                {holidayName && (
+                  <div className="text-xs text-gray-400 mt-1 italic truncate" title={holidayName}>
+                    {holidayName}
+                  </div>
+                )}
               </div>
-              <div className={`text-lg font-semibold mt-1 ${
-                day.toDateString() === new Date().toDateString() 
-                  ? 'text-primary' 
-                  : 'text-gray-900'
-              }`}>
-                {day.getDate()}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <div className="grid grid-cols-7 min-h-[400px]">
           {weekDays.map((day, idx) => {
             const dayClasses = getClassesForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
+            const holidayName = getHongKongHolidayName(day);
             
             return (
               <div
@@ -976,6 +1056,11 @@ export default function ClassesPage() {
                 } ${isSelected ? 'bg-primary/20 ring-2 ring-primary' : 'hover:bg-gray-50'}`}
                 onClick={() => handleDateClick(day)}
               >
+                {holidayName && (
+                  <div className="text-xs text-gray-400 mb-2 italic truncate" title={holidayName}>
+                    {holidayName}
+                  </div>
+                )}
                 {dayClasses.map((classItem) => (
                   <div
                     key={classItem.id}
@@ -1032,6 +1117,7 @@ export default function ClassesPage() {
             const isToday = day.toDateString() === new Date().toDateString();
             const isCurrentMonth = day.getMonth() === currentDate.getMonth();
             const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
+            const holidayName = getHongKongHolidayName(day);
             
             return (
               <div
@@ -1052,6 +1138,11 @@ export default function ClassesPage() {
                 }`}>
                   {day.getDate()}
                 </div>
+                {holidayName && (
+                  <div className="text-xs text-gray-400 mb-1 italic truncate" title={holidayName}>
+                    {holidayName}
+                  </div>
+                )}
                 <div className="space-y-1">
                   {dayClasses.slice(0, 2).map((classItem) => (
                     <div
@@ -1361,6 +1452,7 @@ export default function ClassesPage() {
                       onToggleConfirmation={toggleAttendanceConfirmation}
                       onCancelClass={() => handleCancelClass(classItem.id)}
                       onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
+                      onRefundToken={handleRefundToken}
                       onClose={() => setExpandedAttendanceClassId(null)}
                       inline
                     />
@@ -1374,43 +1466,53 @@ export default function ClassesPage() {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {editingClass ? t('admin.classes.editClass') : t('admin.classes.createClass')}
-            </h2>
-            {editingClass && findRepeatedClasses(editingClass).length > 0 && (
-              <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <p className="text-sm text-gray-700 mb-3">
-                  {t('admin.classes.repeatClassDetected', { count: findRepeatedClasses(editingClass).length })}
-                </p>
-                <div className="space-y-2">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="editMode"
-                      checked={!editAllRepeats}
-                      onChange={() => setEditAllRepeats(false)}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">{t('admin.classes.editSingleClass')}</span>
-                  </label>
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="editMode"
-                      checked={editAllRepeats}
-                      onChange={() => setEditAllRepeats(true)}
-                      className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">
-                      {t('admin.classes.editAllRepeats', { count: findRepeatedClasses(editingClass).length + 1 })}
-                    </span>
-                  </label>
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowModal(false);
+            }
+          }}
+        >
+          <div className="bg-white rounded-lg max-w-md w-full mx-4 flex flex-col max-h-[90vh]">
+            <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {editingClass ? t('admin.classes.editClass') : t('admin.classes.createClass')}
+              </h2>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-4">
+              {editingClass && findRepeatedClasses(editingClass).length > 0 && (
+                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-gray-700 mb-3">
+                    {t('admin.classes.repeatClassDetected', { count: findRepeatedClasses(editingClass).length })}
+                  </p>
+                  <div className="space-y-2">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="editMode"
+                        checked={!editAllRepeats}
+                        onChange={() => setEditAllRepeats(false)}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">{t('admin.classes.editSingleClass')}</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        name="editMode"
+                        checked={editAllRepeats}
+                        onChange={() => setEditAllRepeats(true)}
+                        className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        {t('admin.classes.editAllRepeats', { count: findRepeatedClasses(editingClass).length + 1 })}
+                      </span>
+                    </label>
+                  </div>
                 </div>
-              </div>
-            )}
-            <form onSubmit={handleSubmit} className="space-y-4">
+              )}
+              <form onSubmit={handleSubmit} className="space-y-4" id="class-form">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.className')}</label>
                 <input
@@ -1446,6 +1548,19 @@ export default function ClassesPage() {
                       {instructor.name}
                     </option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.level')}</label>
+                <select
+                  required
+                  value={form.level}
+                  onChange={(e) => setForm({ ...form, level: e.target.value as CourseLevel })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="entry">{t('admin.classes.entryLevel')}</option>
+                  <option value="intermediate">{t('admin.classes.intermediateLevel')}</option>
+                  <option value="advanced">{t('admin.classes.advancedLevel')}</option>
                 </select>
               </div>
               <div>
@@ -1538,10 +1653,12 @@ export default function ClassesPage() {
                   {t('admin.classes.internalCourse')}
                 </label>
               </div>
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
+            </form>
+            </div>
+            <div className="px-6 py-4 flex-shrink-0 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={() => {
                     setShowModal(false);
                     setEditingClass(null);
                     setEditAllRepeats(false);
@@ -1552,12 +1669,12 @@ export default function ClassesPage() {
                 </button>
                 <button
                   type="submit"
+                  form="class-form"
                   className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
                 >
-                  {editingClass ? t('common.update') : t('admin.classes.createClass')}
+                  {editingClass ? t('common.update') : t('common.create')}
                 </button>
               </div>
-            </form>
           </div>
         </div>
       )}
