@@ -1,7 +1,7 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Receipt, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info } from 'lucide-react';
+import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info, Check } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from '../assets/images/the-yard-logo.png';
@@ -25,7 +25,8 @@ interface PublicLayoutProps {
 export default function PublicLayout({ children }: PublicLayoutProps) {
   const { t } = useTranslation();
   const location = useLocation();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, profiles, activeProfileId, switchProfile } = useAuth();
+  const hasMultipleProfiles = !!(user && profile?.role === 'student' && profiles.length > 1);
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -109,57 +110,25 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                   </button>
                   {userMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
-                      {isStudent && (
-                        <>
-                          <Link
-                            to="/dashboard"
-                            onClick={() => setUserMenuOpen(false)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                              isActive('/dashboard')
-                                ? 'bg-primary-lighter text-primary'
-                                : 'text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            <Home className="h-4 w-4" />
-                            {t('nav.dashboard')}
-                          </Link>
-                          <Link
-                            to="/schedule"
-                            onClick={() => setUserMenuOpen(false)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                              isActive('/schedule')
-                                ? 'bg-primary-lighter text-primary'
-                                : 'text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            <Calendar className="h-4 w-4" />
-                            {t('nav.schedule')}
-                          </Link>
-                          <Link
-                            to="/payment-history"
-                            onClick={() => setUserMenuOpen(false)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                              isActive('/payment-history')
-                                ? 'bg-primary-lighter text-primary'
-                                : 'text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            <Receipt className="h-4 w-4" />
-                            {t('nav.paymentHistory')}
-                          </Link>
-                          <Link
-                            to="/profile"
-                            onClick={() => setUserMenuOpen(false)}
-                            className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                              isActive('/profile')
-                                ? 'bg-primary-lighter text-primary'
-                                : 'text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            <User className="h-4 w-4" />
-                            {t('nav.profile')}
-                          </Link>
-                        </>
+                      {isStudent && hasMultipleProfiles && (
+                        <div className="border-b border-gray-100 px-3 py-2">
+                          <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                          {profiles.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                switchProfile(p.id);
+                                setUserMenuOpen(false);
+                              }}
+                              className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
+                                p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span>{p.full_name}</span>
+                              {p.id === activeProfileId && <Check className="h-4 w-4 shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
                       )}
                       {isAdmin && (
                         <Link
@@ -236,58 +205,27 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 {/* User Menu Items */}
                 {user && isStudent && (
                   <>
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="space-y-1">
-                        <Link
-                          to="/dashboard"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/dashboard')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <Home className={`h-5 w-5 ${isActive('/dashboard') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.dashboard')}
-                        </Link>
-                        <Link
-                          to="/schedule"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/schedule')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <Calendar className={`h-5 w-5 ${isActive('/schedule') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.schedule')}
-                        </Link>
-                        <Link
-                          to="/payment-history"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/payment-history')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <Receipt className={`h-5 w-5 ${isActive('/payment-history') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.paymentHistory')}
-                        </Link>
-                        <Link
-                          to="/profile"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/profile')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <User className={`h-5 w-5 ${isActive('/profile') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.profile')}
-                        </Link>
+                    {hasMultipleProfiles && (
+                      <div className="pt-2 border-t border-gray-200">
+                        <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                        <div className="flex flex-wrap gap-2 px-4">
+                          {profiles.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                switchProfile(p.id);
+                                setMobileMenuOpen(false);
+                              }}
+                              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                                p.id === activeProfileId ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
+                              }`}
+                            >
+                              {p.full_name}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    )}
                     <div className="pt-2">
                       <button
                         onClick={() => {

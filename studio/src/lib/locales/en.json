@@ -48,7 +48,8 @@
     "info": "Information",
     "yes": "Yes",
     "no": "No",
-    "optional": "Optional"
+    "optional": "Optional",
+    "moreOptions": "More options"
   },
   "home": {
     "title": "Transform Your Practice",
@@ -255,6 +256,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "titleFor": "{{name}}'s Dashboard",
     "tokenBalance": "Token Balance",
     "availableTokens": "Available tokens",
     "upcomingClasses": "This Week's Lessons",

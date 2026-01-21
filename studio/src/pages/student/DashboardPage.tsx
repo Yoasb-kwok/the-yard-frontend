@@ -40,46 +40,58 @@ interface ApplicationModalProps {
   onSubmit: (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string) => void;
 }
 
-// Mock data
-const MOCK_TOKENS: UserToken[] = [
-  {
-    id: '1',
-    remaining_tokens: 5,
-    total_tokens: 10,
-    expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  },
-  {
-    id: '2',
-    remaining_tokens: 8,
-    total_tokens: 8,
-    expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  },
-];
+// Profile-specific mock data for testing (each child has different tokens and courses)
+function getMockTokensForProfile(profileId: string | undefined): UserToken[] {
+  const base = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  if (profileId === 'student-001') {
+    return [
+      { id: 't1', remaining_tokens: 5, total_tokens: 10, expiry_date: new Date(base + 30 * day).toISOString().split('T')[0] },
+      { id: 't2', remaining_tokens: 8, total_tokens: 8, expiry_date: new Date(base + 60 * day).toISOString().split('T')[0] },
+    ];
+  }
+  if (profileId === 'student-001-sub-2') {
+    return [
+      { id: 't1', remaining_tokens: 12, total_tokens: 12, expiry_date: new Date(base + 45 * day).toISOString().split('T')[0] },
+    ];
+  }
+  if (profileId === 'student-001-sub-3') {
+    return [
+      { id: 't1', remaining_tokens: 3, total_tokens: 10, expiry_date: new Date(base + 7 * day).toISOString().split('T')[0] },
+      { id: 't2', remaining_tokens: 15, total_tokens: 15, expiry_date: new Date(base + 90 * day).toISOString().split('T')[0] },
+    ];
+  }
+  return [
+    { id: 't1', remaining_tokens: 6, total_tokens: 10, expiry_date: new Date(base + 20 * day).toISOString().split('T')[0] },
+  ];
+}
 
-const MOCK_UPCOMING_CLASSES: UpcomingClass[] = [
-  {
-    id: '1',
-    status: 'enrolled',
-    class: {
-      name: 'Yoga Basics',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      program_code: 'YG001',
-    },
-  },
-  {
-    id: '2',
-    status: 'enrolled',
-    class: {
-      name: 'Pilates Intermediate',
-      instructor: 'John Doe',
-      start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-      program_code: 'PL002',
-    },
-  },
-];
+function getMockUpcomingClassesForProfile(profileId: string | undefined): UpcomingClass[] {
+  const base = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const hour = 60 * 60 * 1000;
+  if (profileId === 'student-001') {
+    return [
+      { id: 'u1', status: 'enrolled', class: { name: 'Yoga Basics', instructor: 'Jane Smith', start_time: new Date(base + 1 * day).toISOString(), end_time: new Date(base + 1 * day + hour).toISOString(), program_code: 'YG001' } },
+      { id: 'u2', status: 'enrolled', class: { name: 'Pilates Intermediate', instructor: 'John Doe', start_time: new Date(base + 3 * day).toISOString(), end_time: new Date(base + 3 * day + 90 * 60000).toISOString(), program_code: 'PL002' } },
+    ];
+  }
+  if (profileId === 'student-001-sub-2') {
+    return [
+      { id: 'u1', status: 'enrolled', class: { name: '韓風小明星KPOP班', instructor: 'Shirley', start_time: new Date(base + 2 * day).toISOString(), end_time: new Date(base + 2 * day + hour).toISOString(), program_code: 'KPW1L1' } },
+      { id: 'u2', status: 'enrolled', class: { name: '幼兒街舞入門班', instructor: 'Wawa', start_time: new Date(base + 4 * day).toISOString(), end_time: new Date(base + 4 * day + hour).toISOString(), program_code: 'PSW6R3' } },
+    ];
+  }
+  if (profileId === 'student-001-sub-3') {
+    return [
+      { id: 'u1', status: 'enrolled', class: { name: '進階街舞', instructor: 'C+', start_time: new Date(base + 1 * day + 12 * hour).toISOString(), end_time: new Date(base + 1 * day + 13 * hour).toISOString(), program_code: 'BSW6R9' } },
+      { id: 'u2', status: 'enrolled', class: { name: 'Hip Hop 基礎', instructor: 'John', start_time: new Date(base + 5 * day).toISOString(), end_time: new Date(base + 5 * day + hour).toISOString(), program_code: 'HH001' } },
+    ];
+  }
+  return [
+    { id: 'u1', status: 'enrolled', class: { name: 'Yoga Basics', instructor: 'Jane Smith', start_time: new Date(base + 1 * day).toISOString(), end_time: new Date(base + 1 * day + hour).toISOString(), program_code: 'YG001' } },
+  ];
+}
 
 function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: ApplicationModalProps) {
   const { t, i18n } = useTranslation();
@@ -172,7 +184,7 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
 }
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const { t, i18n } = useTranslation();
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
@@ -201,16 +213,16 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (user) {
+    if (profile) {
       loadData();
     }
-  }, [user]);
+  }, [profile?.id]);
 
   async function loadData() {
-    // Simulate API call delay
+    setLoading(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    setTokens(MOCK_TOKENS);
-    setUpcomingClasses(MOCK_UPCOMING_CLASSES);
+    setTokens(getMockTokensForProfile(profile?.id));
+    setUpcomingClasses(getMockUpcomingClassesForProfile(profile?.id));
     setLoading(false);
   }
 
@@ -269,7 +281,9 @@ export default function DashboardPage() {
       <div className="space-y-4 md:space-y-6">
         <div className="flex items-center gap-3">
           <Home className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+            {profile?.full_name ? t('dashboard.titleFor', { name: profile.full_name }) : t('dashboard.title')}
+          </h1>
         </div>
 
         {successMessage && (
@@ -308,7 +322,7 @@ export default function DashboardPage() {
               <h2 className="text-lg md:text-xl font-semibold text-gray-900">{t('dashboard.allUpcomingLessons')}</h2>
               <Calendar className="h-6 w-6 md:h-8 md:w-8 text-primary" />
             </div>
-            <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">8</div>
+            <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{upcomingClasses.length}</div>
             <p className="text-gray-600 text-sm">{t('dashboard.classesScheduled')}</p>
           </div>
         </div>

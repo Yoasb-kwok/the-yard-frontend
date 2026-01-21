@@ -35,81 +35,53 @@ interface ApplicationModalProps {
   onSubmit: (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string) => void;
 }
 
-// Mock data - includes both upcoming and past lessons
-const MOCK_ENROLLMENTS: Enrollment[] = [
-  {
-    id: '1',
-    status: 'enrolled',
+// Profile-specific mock enrollments for testing (each child has different courses)
+function getMockEnrollmentsForProfile(profileId: string | undefined): Enrollment[] {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const hour = 60 * 60 * 1000;
+  const cls = (id: string, name: string, inst: string, start: number, dur: number, code: string) => ({
+    id,
     class: {
-      id: '1',
-      name: 'Yoga Basics',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      program_code: 'YG001',
+      id,
+      name,
+      instructor: inst,
+      start_time: new Date(start).toISOString(),
+      end_time: new Date(start + dur).toISOString(),
+      program_code: code,
     },
-  },
-  {
-    id: '2',
-    status: 'enrolled',
-    class: {
-      id: '2',
-      name: 'Pilates Intermediate',
-      instructor: 'John Doe',
-      start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-      program_code: 'PL002',
-    },
-  },
-  {
-    id: '3',
-    status: 'enrolled',
-    class: {
-      id: '3',
-      name: '補課 - Yoga Basics',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      program_code: 'YG001-MAKEUP',
-    },
-  },
-  {
-    id: '4',
-    status: 'attended',
-    class: {
-      id: '4',
-      name: 'Yoga Basics',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      program_code: 'YG001',
-    },
-  },
-  {
-    id: '5',
-    status: 'attended',
-    class: {
-      id: '5',
-      name: 'Pilates Intermediate',
-      instructor: 'John Doe',
-      start_time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-      program_code: 'PL002',
-    },
-  },
-  {
-    id: '6',
-    status: 'missed',
-    class: {
-      id: '6',
-      name: '補課 - Yoga Basics',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      program_code: 'YG001-MAKEUP',
-    },
-  },
-];
+  });
+  if (profileId === 'student-001') {
+    return [
+      { ...cls('1', 'Yoga Basics', 'Jane Smith', now + 1 * day, hour, 'YG001'), status: 'enrolled' },
+      { ...cls('2', 'Pilates Intermediate', 'John Doe', now + 3 * day, 90 * 60000, 'PL002'), status: 'enrolled' },
+      { ...cls('3', '補課 - Yoga Basics', 'Jane Smith', now + 5 * day, hour, 'YG001-MAKEUP'), status: 'enrolled' },
+      { ...cls('4', 'Yoga Basics', 'Jane Smith', now - 2 * day, hour, 'YG001'), status: 'attended' },
+      { ...cls('5', 'Pilates Intermediate', 'John Doe', now - 7 * day, 90 * 60000, 'PL002'), status: 'attended' },
+      { ...cls('6', '補課 - Yoga Basics', 'Jane Smith', now - 14 * day, hour, 'YG001-MAKEUP'), status: 'missed' },
+    ];
+  }
+  if (profileId === 'student-001-sub-2') {
+    return [
+      { ...cls('1', '韓風小明星KPOP班', 'Shirley', now + 2 * day, hour, 'KPW1L1'), status: 'enrolled' },
+      { ...cls('2', '幼兒街舞入門班', 'Wawa', now + 4 * day, hour, 'PSW6R3'), status: 'enrolled' },
+      { ...cls('3', 'KPOP 進階', 'Shirley', now - 3 * day, hour, 'KPW2L1'), status: 'attended' },
+      { ...cls('4', '幼兒街舞', 'Wawa', now - 10 * day, hour, 'PSW6R3'), status: 'attended' },
+    ];
+  }
+  if (profileId === 'student-001-sub-3') {
+    return [
+      { ...cls('1', '進階街舞', 'C+', now + 1 * day + 12 * hour, hour, 'BSW6R9'), status: 'enrolled' },
+      { ...cls('2', 'Hip Hop 基礎', 'John', now + 5 * day, hour, 'HH001'), status: 'enrolled' },
+      { ...cls('3', '進階街舞', 'C+', now - 1 * day, hour, 'BSW6R9'), status: 'attended' },
+      { ...cls('4', 'Hip Hop', 'John', now - 8 * day, hour, 'HH001'), status: 'missed' },
+    ];
+  }
+  return [
+    { ...cls('1', 'Yoga Basics', 'Jane Smith', now + 1 * day, hour, 'YG001'), status: 'enrolled' },
+    { ...cls('2', 'Yoga Basics', 'Jane Smith', now - 2 * day, hour, 'YG001'), status: 'attended' },
+  ];
+}
 
 function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: ApplicationModalProps) {
   const { t, i18n } = useTranslation();
@@ -202,7 +174,7 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
 }
 
 export default function SchedulePage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const { t, i18n } = useTranslation();
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,15 +188,15 @@ export default function SchedulePage() {
   const [pastLessonsExpanded, setPastLessonsExpanded] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (profile) {
       loadSchedule();
     }
-  }, [user]);
+  }, [profile?.id]);
 
   async function loadSchedule() {
-    // Simulate API call delay
+    setLoading(true);
     await new Promise(resolve => setTimeout(resolve, 500));
-    setEnrollments(MOCK_ENROLLMENTS);
+    setEnrollments(getMockEnrollmentsForProfile(profile?.id));
     setLoading(false);
   }
 

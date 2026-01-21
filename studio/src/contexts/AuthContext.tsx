@@ -57,10 +57,8 @@ interface AuthContextType {
   addProfile: (data: AddProfileData) => void;
   /** Update an existing family member. */
   updateProfile: (profileId: string, data: Partial<AddProfileData>) => void;
-  /** Remove a family member. Cannot remove the main (first) profile. */
+  /** Remove a family member. Cannot remove the first profile. */
   deleteProfile: (profileId: string) => void;
-  /** Set which profile is the main account (moves it to first in the list). */
-  setMainProfile: (profileId: string) => void;
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -293,7 +291,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function deleteProfile(profileId: string) {
     if (!profiles?.length || !user || !session) return;
     const mainId = profiles[0]?.id;
-    if (profileId === mainId) return; // cannot delete main
+    if (profileId === mainId) return; // cannot delete first profile
     const next = profiles.filter((p) => p.id !== profileId);
     const nextActive = activeProfileId === profileId ? (next[0]?.id ?? mainId) : activeProfileId;
     setProfiles(next);
@@ -302,20 +300,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profiles: next,
       activeProfileId: nextActive ?? mainId!,
-      session,
-    });
-  }
-
-  function setMainProfile(profileId: string) {
-    if (!profiles?.length || !user || !session) return;
-    const target = profiles.find((p) => p.id === profileId);
-    if (!target || target.id === profiles[0]?.id) return; // already main
-    const next = [target, ...profiles.filter((p) => p.id !== profileId)];
-    setProfiles(next);
-    persistSession({
-      user,
-      profiles: next,
-      activeProfileId: activeProfileId ?? profiles[0].id,
       session,
     });
   }
@@ -452,7 +436,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     addProfile,
     updateProfile,
     deleteProfile,
-    setMainProfile,
     session,
     loading,
     signIn,

@@ -124,77 +124,25 @@ export default function Layout({ children }: LayoutProps) {
                 </button>
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
-                    {user && !isAdmin && (
-                      <>
-                        {hasMultipleProfiles && (
-                          <div className="border-b border-gray-100 px-3 py-2">
-                            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
-                            {profiles.map((p) => (
-                              <button
-                                key={p.id}
-                                onClick={() => {
-                                  switchProfile(p.id);
-                                  setUserMenuOpen(false);
-                                }}
-                                className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
-                                  p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
-                                }`}
-                              >
-                                <span>{p.full_name}</span>
-                                {p.id === activeProfileId && <Check className="h-4 w-4 shrink-0" />}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        <Link
-                          to="/dashboard"
-                          onClick={() => setUserMenuOpen(false)}
-                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                            isActive('/dashboard')
-                              ? 'bg-primary-lighter text-primary'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <Home className="h-4 w-4" />
-                          {t('nav.dashboard')}
-                        </Link>
-                        <Link
-                          to="/schedule"
-                          onClick={() => setUserMenuOpen(false)}
-                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                            isActive('/schedule')
-                              ? 'bg-primary-lighter text-primary'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <Calendar className="h-4 w-4" />
-                          {t('nav.schedule')}
-                        </Link>
-                        <Link
-                          to="/payment-history"
-                          onClick={() => setUserMenuOpen(false)}
-                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                            isActive('/payment-history')
-                              ? 'bg-primary-lighter text-primary'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <Receipt className="h-4 w-4" />
-                          {t('nav.paymentHistory')}
-                        </Link>
-                        <Link
-                          to="/profile"
-                          onClick={() => setUserMenuOpen(false)}
-                          className={`flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
-                            isActive('/profile')
-                              ? 'bg-primary-lighter text-primary'
-                              : 'text-gray-700 hover:bg-gray-100'
-                          }`}
-                        >
-                          <User className="h-4 w-4" />
-                          {t('nav.profile')}
-                        </Link>
-                      </>
+                    {user && !isAdmin && hasMultipleProfiles && (
+                      <div className="border-b border-gray-100 px-3 py-2">
+                        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                        {profiles.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              switchProfile(p.id);
+                              setUserMenuOpen(false);
+                            }}
+                            className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
+                              p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span>{p.full_name}</span>
+                            {p.id === activeProfileId && <Check className="h-4 w-4 shrink-0" />}
+                          </button>
+                        ))}
+                      </div>
                     )}
                     {user && isAdmin && (
                       <Link
@@ -287,58 +235,6 @@ export default function Layout({ children }: LayoutProps) {
                         </div>
                       </div>
                     )}
-                    <div className="pt-2 border-t border-gray-200">
-                      <div className="space-y-1">
-                        <Link
-                          to="/dashboard"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/dashboard')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <Home className={`h-5 w-5 ${isActive('/dashboard') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.dashboard')}
-                        </Link>
-                        <Link
-                          to="/schedule"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/schedule')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <Calendar className={`h-5 w-5 ${isActive('/schedule') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.schedule')}
-                        </Link>
-                        <Link
-                          to="/payment-history"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/payment-history')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <Receipt className={`h-5 w-5 ${isActive('/payment-history') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.paymentHistory')}
-                        </Link>
-                        <Link
-                          to="/profile"
-                          onClick={() => setMobileMenuOpen(false)}
-                          className={`flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all ${
-                            isActive('/profile')
-                              ? 'bg-primary text-white shadow-sm'
-                              : 'bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200'
-                          }`}
-                        >
-                          <User className={`h-5 w-5 ${isActive('/profile') ? 'text-white' : 'text-gray-500'}`} />
-                          {t('nav.profile')}
-                        </Link>
-                      </div>
-                    </div>
                     <div className="pt-2">
                       <button
                         onClick={() => {

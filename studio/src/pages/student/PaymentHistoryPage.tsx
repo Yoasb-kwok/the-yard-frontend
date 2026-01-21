@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { Receipt, CheckCircle, Clock, XCircle } from 'lucide-react';
@@ -16,44 +17,35 @@ interface Payment {
   token_count?: number; // Token count for display
 }
 
-// Mock data
-const MOCK_PAYMENTS: Payment[] = [
-  {
-    id: '1',
-    date: '2024-01-15T10:30:00',
-    amount: 1600,
-    status: 'completed',
-    payment_method: 'credit_card',
-    description: 'Premium Pack - 20 tokens', // Fallback description
-    package_id: '3', // Premium Pack
-    token_count: 20,
-    order_id: 'ORD-001',
-  },
-  {
-    id: '2',
-    date: '2024-01-10T14:20:00',
-    amount: 900,
-    status: 'completed',
-    payment_method: 'fps',
-    description: 'Regular Pack - 10 tokens', // Fallback description
-    package_id: '2', // Regular Pack
-    token_count: 10,
-    order_id: 'ORD-002',
-  },
-  {
-    id: '3',
-    date: '2024-01-05T09:15:00',
-    amount: 500,
-    status: 'pending',
-    payment_method: 'cash',
-    description: 'Starter Pack - 5 tokens', // Fallback description
-    package_id: '1', // Starter Pack
-    token_count: 5,
-    order_id: 'ORD-003',
-  },
-];
+// Profile-specific mock payments for testing (each child has different payment history)
+function getMockPaymentsForProfile(profileId: string | undefined): Payment[] {
+  if (profileId === 'student-001') {
+    return [
+      { id: '1', date: '2024-01-15T10:30:00', amount: 1600, status: 'completed', payment_method: 'credit_card', description: 'Premium Pack - 20 tokens', package_id: '3', token_count: 20, order_id: 'ORD-001' },
+      { id: '2', date: '2024-01-10T14:20:00', amount: 900, status: 'completed', payment_method: 'fps', description: 'Regular Pack - 10 tokens', package_id: '2', token_count: 10, order_id: 'ORD-002' },
+      { id: '3', date: '2024-01-05T09:15:00', amount: 500, status: 'pending', payment_method: 'cash', description: 'Starter Pack - 5 tokens', package_id: '1', token_count: 5, order_id: 'ORD-003' },
+    ];
+  }
+  if (profileId === 'student-001-sub-2') {
+    return [
+      { id: '1', date: '2024-01-20T11:00:00', amount: 900, status: 'completed', payment_method: 'fps', description: 'Regular Pack - 10 tokens', package_id: '2', token_count: 10, order_id: 'ORD-101' },
+      { id: '2', date: '2024-01-12T16:45:00', amount: 500, status: 'completed', payment_method: 'cash', description: 'Starter Pack - 5 tokens', package_id: '1', token_count: 5, order_id: 'ORD-102' },
+    ];
+  }
+  if (profileId === 'student-001-sub-3') {
+    return [
+      { id: '1', date: '2024-01-18T09:30:00', amount: 1600, status: 'completed', payment_method: 'credit_card', description: 'Premium Pack - 20 tokens', package_id: '3', token_count: 20, order_id: 'ORD-201' },
+      { id: '2', date: '2024-01-08T14:00:00', amount: 1600, status: 'completed', payment_method: 'fps', description: 'Premium Pack - 20 tokens', package_id: '3', token_count: 20, order_id: 'ORD-202' },
+      { id: '3', date: '2024-01-02T10:15:00', amount: 900, status: 'completed', payment_method: 'credit_card', description: 'Regular Pack - 10 tokens', package_id: '2', token_count: 10, order_id: 'ORD-203' },
+    ];
+  }
+  return [
+    { id: '1', date: '2024-01-10T10:00:00', amount: 500, status: 'completed', payment_method: 'cash', description: 'Starter Pack - 5 tokens', package_id: '1', token_count: 5, order_id: 'ORD-999' },
+  ];
+}
 
 export default function PaymentHistoryPage() {
+  const { profile } = useAuth();
   const { t, i18n } = useTranslation();
   
   // Map i18n language codes to locale strings for date formatting
@@ -69,13 +61,14 @@ export default function PaymentHistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Simulate API call
+    if (!profile) return;
+    setLoading(true);
     const timer = setTimeout(() => {
-      setPayments(MOCK_PAYMENTS);
+      setPayments(getMockPaymentsForProfile(profile?.id));
       setLoading(false);
     }, 500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [profile?.id]);
 
   const getStatusIcon = (status: Payment['status']) => {
     switch (status) {

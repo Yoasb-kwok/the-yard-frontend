@@ -48,7 +48,8 @@
     "info": "信息",
     "yes": "是",
     "no": "否",
-    "optional": "选填"
+    "optional": "选填",
+    "moreOptions": "更多选项"
   },
   "home": {
     "title": "改变您的练习",
@@ -255,6 +256,7 @@
   },
   "dashboard": {
     "title": "仪表板",
+    "titleFor": "{{name}}的仪表板",
     "tokenBalance": "代币余额",
     "availableTokens": "可用代币",
     "upcomingClasses": "本周课程",

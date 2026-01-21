@@ -3,7 +3,7 @@ import Layout from '../../components/Layout';
 import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext';
 import { getAgeTagFromDateOfBirth } from '../../lib/utils';
 import { useTranslation } from 'react-i18next';
-import { User, Copy, Check, Plus, Pencil, Trash2, Crown } from 'lucide-react';
+import { User, Copy, Check, Plus, Pencil, Trash2 } from 'lucide-react';
 
 const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
   full_name: '',
@@ -18,28 +18,28 @@ const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
 });
 
 export default function ProfilePage() {
-  const { profile, user, profiles, activeProfileId, switchProfile, addProfile, updateProfile, deleteProfile, setMainProfile } = useAuth();
+  const { profile, user, profiles, addProfile, updateProfile, deleteProfile } = useAuth();
   const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
   const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [form, setForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyForm());
-  const [confirmSetMain, setConfirmSetMain] = useState<(typeof profiles)[0] | null>(null);
 
   if (!profile) return null;
 
   const hasMultipleProfiles = profiles.length > 1;
   const isStudent = profile.role === 'student';
-  const mainProfile = profiles[0];
+  const firstProfile = profiles[0];
+  const canDelete = hasMultipleProfiles && firstProfile && profile.id !== firstProfile.id;
 
-  // Open Add modal: reset form and pre-fill from main
+  // Open Add modal: reset form and pre-fill from first profile
   const openAddModal = () => {
     setForm({
       ...emptyForm(),
-      parents_name: mainProfile?.parents_name ?? '',
-      contact_number: mainProfile?.contact_number ?? mainProfile?.mobile ?? '',
-      residential_district: mainProfile?.residential_district ?? '',
+      parents_name: firstProfile?.parents_name ?? '',
+      contact_number: firstProfile?.contact_number ?? firstProfile?.mobile ?? '',
+      residential_district: firstProfile?.residential_district ?? '',
     });
     setModalMode('add');
     setEditingProfileId(null);
@@ -93,22 +93,10 @@ export default function ProfilePage() {
   };
 
   const handleDeleteMember = (p: (typeof profiles)[0]) => {
-    if (p.id === mainProfile?.id) return;
+    if (p.id === firstProfile?.id) return;
     if (!window.confirm(t('profile.confirmDeleteFamilyMember', { name: p.full_name }))) return;
     deleteProfile(p.id);
     setMessage(t('profile.memberDeleted'));
-  };
-
-  const openSetMainConfirm = (p: (typeof profiles)[0]) => {
-    if (p.id === mainProfile?.id) return;
-    setConfirmSetMain(p);
-  };
-
-  const handleConfirmSetAsMain = () => {
-    if (!confirmSetMain) return;
-    setMainProfile(confirmSetMain.id);
-    setConfirmSetMain(null);
-    setMessage(t('profile.mainAccountUpdated'));
   };
 
   // Extract country code and contact number
@@ -170,92 +158,22 @@ export default function ProfilePage() {
   return (
     <Layout>
       <div className="space-y-4 md:space-y-6">
-        <div className="flex items-center gap-3">
-          <User className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('profile.title')}</h1>
-        </div>
-
-        {isStudent && (
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3 md:p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-gray-700">{t('profile.familyMembers')}</p>
-              <button
-                type="button"
-                onClick={openAddModal}
-                className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark"
-              >
-                <Plus className="h-4 w-4" />
-                {t('profile.addFamilyMember')}
-              </button>
-            </div>
-            <ul className="space-y-2">
-              {profiles.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-gray-200 bg-white p-2 md:p-3"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-gray-900">{p.full_name}</span>
-                      {p.id === mainProfile?.id && (
-                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-600">{t('profile.mainAccount')}</span>
-                      )}
-                      {p.id === activeProfileId && (
-                        <span className="rounded bg-primary/20 px-1.5 py-0.5 text-xs text-primary">{t('profile.viewing')}</span>
-                      )}
-                    </div>
-                    {p.student_id && <p className="mt-0.5 text-xs text-gray-500">{p.student_id}</p>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {hasMultipleProfiles && p.id !== activeProfileId && (
-                      <button
-                        type="button"
-                        onClick={() => switchProfile(p.id)}
-                        className="rounded p-1.5 text-sm text-primary hover:bg-primary/10"
-                        title={t('profile.switchTo', { name: p.full_name })}
-                      >
-                        {t('profile.viewProfile')}
-                      </button>
-                    )}
-                    {hasMultipleProfiles && p.id !== mainProfile?.id && (
-                      <button
-                        type="button"
-                        onClick={() => openSetMainConfirm(p)}
-                        className="rounded p-1.5 text-amber-600 hover:bg-amber-50"
-                        title={t('profile.setAsMainAccount')}
-                      >
-                        <Crown className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(p)}
-                      className="rounded p-1.5 text-gray-600 hover:bg-gray-100"
-                      title={t('profile.editFamilyMember')}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    {p.id !== mainProfile?.id && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteMember(p)}
-                        className="rounded p-1.5 text-red-600 hover:bg-red-50"
-                        title={t('profile.deleteFamilyMember')}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-            {hasMultipleProfiles && (
-              <p className="mt-2 text-xs text-gray-500">
-                {t('profile.viewing')}: <span className="font-medium text-gray-700">{profile.full_name}</span>
-              </p>
-            )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <User className="h-6 w-6 md:h-8 md:w-8 text-primary" />
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('profile.title')}</h1>
           </div>
-        )}
+          {isStudent && (
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark"
+            >
+              <Plus className="h-4 w-4" />
+              {t('profile.addFamilyMember')}
+            </button>
+          )}
+        </div>
 
         {message && (
           <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded">
@@ -263,10 +181,34 @@ export default function ProfilePage() {
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <div className="mb-4 md:mb-6">
-            <h2 className="text-xl md:text-2xl font-semibold text-gray-900 mb-1">{profile.full_name}</h2>
-            <p className="text-sm md:text-base text-gray-600">{getRoleLabel(profile.role)}</p>
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 relative">
+          <div className="mb-4 md:mb-6 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h2 className="text-xl md:text-2xl font-semibold text-gray-900 mb-1">{profile.full_name}</h2>
+              <p className="text-sm md:text-base text-gray-600">{getRoleLabel(profile.role)}</p>
+            </div>
+            {isStudent && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openEditModal(profile)}
+                  className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  <Pencil className="h-4 w-4" />
+                  {t('profile.editFamilyMember')}
+                </button>
+                {canDelete && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteMember(profile)}
+                    className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    {t('profile.deleteFamilyMember')}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="space-y-3 md:space-y-4">
@@ -575,40 +517,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {confirmSetMain && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-4 shadow-xl sm:p-6">
-            <div className="mb-4 flex justify-center">
-              <div className="rounded-full bg-amber-100 p-3">
-                <Crown className="h-8 w-8 text-amber-600" />
-              </div>
-            </div>
-            <h3 className="mb-2 text-center text-lg font-semibold text-gray-900">{t('profile.setAsMainAccount')}</h3>
-            <p className="mb-6 text-center text-sm text-gray-600">
-              {t('profile.confirmSetAsMainAccount', {
-                name: confirmSetMain.full_name,
-                current: mainProfile?.full_name ?? '',
-              })}
-            </p>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setConfirmSetMain(null)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={handleConfirmSetAsMain}
-                className="rounded-md bg-amber-600 px-4 py-2 text-white hover:bg-amber-700"
-              >
-                {t('common.confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 }
