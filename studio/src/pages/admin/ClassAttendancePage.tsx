@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
+import { appendRefundRecord } from '../../lib/refundRecords';
+import { useAuth } from '../../contexts/AuthContext';
 import { ArrowLeft, Search, X, AlertTriangle, Users, RefreshCw } from 'lucide-react';
 
 interface Class {
@@ -143,6 +145,7 @@ const MOCK_ENROLLMENTS: Enrollment[] = [
 export default function ClassAttendancePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { classId } = useParams<{ classId: string }>();
   const [selectedClass, setSelectedClass] = useState<Class | null>(null);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -154,7 +157,8 @@ export default function ClassAttendancePage() {
     enrollmentId: string;
     userId: string;
     userName: string;
-  }>({ isOpen: false, enrollmentId: '', userId: '', userName: '' });
+    remarks: string;
+  }>({ isOpen: false, enrollmentId: '', userId: '', userName: '', remarks: '' });
 
   useEffect(() => {
     if (classId) {
@@ -203,18 +207,23 @@ export default function ClassAttendancePage() {
     }));
   }
 
-  async function handleRefundToken(enrollmentId: string, userId: string, userName: string) {
+  async function handleRefundToken(enrollmentId: string, userId: string, userName: string, remarks: string) {
     // Simulate API call to refund token
     await new Promise((resolve) => setTimeout(resolve, 500));
-    
-    // In a real application, this would call an API to:
-    // 1. Add 1 token back to the user's token balance
-    // 2. Log the refund transaction
-    
+    if (selectedClass) {
+      appendRefundRecord({
+        enrollment_id: enrollmentId,
+        user_id: userId,
+        user_name: userName,
+        class_id: selectedClass.id,
+        class_name: selectedClass.name,
+        class_code: selectedClass.class_code ?? '',
+        tokens_refunded: 1,
+        remarks,
+        refunded_by: profile?.full_name ?? 'Admin',
+      });
+    }
     alert(t('admin.attendance.tokenRefunded', { name: userName }));
-    
-    // Optionally, you could refresh the enrollment data here
-    // if you want to show updated information
   }
 
   async function toggleAttendanceConfirmation() {
@@ -557,6 +566,7 @@ export default function ClassAttendancePage() {
                                 enrollmentId: enrollment.id,
                                 userId: enrollment.user_id,
                                 userName: enrollment.user_name,
+                                remarks: '',
                               })}
                               className="px-3 py-1.5 text-sm font-medium bg-green-100 text-green-700 hover:bg-green-200 rounded-md flex items-center gap-1.5 transition-colors"
                               title={t('admin.attendance.refundToken')}
@@ -643,6 +653,7 @@ export default function ClassAttendancePage() {
                               enrollmentId: enrollment.id,
                               userId: enrollment.user_id,
                               userName: enrollment.user_name,
+                              remarks: '',
                             })}
                             className="w-full px-3 py-2 text-sm font-medium bg-green-100 text-green-700 hover:bg-green-200 rounded-md flex items-center justify-center gap-1.5 transition-colors"
                           >
@@ -671,7 +682,7 @@ export default function ClassAttendancePage() {
                   <h3 className="text-xl font-semibold text-gray-900">{t('admin.attendance.refundToken')}</h3>
                 </div>
                 <button
-                  onClick={() => setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '' })}
+                  onClick={() => setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '', remarks: '' })}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                 >
                   <X className="h-6 w-6" />
@@ -681,7 +692,7 @@ export default function ClassAttendancePage() {
                 <p className="text-sm text-yellow-800 font-medium mb-2">{t('admin.attendance.refundWarning')}</p>
                 <p className="text-sm text-yellow-700">{t('admin.attendance.refundWarningDesc')}</p>
               </div>
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg">
                 <h4 className="font-medium text-gray-900 mb-2">{t('admin.attendance.studentInfo')}</h4>
                 <p className="text-sm text-gray-600">
                   <span className="font-medium">{t('admin.attendance.studentName')}:</span> {refundModal.userName}
@@ -690,19 +701,32 @@ export default function ClassAttendancePage() {
                   <span className="font-medium">{t('admin.attendance.class')}:</span> {selectedClass.name} ({selectedClass.class_code})
                 </p>
               </div>
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.attendance.refundRemarks')}</label>
+                <p className="text-xs text-gray-500 mb-2">{t('admin.attendance.refundRemarksHint')}</p>
+                <textarea
+                  value={refundModal.remarks}
+                  onChange={(e) => setRefundModal((prev) => ({ ...prev, remarks: e.target.value }))}
+                  placeholder={t('admin.attendance.refundRemarksPlaceholder')}
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                />
+              </div>
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
-                  onClick={() => setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '' })}
+                  onClick={() => setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '', remarks: '' })}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800 rounded-md transition-colors"
                 >
                   {t('common.cancel')}
                 </button>
                 <button
                   onClick={async () => {
-                    await handleRefundToken(refundModal.enrollmentId, refundModal.userId, refundModal.userName);
-                    setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '' });
+                    if (!refundModal.remarks.trim()) return;
+                    await handleRefundToken(refundModal.enrollmentId, refundModal.userId, refundModal.userName, refundModal.remarks.trim());
+                    setRefundModal({ isOpen: false, enrollmentId: '', userId: '', userName: '', remarks: '' });
                   }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 transition-colors"
+                  disabled={!refundModal.remarks.trim()}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <RefreshCw className="h-4 w-4" />
                   {t('admin.attendance.confirmRefund')}

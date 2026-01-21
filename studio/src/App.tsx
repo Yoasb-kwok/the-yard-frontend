@@ -35,6 +35,8 @@ import UserPurchaseHistoryDetailPage from './pages/admin/UserPurchaseHistoryDeta
 import UserSchedulePage from './pages/admin/UserSchedulePage';
 import TokenAssignmentPage from './pages/admin/TokenAssignmentPage';
 import ReassignStudentsPage from './pages/admin/ReassignStudentsPage';
+import HolidaysPage from './pages/admin/HolidaysPage';
+import RefundRecordsPage from './pages/admin/RefundRecordsPage';
 
 function App() {
   return (
@@ -183,6 +185,22 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <ReassignStudentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/holidays"
+            element={
+              <ProtectedRoute requireAdmin>
+                <HolidaysPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/refund-records"
+            element={
+              <ProtectedRoute requireAdmin>
+                <RefundRecordsPage />
               </ProtectedRoute>
             }
           />

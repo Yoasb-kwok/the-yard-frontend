@@ -1,3 +1,23 @@
+import type { AgeTag } from '../contexts/AuthContext';
+
+/**
+ * Derive age group from date of birth using (today - DOB).
+ * Returns '5-8' | '9-12' | '13-16' if age falls in range, otherwise null.
+ */
+export function getAgeTagFromDateOfBirth(dob: string | null): AgeTag | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  if (age >= 5 && age <= 8) return '5-8';
+  if (age >= 9 && age <= 12) return '9-12';
+  if (age >= 13 && age <= 16) return '13-16';
+  return null;
+}
+
 export function formatDate(date: string | Date, locale: string = 'en-US'): string {
   const d = new Date(date);
   return d.toLocaleDateString(locale, {

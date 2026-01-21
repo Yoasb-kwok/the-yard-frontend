@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -23,7 +23,8 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { profile, signOut, isAdmin, user } = useAuth();
+  const { profile, signOut, isAdmin, user, profiles, activeProfileId, switchProfile } = useAuth();
+  const hasMultipleProfiles = !isAdmin && profiles.length > 1;
   const { t } = useTranslation();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -60,9 +61,11 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin', icon: LayoutDashboard, label: t('nav.dashboard') },
     { path: '/admin/users', icon: Users, label: t('nav.users') },
     { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
+    { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },
     { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
     { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
     { path: '/admin/purchase-history', icon: Receipt, label: t('nav.purchaseHistory') },
+    { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
   ];
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;
@@ -123,6 +126,26 @@ export default function Layout({ children }: LayoutProps) {
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
                     {user && !isAdmin && (
                       <>
+                        {hasMultipleProfiles && (
+                          <div className="border-b border-gray-100 px-3 py-2">
+                            <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                            {profiles.map((p) => (
+                              <button
+                                key={p.id}
+                                onClick={() => {
+                                  switchProfile(p.id);
+                                  setUserMenuOpen(false);
+                                }}
+                                className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
+                                  p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
+                                }`}
+                              >
+                                <span>{p.full_name}</span>
+                                {p.id === activeProfileId && <Check className="h-4 w-4 shrink-0" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         <Link
                           to="/dashboard"
                           onClick={() => setUserMenuOpen(false)}
@@ -243,6 +266,27 @@ export default function Layout({ children }: LayoutProps) {
                 {/* User Menu Items */}
                 {!isAdmin && (
                   <>
+                    {hasMultipleProfiles && (
+                      <div className="border-t border-gray-200 pt-3">
+                        <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                        <div className="flex flex-wrap gap-2 px-4">
+                          {profiles.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                switchProfile(p.id);
+                                setMobileMenuOpen(false);
+                              }}
+                              className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                                p.id === activeProfileId ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
+                              }`}
+                            >
+                              {p.full_name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div className="pt-2 border-t border-gray-200">
                       <div className="space-y-1">
                         <Link

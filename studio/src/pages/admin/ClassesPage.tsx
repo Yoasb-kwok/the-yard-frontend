@@ -4,8 +4,9 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
 import { formatDateTime, shouldPostponeClass, getHongKongHolidayName } from '../../lib/utils';
+import { appendRefundRecord } from '../../lib/refundRecords';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
-import { type CourseLevel } from '../../contexts/AuthContext';
+import { type CourseLevel, type AgeTag, useAuth } from '../../contexts/AuthContext';
 
 interface Class {
   id: string;
@@ -21,6 +22,7 @@ interface Class {
   is_cancelled: boolean;
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   level?: CourseLevel;
+  age_tag?: AgeTag;
 }
 
 interface Instructor {
@@ -69,6 +71,7 @@ const MOCK_CLASSES: Class[] = [
     is_cancelled: false,
     location: 'sanpokong',
     level: 'entry',
+    age_tag: '5-8',
   },
   {
     id: '2',
@@ -83,6 +86,7 @@ const MOCK_CLASSES: Class[] = [
     is_cancelled: false,
     location: 'causewaybay',
     level: 'intermediate',
+    age_tag: '9-12',
   },
   {
     id: '3',
@@ -97,6 +101,7 @@ const MOCK_CLASSES: Class[] = [
     is_cancelled: false,
     location: 'fotan',
     level: 'entry',
+    age_tag: '13-16',
   },
 ];
 
@@ -177,6 +182,7 @@ type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
 export default function ClassesPage() {
   const { t, i18n } = useTranslation();
+  const { profile } = useAuth();
   const navigate = useNavigate();
   const [classes, setClasses] = useState<Class[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
@@ -199,6 +205,7 @@ export default function ClassesPage() {
     is_internal: false,
     location: 'sanpokong' as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui',
     level: 'entry' as CourseLevel,
+    age_tag: '5-8' as AgeTag,
     repeat_weekly: false,
     repeat_until: '',
   });
@@ -333,18 +340,22 @@ export default function ClassesPage() {
     alert(t('admin.attendance.classCancelled'));
   }
 
-  async function handleRefundToken(enrollmentId: string, userId: string, userName: string) {
+  async function handleRefundToken(enrollmentId: string, userId: string, userName: string, remarks: string) {
     // Simulate API call to refund token
     await new Promise((resolve) => setTimeout(resolve, 500));
-    
-    // In a real application, this would call an API to:
-    // 1. Add 1 token back to the user's token balance
-    // 2. Log the refund transaction
-    
+    const cls = attendanceData?.class;
+    appendRefundRecord({
+      enrollment_id: enrollmentId,
+      user_id: userId,
+      user_name: userName,
+      class_id: cls?.id ?? '',
+      class_name: cls?.name ?? '',
+      class_code: cls?.class_code ?? '',
+      tokens_refunded: 1,
+      remarks,
+      refunded_by: profile?.full_name ?? 'Admin',
+    });
     alert(t('admin.attendance.tokenRefunded', { name: userName }));
-    
-    // Optionally, you could refresh the attendance data here
-    // if you want to show updated information
   }
 
   function findRepeatedClasses(classItem: Class): Class[] {
@@ -389,6 +400,7 @@ export default function ClassesPage() {
       is_internal: classItem.is_internal,
       location: classItem.location || 'sanpokong',
       level: classItem.level || 'entry',
+      age_tag: classItem.age_tag || '5-8',
       repeat_weekly: false,
       repeat_until: '',
     });
@@ -408,6 +420,7 @@ export default function ClassesPage() {
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
+      age_tag: '5-8',
       repeat_weekly: false,
       repeat_until: '',
     });
@@ -456,6 +469,7 @@ export default function ClassesPage() {
               is_internal: form.is_internal,
               location: form.location,
               level: form.level,
+              age_tag: form.age_tag,
             };
           }
           return c;
@@ -475,6 +489,7 @@ export default function ClassesPage() {
           is_internal: form.is_internal,
           location: form.location,
           level: form.level,
+          age_tag: form.age_tag,
         };
 
         setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
@@ -495,6 +510,7 @@ export default function ClassesPage() {
         is_internal: false,
         location: 'sanpokong',
         level: 'entry',
+        age_tag: '5-8',
         repeat_weekly: false,
         repeat_until: '',
       });
@@ -562,6 +578,7 @@ export default function ClassesPage() {
             is_cancelled: false,
             location: form.location,
             level: form.level,
+            age_tag: form.age_tag,
           };
 
           newClasses.push(newClass);
@@ -594,6 +611,7 @@ export default function ClassesPage() {
         is_cancelled: false,
         location: form.location,
         level: form.level,
+        age_tag: form.age_tag,
       };
       newClasses.push(newClass);
     }
@@ -616,6 +634,7 @@ export default function ClassesPage() {
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
+      age_tag: '5-8',
       repeat_weekly: false,
       repeat_until: '',
     });
@@ -1591,6 +1610,19 @@ export default function ClassesPage() {
                   <option value="entry">{t('admin.classes.entryLevel')}</option>
                   <option value="intermediate">{t('admin.classes.intermediateLevel')}</option>
                   <option value="advanced">{t('admin.classes.advancedLevel')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.ageTag')}</label>
+                <select
+                  required
+                  value={form.age_tag}
+                  onChange={(e) => setForm({ ...form, age_tag: e.target.value as AgeTag })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="5-8">{t('calendar.ageTag.5-8')}</option>
+                  <option value="9-12">{t('calendar.ageTag.9-12')}</option>
+                  <option value="13-16">{t('calendar.ageTag.13-16')}</option>
                 </select>
               </div>
               <div>

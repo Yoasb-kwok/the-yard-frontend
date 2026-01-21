@@ -359,6 +359,29 @@ export type Database = {
           updated_by?: string | null
         }
       }
+      holidays: {
+        Row: {
+          id: string
+          name: string
+          date: string
+          description: string | null
+          created_at: string
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          date: string
+          description?: string | null
+          created_at?: string
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
+          date?: string
+          description?: string | null
+        }
+      }
     }
   }
 }

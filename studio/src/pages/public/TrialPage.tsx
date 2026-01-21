@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
-import { useAuth, CourseLevel } from '../../contexts/AuthContext';
+import { useAuth, CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
 
 interface ClassData {
@@ -14,6 +14,7 @@ interface ClassData {
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   program_code: string;
   level: CourseLevel;
+  age_tag?: AgeTag;
 }
 
 export default function TrialPage() {
@@ -267,6 +268,21 @@ export default function TrialPage() {
                     }
                   </span>
                 </div>
+
+                {classData.age_tag && (
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.ageTag')}</p>
+                    <span className={`inline-block text-sm font-semibold px-3 py-1.5 rounded border ${
+                      classData.age_tag === '5-8' 
+                        ? 'bg-teal-100 text-teal-800 border-teal-200'
+                        : classData.age_tag === '9-12'
+                        ? 'bg-cyan-100 text-cyan-800 border-cyan-200'
+                        : 'bg-indigo-100 text-indigo-800 border-indigo-200'
+                    }`}>
+                      {t(`calendar.ageTag.${classData.age_tag}`)}
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex items-center text-gray-800">
                   <Calendar className="h-5 w-5 mr-3 text-primary flex-shrink-0" />

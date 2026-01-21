@@ -1,7 +1,7 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Receipt, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard } from 'lucide-react';
+import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Receipt, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
 import logoImage from '../assets/images/the-yard-logo.png';
@@ -45,6 +45,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
   // Build navigation items with icons
   const navItems = [
     { path: '/', label: t('nav.home'), icon: Home },
+    { path: '/about', label: t('nav.about'), icon: Info },
     { path: '/calendar', label: t('nav.calendar'), icon: Calendar },
     { path: '/news', label: t('nav.news'), icon: Newspaper },
     { path: '/token-package', label: t('nav.tokenPackage'), icon: Package },

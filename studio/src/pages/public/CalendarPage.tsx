@@ -5,8 +5,8 @@ import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { getHongKongHolidayName } from '../../lib/utils';
-import { CourseLevel } from '../../contexts/AuthContext';
+import { getHongKongHolidayName, getAgeTagFromDateOfBirth } from '../../lib/utils';
+import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 
 interface Lesson {
   id: string;
@@ -19,6 +19,7 @@ interface Lesson {
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   program_code: string;
   level: CourseLevel;
+  age_tag: AgeTag;
 }
 
 type ViewType = 'day' | 'threeDay' | 'week' | 'month';
@@ -43,15 +44,15 @@ const generateDummyLessons = (): Lesson[] => {
       endTime.setHours(hour + 1, 0, 0, 0);
       
       const classData = [
-        { name: '幼兒街舞入門班', level: 'entry' as CourseLevel, programCode: 'PSW6R3' },
-        { name: '初階街舞基礎班', level: 'entry' as CourseLevel, programCode: 'BSW6R9' },
-        { name: '韓風小明星KPOP班', level: 'intermediate' as CourseLevel, programCode: 'KPW1L1-FT' },
-        { name: 'Yoga Basics', level: 'entry' as CourseLevel, programCode: 'YG001' },
-        { name: 'Pilates Core', level: 'intermediate' as CourseLevel, programCode: 'PL002' },
-        { name: 'Morning Stretch', level: 'entry' as CourseLevel, programCode: 'MS003' },
-        { name: 'Advanced Street Dance', level: 'advanced' as CourseLevel, programCode: 'ASD001' },
-        { name: 'Intermediate KPOP', level: 'intermediate' as CourseLevel, programCode: 'IKP001' },
-        { name: 'Advanced Yoga', level: 'advanced' as CourseLevel, programCode: 'AYG001' },
+        { name: '幼兒街舞入門班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'PSW6R3' },
+        { name: '初階街舞基礎班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'BSW6R9' },
+        { name: '韓風小明星KPOP班', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'KPW1L1-FT' },
+        { name: 'Yoga Basics', level: 'entry' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'YG001' },
+        { name: 'Pilates Core', level: 'intermediate' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'PL002' },
+        { name: 'Morning Stretch', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'MS003' },
+        { name: 'Advanced Street Dance', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'ASD001' },
+        { name: 'Intermediate KPOP', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'IKP001' },
+        { name: 'Advanced Yoga', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'AYG001' },
       ];
       const instructors = ['Wawa', 'C+', 'Shirley', 'Jane Smith', 'John Doe', 'Sarah Johnson'];
       const locations: ('sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui')[] = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'];
@@ -69,6 +70,7 @@ const generateDummyLessons = (): Lesson[] => {
         location: locations[Math.floor(Math.random() * locations.length)],
         program_code: selectedClass.programCode,
         level: selectedClass.level,
+        age_tag: selectedClass.ageTag,
       });
     }
   }
@@ -144,7 +146,12 @@ export default function CalendarPage() {
     
     // Filter lessons by student level if student is logged in
     if (isStudent && profile?.level) {
-      filteredLessons = DUMMY_LESSONS.filter(lesson => lesson.level === profile.level);
+      filteredLessons = filteredLessons.filter(lesson => lesson.level === profile.level);
+    }
+    // Filter lessons by student age group (derived from date of birth) if student is logged in
+    const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
+    if (isStudent && profileAgeTag) {
+      filteredLessons = filteredLessons.filter(lesson => lesson.age_tag === profileAgeTag);
     }
     
     setLessons(filteredLessons);
@@ -232,6 +239,25 @@ export default function CalendarPage() {
       },
     };
     return levelConfig[level];
+  };
+
+  // Get age tag styling
+  const getAgeTag = (ageTag: AgeTag) => {
+    const ageConfig = {
+      '5-8': {
+        label: t('calendar.ageTag.5-8'),
+        className: 'bg-teal-100 text-teal-800 border-teal-200',
+      },
+      '9-12': {
+        label: t('calendar.ageTag.9-12'),
+        className: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+      },
+      '13-16': {
+        label: t('calendar.ageTag.13-16'),
+        className: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+      },
+    };
+    return ageConfig[ageTag];
   };
 
 
@@ -414,6 +440,9 @@ export default function CalendarPage() {
                       <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(lesson.level).className}`}>
                         {getLevelTag(lesson.level).label}
                       </span>
+                      <span className={`text-xs font-semibold px-2 py-1 rounded border ${getAgeTag(lesson.age_tag).className}`}>
+                        {getAgeTag(lesson.age_tag).label}
+                      </span>
                     </div>
                   </div>
 
@@ -461,6 +490,7 @@ export default function CalendarPage() {
                           location: lesson.location,
                           program_code: lesson.program_code,
                           level: lesson.level,
+                          age_tag: lesson.age_tag,
                         }
                       }}
                       className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
@@ -488,6 +518,8 @@ export default function CalendarPage() {
                             end_time: lesson.end_time,
                             location: lesson.location,
                             program_code: lesson.program_code,
+                            level: lesson.level,
+                            age_tag: lesson.age_tag,
                           }
                         }}
                         className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
@@ -614,7 +646,7 @@ export default function CalendarPage() {
                   {dayLessons.map((lesson) => {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
-                    
+                    const ageTag = getAgeTag(lesson.age_tag);
                     return (
                       <div
                         key={lesson.id}
@@ -637,8 +669,9 @@ export default function CalendarPage() {
                         <div className="text-white/80 text-xs mt-0.5">
                           {formatTime(new Date(lesson.start_time))}
                         </div>
-                        <div className={`text-xs mt-1 px-1.5 py-0.5 rounded ${levelTag.className}`}>
-                          {levelTag.label}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
                         </div>
                       </div>
                     );
@@ -748,7 +781,7 @@ export default function CalendarPage() {
                   {dayLessons.map((lesson) => {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
-                    
+                    const ageTag = getAgeTag(lesson.age_tag);
                     return (
                       <div
                         key={lesson.id}
@@ -771,8 +804,9 @@ export default function CalendarPage() {
                         <div className="text-white/80 text-xs mt-0.5">
                           {formatTime(new Date(lesson.start_time))}
                         </div>
-                        <div className={`text-xs mt-1 px-1.5 py-0.5 rounded ${levelTag.className}`}>
-                          {levelTag.label}
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
                         </div>
                       </div>
                     );
@@ -878,6 +912,7 @@ export default function CalendarPage() {
                   {dayLessons.slice(0, 3).map((lesson) => {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
+                    const ageTag = getAgeTag(lesson.age_tag);
                     return (
                       <div
                         key={lesson.id}
@@ -891,7 +926,7 @@ export default function CalendarPage() {
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         }}
-                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))} - ${levelTag.label}`}
+                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))} - ${levelTag.label} - ${ageTag.label}`}
                         onClick={() => handleLessonClick(lesson)}
                       >
                         <div className="truncate">
@@ -900,8 +935,9 @@ export default function CalendarPage() {
                         <div className="truncate text-white/80">
                           {lesson.instructor}
                         </div>
-                        <div className={`text-xs mt-0.5 px-1 py-0.5 rounded ${levelTag.className}`}>
-                          {levelTag.label}
+                        <div className="flex flex-wrap gap-0.5 mt-0.5">
+                          <span className={`text-xs px-1 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
+                          <span className={`text-xs px-1 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
                         </div>
                       </div>
                     );
@@ -1090,6 +1126,9 @@ export default function CalendarPage() {
                           <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(selectedLesson.level).className}`}>
                             {getLevelTag(selectedLesson.level).label}
                           </span>
+                          <span className={`text-xs font-semibold px-2 py-1 rounded border ${getAgeTag(selectedLesson.age_tag).className}`}>
+                            {getAgeTag(selectedLesson.age_tag).label}
+                          </span>
                         </div>
                       </div>
 
@@ -1168,6 +1207,7 @@ export default function CalendarPage() {
                               location: selectedLesson.location,
                               program_code: selectedLesson.program_code,
                               level: selectedLesson.level,
+                              age_tag: selectedLesson.age_tag,
                             }
                           }}
                           className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
@@ -1196,6 +1236,8 @@ export default function CalendarPage() {
                                 end_time: selectedLesson.end_time,
                                 location: selectedLesson.location,
                                 program_code: selectedLesson.program_code,
+                                level: selectedLesson.level,
+                                age_tag: selectedLesson.age_tag,
                               }
                             }}
                             className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"

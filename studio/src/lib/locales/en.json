@@ -18,7 +18,9 @@
     "reports": "Reports",
     "settings": "Settings",
     "coupons": "Coupons",
+    "holidays": "Holidays",
     "purchaseHistory": "Purchase History",
+    "refundRecords": "Refund Records",
     "signOut": "Sign Out",
     "menu": "Menu"
   },
@@ -45,7 +47,8 @@
     "warning": "Warning",
     "info": "Information",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "optional": "Optional"
   },
   "home": {
     "title": "Transform Your Practice",
@@ -53,7 +56,10 @@
     "bookTrial": "Book Trial Lesson",
     "signIn": "Sign In",
     "todaysClasses": "Today's Classes",
+    "newStudentShortTerm": "New Student & Short-term Courses",
     "noClassesToday": "No classes scheduled for today",
+    "studentLogin": "Student Login",
+    "studentLoginDesc": "Book classes and view your schedule online.",
     "viewMore": "View More",
     "enrolled": "enrolled",
     "expertInstructors": "Expert Instructors",
@@ -163,6 +169,7 @@
     "className": "Class Name",
     "classCode": "Class Code",
     "level": "Level",
+    "ageTag": "Age Group",
     "classDate": "Class Date",
     "classTime": "Class Time",
     "registrationForm": "Registration Form",
@@ -350,11 +357,27 @@
     "residentialDistrict": "Residential District",
     "hasJoinedCourses": "Has Joined Regular/Summer Courses",
     "level": "Course Level",
+    "ageTag": "Age Group",
     "mobile": "Mobile Number",
     "idFirstFour": "Last 4 characters of ID Card",
     "notProvided": "Not provided",
     "student": "Student",
-    "admin": "Admin"
+    "admin": "Admin",
+    "familyMembers": "Family members",
+    "switchTo": "Switch to {{name}}",
+    "viewing": "Viewing",
+    "viewProfile": "View",
+    "addFamilyMember": "Add family member",
+    "editFamilyMember": "Edit family member",
+    "deleteFamilyMember": "Remove",
+    "confirmDeleteFamilyMember": "Remove {{name}} from the family? This cannot be undone.",
+    "mainAccount": "Main account",
+    "setAsMainAccount": "Set as main account",
+    "confirmSetAsMainAccount": "Set {{name}} as the main account? {{current}} will become a family member.",
+    "mainAccountUpdated": "Main account updated.",
+    "memberAdded": "Family member added.",
+    "memberUpdated": "Family member updated.",
+    "memberDeleted": "Family member removed."
   },
   "admin": {
     "dashboard": {
@@ -418,6 +441,7 @@
       "substituteInstructorHint": "Internal only. Students and visitors will not see that a substitute is covering.",
       "substituteShort": "Sub",
       "level": "Course Level",
+      "ageTag": "Age Group",
       "entryLevel": "Entry Level",
       "intermediateLevel": "Intermediate Level",
       "advancedLevel": "Advanced Level",
@@ -519,6 +543,9 @@
       "refundWarning": "Are you sure you want to refund 1 token to this student?",
       "refundWarningDesc": "This action will add 1 token back to the student's account. This is typically used when a student has informed of sick leave in advance but the course has already deducted a token.",
       "confirmRefund": "Confirm Refund",
+      "refundRemarks": "Remarks (required)",
+      "refundRemarksHint": "Required. This refund will be recorded with your remarks for audit.",
+      "refundRemarksPlaceholder": "e.g. Sick leave notified in advance; token deducted by mistake; ...",
       "tokenRefunded": "1 token has been refunded to {{name}}",
       "studentInfo": "Student Information",
       "class": "Class",
@@ -615,6 +642,24 @@
       "validUntilRequired": "Valid until date is required",
       "validUntilAfterValidFrom": "Valid until date must be after valid from date"
     },
+    "holidays": {
+      "title": "Holiday Calendar",
+      "description": "Add academy holidays. These dates will be used for lesson postponement when they fall on a holiday.",
+      "addHoliday": "Add Holiday",
+      "editHoliday": "Edit Holiday",
+      "name": "Holiday Name",
+      "date": "Date",
+      "description": "Description",
+      "namePlaceholder": "e.g. Chinese New Year",
+      "descriptionPlaceholder": "Optional notes (e.g. Academy closed)",
+      "nameRequired": "Holiday name is required",
+      "dateRequired": "Date is required",
+      "noHolidays": "No holidays added yet. Add your first holiday to manage lesson postponement.",
+      "holidayCreated": "Holiday added successfully",
+      "holidayUpdated": "Holiday updated successfully",
+      "holidayDeleted": "Holiday deleted successfully",
+      "confirmDelete": "Are you sure you want to delete \"{{name}}\"?"
+    },
     "purchaseHistory": {
       "title": "User Purchase History",
       "userPurchaseHistory": "User Purchase History",
@@ -656,6 +701,20 @@
         "failed": "Failed",
         "not_required": "Not Required"
       }
+    },
+    "refundRecords": {
+      "title": "Refund Records",
+      "subtitle": "Token refunds processed from the attendance panel. Records are kept for audit.",
+      "noRecords": "No refund records yet",
+      "noRecordsHint": "Refunds performed from Classes → Attendance will appear here.",
+      "date": "Date",
+      "student": "Student",
+      "class": "Class",
+      "tokens": "Tokens",
+      "remarks": "Remarks",
+      "refundedBy": "Refunded by",
+      "searchPlaceholder": "Search by student or class...",
+      "refresh": "Refresh"
     },
     "tokenAssignment": {
       "title": "Assign Tokens to Classes",
@@ -712,6 +771,11 @@
       "entry": "Entry Level",
       "intermediate": "Intermediate Level",
       "advanced": "Advanced Level"
+    },
+    "ageTag": {
+      "5-8": "Ages 5-8",
+      "9-12": "Ages 9-12",
+      "13-16": "Ages 13-16"
     }
   },
   "faq": {

@@ -18,7 +18,9 @@
     "reports": "报告",
     "settings": "设置",
     "coupons": "优惠券",
+    "holidays": "假期",
     "purchaseHistory": "购买记录",
+    "refundRecords": "退款记录",
     "signOut": "登出",
     "menu": "菜单"
   },
@@ -45,7 +47,8 @@
     "warning": "警告",
     "info": "信息",
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "optional": "选填"
   },
   "home": {
     "title": "改变您的练习",
@@ -53,7 +56,10 @@
     "bookTrial": "预约试课",
     "signIn": "登录",
     "todaysClasses": "今日课程",
+    "newStudentShortTerm": "新生课堂 及短期课程",
     "noClassesToday": "今日没有安排课程",
+    "studentLogin": "学生登入",
+    "studentLoginDesc": "在线预约课堂、查看时间表。",
     "viewMore": "查看更多",
     "enrolled": "已报名",
     "expertInstructors": "专业导师",
@@ -163,6 +169,7 @@
     "className": "课程名称",
     "classCode": "课程代码",
     "level": "级别",
+    "ageTag": "年龄组",
     "classDate": "课程日期",
     "classTime": "课程时间",
     "registrationForm": "申请表单",
@@ -350,11 +357,27 @@
     "residentialDistrict": "居住地区",
     "hasJoinedCourses": "是否参加过常规/暑期课程",
     "level": "课程级别",
+    "ageTag": "年龄组",
     "mobile": "手机号码",
     "idFirstFour": "身份证后4位字",
     "notProvided": "未提供",
     "student": "学生",
-    "admin": "管理员"
+    "admin": "管理员",
+    "familyMembers": "家庭成员",
+    "switchTo": "切换至 {{name}}",
+    "viewing": "当前查看",
+    "viewProfile": "查看",
+    "addFamilyMember": "添加家庭成员",
+    "editFamilyMember": "编辑家庭成员",
+    "deleteFamilyMember": "移除",
+    "confirmDeleteFamilyMember": "确定要将 {{name}} 从家庭中移除吗？此操作无法撤销。",
+    "mainAccount": "主账户",
+    "setAsMainAccount": "设为主账户",
+    "confirmSetAsMainAccount": "确定将 {{name}} 设为主账户吗？{{current}} 将变为家庭成员。",
+    "mainAccountUpdated": "主账户已更新。",
+    "memberAdded": "已添加家庭成员。",
+    "memberUpdated": "已更新家庭成员。",
+    "memberDeleted": "已移除家庭成员。"
   },
   "admin": {
     "dashboard": {
@@ -418,6 +441,7 @@
       "substituteInstructorHint": "仅内部可见。学生与访客不会看到由代课老师授课。",
       "substituteShort": "代课",
       "level": "课程级别",
+      "ageTag": "年龄组",
       "entryLevel": "入门级",
       "intermediateLevel": "中级",
       "advancedLevel": "高级",
@@ -519,6 +543,9 @@
       "refundWarning": "您确定要向该学生退还1个代币吗？",
       "refundWarningDesc": "此操作将向学生账户退还1个代币。通常用于学生提前告知病假但课程已扣除代币的情况。",
       "confirmRefund": "确认退款",
+      "refundRemarks": "备注（必填）",
+      "refundRemarksHint": "必填。此退款将连同您的备注一并记录以作审计。",
+      "refundRemarksPlaceholder": "例如：已事先通知病假；代币误扣；…",
       "tokenRefunded": "已向 {{name}} 退还1个代币",
       "studentInfo": "学生信息",
       "class": "课程",
@@ -615,6 +642,24 @@
       "validUntilRequired": "有效期结束日期为必填项",
       "validUntilAfterValidFrom": "有效期结束日期必须晚于开始日期"
     },
+    "holidays": {
+      "title": "假期日历",
+      "description": "添加学院假期。这些日期将用于在假期当天顺延课程。",
+      "addHoliday": "添加假期",
+      "editHoliday": "编辑假期",
+      "name": "假期名称",
+      "date": "日期",
+      "description": "备注",
+      "namePlaceholder": "例如：春节",
+      "descriptionPlaceholder": "选填说明（例如：学院休息）",
+      "nameRequired": "请输入假期名称",
+      "dateRequired": "请选择日期",
+      "noHolidays": "尚未添加假期。添加第一个假期以管理课程顺延。",
+      "holidayCreated": "假期添加成功",
+      "holidayUpdated": "假期更新成功",
+      "holidayDeleted": "假期已删除",
+      "confirmDelete": "确定要删除「{{name}}」吗？"
+    },
     "purchaseHistory": {
       "title": "用户购买记录",
       "userPurchaseHistory": "用户购买记录",
@@ -656,6 +701,20 @@
         "failed": "付款失败",
         "not_required": "无需付款"
       }
+    },
+    "refundRecords": {
+      "title": "退款记录",
+      "subtitle": "从出席名单处理的代币退款，记录保留作审计。",
+      "noRecords": "暂无退款记录",
+      "noRecordsHint": "在课程 → 出席名单中执行的退款会显示于此。",
+      "date": "日期",
+      "student": "学生",
+      "class": "课程",
+      "tokens": "代币",
+      "remarks": "备注",
+      "refundedBy": "操作人",
+      "searchPlaceholder": "按学生或课程搜索…",
+      "refresh": "刷新"
     },
     "tokenAssignment": {
       "title": "分配代币到课程",
@@ -712,6 +771,11 @@
       "entry": "入门级",
       "intermediate": "中级",
       "advanced": "高级"
+    },
+    "ageTag": {
+      "5-8": "5-8岁",
+      "9-12": "9-12岁",
+      "13-16": "13-16岁"
     }
   },
   "faq": {
