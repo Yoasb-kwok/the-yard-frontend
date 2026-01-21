@@ -144,8 +144,7 @@ export default function ShopPage() {
     ? calculateDiscount(subtotal, appliedCoupon.discount_type, appliedCoupon.discount_value)
     : 0;
   const referralValid = REFERRAL_CODE_REGEX.test(referralCode.trim());
-  const referralDiscount = referralValid ? subtotal * 0.1 : 0;
-  const total = subtotal - discount - referralDiscount;
+  const total = subtotal - discount;
 
   if (loading) {
     return (
@@ -276,7 +275,7 @@ export default function ShopPage() {
                       {referralValid && (
                         <div className="flex items-center text-green-600 text-sm mt-1">
                           <Check className="h-4 w-4 mr-1" />
-                          Referral applied — 10% off
+                          Referral code applied
                         </div>
                       )}
                     </div>
@@ -291,12 +290,6 @@ export default function ShopPage() {
                       <div className="flex justify-between text-sm text-green-600">
                         <span>Discount:</span>
                         <span>-{formatCurrency(discount)}</span>
-                      </div>
-                    )}
-                    {referralDiscount > 0 && (
-                      <div className="flex justify-between text-sm text-green-600">
-                        <span>Referral (10%):</span>
-                        <span>-{formatCurrency(referralDiscount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-lg font-bold">

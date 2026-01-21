@@ -170,8 +170,7 @@ export default function TokenPackagePage() {
     ? calculateDiscount(subtotal, appliedCoupon.discount_type, appliedCoupon.discount_value)
     : 0;
   const referralValid = REFERRAL_CODE_REGEX.test(referralCode.trim());
-  const referralDiscount = referralValid ? subtotal * 0.1 : 0;
-  const total = subtotal - discount - referralDiscount;
+  const total = subtotal - discount;
 
   // Helper functions for class data display
   const getLocale = (): string => {
@@ -417,12 +416,6 @@ export default function TokenPackagePage() {
                         <div className="flex justify-between text-sm text-green-600">
                           <span>{t('shop.discount')}:</span>
                           <span>-{formatCurrency(discount)}</span>
-                        </div>
-                      )}
-                      {referralDiscount > 0 && (
-                        <div className="flex justify-between text-sm text-green-600">
-                          <span>{t('shop.referralDiscount')}:</span>
-                          <span>-{formatCurrency(referralDiscount)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-lg font-bold">
