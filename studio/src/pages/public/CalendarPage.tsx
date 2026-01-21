@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { getHongKongHolidayName, getAgeTagFromDateOfBirth } from '../../lib/utils';
@@ -20,9 +20,15 @@ interface Lesson {
   program_code: string;
   level: CourseLevel;
   age_tag: AgeTag;
+  /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
+  weekday: number;
+  /** Total lessons in the course (8 or 16). */
+  total_lessons: 8 | 16;
 }
 
 type ViewType = 'day' | 'threeDay' | 'week' | 'month';
+
+const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
 // Dummy lesson data for the next 30 days
 const generateDummyLessons = (): Lesson[] => {
@@ -43,16 +49,17 @@ const generateDummyLessons = (): Lesson[] => {
       const endTime = new Date(startTime);
       endTime.setHours(hour + 1, 0, 0, 0);
       
+      // Each class has a recurring weekday (0=Sun..6=Sat) and total lessons (8 or 16), randomly assigned
       const classData = [
-        { name: '幼兒街舞入門班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'PSW6R3' },
-        { name: '初階街舞基礎班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'BSW6R9' },
-        { name: '韓風小明星KPOP班', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'KPW1L1-FT' },
-        { name: 'Yoga Basics', level: 'entry' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'YG001' },
-        { name: 'Pilates Core', level: 'intermediate' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'PL002' },
-        { name: 'Morning Stretch', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'MS003' },
-        { name: 'Advanced Street Dance', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'ASD001' },
-        { name: 'Intermediate KPOP', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'IKP001' },
-        { name: 'Advanced Yoga', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'AYG001' },
+        { name: '幼兒街舞入門班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'PSW6R3', weekday: 3, total_lessons: 8 as 8 | 16 },
+        { name: '初階街舞基礎班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'BSW6R9', weekday: 5, total_lessons: 16 as 8 | 16 },
+        { name: '韓風小明星KPOP班', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'KPW1L1-FT', weekday: 1, total_lessons: 8 as 8 | 16 },
+        { name: 'Yoga Basics', level: 'entry' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'YG001', weekday: 4, total_lessons: 16 as 8 | 16 },
+        { name: 'Pilates Core', level: 'intermediate' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'PL002', weekday: 2, total_lessons: 8 as 8 | 16 },
+        { name: 'Morning Stretch', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'MS003', weekday: 6, total_lessons: 16 as 8 | 16 },
+        { name: 'Advanced Street Dance', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'ASD001', weekday: 3, total_lessons: 16 as 8 | 16 },
+        { name: 'Intermediate KPOP', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'IKP001', weekday: 5, total_lessons: 8 as 8 | 16 },
+        { name: 'Advanced Yoga', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'AYG001', weekday: 0, total_lessons: 8 as 8 | 16 },
       ];
       const instructors = ['Wawa', 'C+', 'Shirley', 'Jane Smith', 'John Doe', 'Sarah Johnson'];
       const locations: ('sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui')[] = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'];
@@ -71,6 +78,8 @@ const generateDummyLessons = (): Lesson[] => {
         program_code: selectedClass.programCode,
         level: selectedClass.level,
         age_tag: selectedClass.ageTag,
+        weekday: selectedClass.weekday,
+        total_lessons: selectedClass.total_lessons,
       });
     }
   }
@@ -475,6 +484,15 @@ export default function CalendarPage() {
                       />
                       <span className="text-base font-semibold">{t(`home.locations.${lesson.location}`)}</span>
                     </div>
+                    <div className="flex items-center text-gray-800 rounded-lg p-3">
+                      <Repeat 
+                        className="h-5 w-5 mr-3 flex-shrink-0" 
+                        style={{ color: locationColors.primary }}
+                      />
+                      <span className="text-base font-semibold">
+                        {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: lesson.total_lessons })}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -669,6 +687,9 @@ export default function CalendarPage() {
                         <div className="text-white/80 text-xs mt-0.5">
                           {formatTime(new Date(lesson.start_time))}
                         </div>
+                        <div className="text-white/80 text-xs mt-0.5 truncate">
+                          {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: lesson.total_lessons })}
+                        </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
@@ -804,6 +825,9 @@ export default function CalendarPage() {
                         <div className="text-white/80 text-xs mt-0.5">
                           {formatTime(new Date(lesson.start_time))}
                         </div>
+                        <div className="text-white/80 text-xs mt-0.5 truncate">
+                          {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: lesson.total_lessons })}
+                        </div>
                         <div className="flex flex-wrap gap-1 mt-1">
                           <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
@@ -926,7 +950,7 @@ export default function CalendarPage() {
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         }}
-                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))} - ${levelTag.label} - ${ageTag.label}`}
+                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))} - ${levelTag.label} - ${ageTag.label} - ${t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · ${t('calendar.lessonsInTotal', { count: lesson.total_lessons })}`}
                         onClick={() => handleLessonClick(lesson)}
                       >
                         <div className="truncate">
@@ -1189,6 +1213,16 @@ export default function CalendarPage() {
                               {t(`home.locations.${selectedLesson.location}`)}
                             </p>
                           </div>
+                        </div>
+
+                        <div className="flex items-center text-gray-800 rounded-lg p-3">
+                          <Repeat
+                            className="h-5 w-5 mr-3 flex-shrink-0"
+                            style={{ color: locationColors.primary }}
+                          />
+                          <span className="text-base font-semibold">
+                            {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[selectedLesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: selectedLesson.total_lessons })}
+                          </span>
                         </div>
 
                       </div>

@@ -731,8 +731,11 @@
       "selected": "已选择",
       "select": "选择",
       "assignToClasses": "分配到课程",
+      "started": "已开课",
+      "upcoming": "未开课",
       "searchClasses": "搜索课程...",
       "noClassesFound": "未找到课程",
+      "noClassesInSection": "此区没有课程",
       "makeupClass": "补课",
       "assigned": "已分配",
       "classCode": "课程代码",
@@ -752,9 +755,11 @@
       "selectToken": "选择代币",
       "chooseToken": "选择代币",
       "confirmAssign": "确认分配",
+      "confirmAssignMessage": "确认将 1 个代币分配到「{{className}}」？",
+      "confirmRemove": "确认移除",
+      "confirmRemoveMessage": "确定要移除此代币分配？「{{className}}」",
       "assignedSuccessfully": "代币已成功分配到课程",
-      "removedSuccessfully": "分配已成功移除",
-      "confirmRemove": "确定要移除此分配吗？"
+      "removedSuccessfully": "分配已成功移除"
     }
   },
   "calendar": {
@@ -769,6 +774,17 @@
     "allLocations": "所有地点",
     "enrollment": "报名人数",
     "enroll": "报名",
+    "everyWeekday": "每{{day}}",
+    "lessonsInTotal": "共{{count}}堂课",
+    "weekdays": {
+      "sunday": "星期日",
+      "monday": "星期一",
+      "tuesday": "星期二",
+      "wednesday": "星期三",
+      "thursday": "星期四",
+      "friday": "星期五",
+      "saturday": "星期六"
+    },
     "level": {
       "entry": "入门级",
       "intermediate": "中级",

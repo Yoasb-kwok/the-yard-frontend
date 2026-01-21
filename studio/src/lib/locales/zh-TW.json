@@ -731,8 +731,11 @@
       "selected": "已選擇",
       "select": "選擇",
       "assignToClasses": "分配到課程",
+      "started": "已開課",
+      "upcoming": "未開課",
       "searchClasses": "搜尋課程...",
       "noClassesFound": "未找到課程",
+      "noClassesInSection": "此區沒有課程",
       "makeupClass": "補課",
       "assigned": "已分配",
       "classCode": "課程代碼",
@@ -752,9 +755,11 @@
       "selectToken": "選擇代幣",
       "chooseToken": "選擇代幣",
       "confirmAssign": "確認分配",
+      "confirmAssignMessage": "確認將 1 個代幣分配到「{{className}}」？",
+      "confirmRemove": "確認移除",
+      "confirmRemoveMessage": "確定要移除此代幣分配？「{{className}}」",
       "assignedSuccessfully": "代幣已成功分配到課程",
-      "removedSuccessfully": "分配已成功移除",
-      "confirmRemove": "確定要移除此分配嗎？"
+      "removedSuccessfully": "分配已成功移除"
     }
   },
   "calendar": {
@@ -769,6 +774,17 @@
     "allLocations": "所有地點",
     "enrollment": "報名人數",
     "enroll": "報名",
+    "everyWeekday": "每{{day}}",
+    "lessonsInTotal": "共{{count}}堂課",
+    "weekdays": {
+      "sunday": "星期日",
+      "monday": "星期一",
+      "tuesday": "星期二",
+      "wednesday": "星期三",
+      "thursday": "星期四",
+      "friday": "星期五",
+      "saturday": "星期六"
+    },
     "level": {
       "entry": "入門級",
       "intermediate": "中級",

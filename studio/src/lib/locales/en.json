@@ -731,8 +731,11 @@
       "selected": "Selected",
       "select": "Select",
       "assignToClasses": "Assign to Classes",
+      "started": "Already Started",
+      "upcoming": "Not Yet Started",
       "searchClasses": "Search classes...",
       "noClassesFound": "No classes found",
+      "noClassesInSection": "No classes in this section",
       "makeupClass": "Makeup Class",
       "assigned": "Assigned",
       "classCode": "Class Code",
@@ -752,9 +755,11 @@
       "selectToken": "Select Token",
       "chooseToken": "Choose a token",
       "confirmAssign": "Confirm Assignment",
+      "confirmAssignMessage": "Assign 1 token to {{className}}?",
+      "confirmRemove": "Confirm Removal",
+      "confirmRemoveMessage": "Remove token assignment for {{className}}?",
       "assignedSuccessfully": "Token assigned to class successfully",
-      "removedSuccessfully": "Assignment removed successfully",
-      "confirmRemove": "Are you sure you want to remove this assignment?"
+      "removedSuccessfully": "Assignment removed successfully"
     }
   },
   "calendar": {
@@ -769,6 +774,17 @@
     "allLocations": "All Locations",
     "enrollment": "Enrollment",
     "enroll": "Enroll",
+    "everyWeekday": "Every {{day}}",
+    "lessonsInTotal": "{{count}} lessons in total",
+    "weekdays": {
+      "sunday": "Sunday",
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday"
+    },
     "level": {
       "entry": "Entry Level",
       "intermediate": "Intermediate Level",
