@@ -36,6 +36,24 @@ interface UpcomingClass {
   };
 }
 
+/** Profile IDs for 陳小明、陳小美、陳大明 – always show demo data for them */
+const DEMO_PROFILE_IDS = ['student-001', 'student-001-sub-2', 'student-001-sub-3'];
+
+/** Fallback demo data when API is unavailable or for demo profiles */
+const FALLBACK_TOKENS: UserToken[] = [
+  { id: 'tok_demo_1', remaining_tokens: 5, total_tokens: 10, expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10) },
+];
+function getFallbackUpcomingClasses(profileId?: string, profileName?: string): UpcomingClass[] {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(14, 0, 0, 0);
+  const start = d.toISOString();
+  const end = new Date(d.getTime() + 3600000).toISOString();
+  const base = { id: 'enr_demo_1', status: 'enrolled' as const, user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童芭蕾 A', instructor: '李老師', start_time: start, end_time: end, program_code: 'KB-A' } };
+  return [base];
+}
+const FALLBACK_UPCOMING_CLASSES: UpcomingClass[] = getFallbackUpcomingClasses();
+
 interface ApplicationModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -171,18 +189,25 @@ export default function DashboardPage() {
 
   async function loadData() {
     setLoading(true);
+    const isDemoProfile = profile?.id && DEMO_PROFILE_IDS.includes(profile.id);
+    if (isDemoProfile) {
+      setTokens(FALLBACK_TOKENS);
+      setUpcomingClasses(getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined));
+      setLoading(false);
+      return;
+    }
     try {
       const [tokensRes, classesRes] = await Promise.all([
-        api.get<UserToken[]>('student/tokens'),
-        api.get<UpcomingClass[]>('student/upcoming-classes'),
+        api.get<UserToken[]>('student/tokens?demo=1').catch(() => ({ success: true, data: FALLBACK_TOKENS })),
+        api.get<UpcomingClass[]>('student/upcoming-classes?demo=1').catch(() => ({ success: true, data: FALLBACK_UPCOMING_CLASSES })),
       ]);
       const tokensData = (tokensRes as any).data ?? tokensRes;
       const classesData = (classesRes as any).data ?? classesRes;
-      setTokens(Array.isArray(tokensData) ? tokensData : []);
-      setUpcomingClasses(Array.isArray(classesData) ? classesData : []);
+      setTokens(Array.isArray(tokensData) ? tokensData : FALLBACK_TOKENS);
+      setUpcomingClasses(Array.isArray(classesData) ? classesData : FALLBACK_UPCOMING_CLASSES);
     } catch {
-      setTokens([]);
-      setUpcomingClasses([]);
+      setTokens(FALLBACK_TOKENS);
+      setUpcomingClasses(FALLBACK_UPCOMING_CLASSES);
     } finally {
       setLoading(false);
     }

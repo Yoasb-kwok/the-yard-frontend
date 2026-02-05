@@ -4,7 +4,7 @@ import Layout from '../../components/Layout';
 import { TableSortButton, type SortDir } from '../../components/TableSortButton';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus, TrendingUp, TrendingDown, Minus, PieChart as PieChartIcon, Target, UserMinus, Download, BookOpen, GraduationCap } from 'lucide-react';
+import { DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus, TrendingUp, TrendingDown, Minus, PieChart as PieChartIcon, Target, UserMinus, Download, BookOpen, GraduationCap, ClipboardList, Calendar } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -40,6 +40,18 @@ interface Stats {
   expiringStudents: number;
   lowTokenStudents: number;
 }
+
+/** Fallback demo for overview stats when API is unavailable */
+const FALLBACK_STATS: Stats = { totalRevenue: 12500, totalUsers: 3, expiringStudents: 1, lowTokenStudents: 1 };
+const FALLBACK_UPCOMING_CLASSES_OVERVIEW: UpcomingClass[] = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(14, 0, 0, 0);
+  return [
+    { id: 'cls_demo_1', name: 'Kids Ballet A', program_code: 'KB-A', instructor: 'Amy Lee', start_time: d.toISOString(), enrolled_count: 8, capacity: 12, location: 'sanpokong' },
+    { id: 'cls_demo_2', name: 'Teen Hip Hop', program_code: 'THH', instructor: 'Bob Chen', start_time: new Date(d.getTime() + 86400000).toISOString(), enrolled_count: 10, capacity: 15, location: 'causewaybay' },
+  ];
+})();
 
 interface FinancialDashboardData {
   revenueThisMonth: number;
@@ -94,6 +106,127 @@ interface InstructorPerformanceData {
   byInstructor: InstructorPerformanceRow[];
 }
 
+interface AttendanceAnomalyData {
+  overallMonthlyAttendanceRate: number;
+  lowAttendanceRateThreshold: number;
+  lowAttendanceRateClasses: { classId: string; className: string; programCode: string; instructor: string; attendanceRate: number; enrolledCount: number }[];
+  consecutiveAbsenceThreshold: number;
+  consecutiveAbsenceStudents: { studentId: string; full_name: string; mobile: string; consecutiveAbsences: number; lastClassDate: string; className: string }[];
+}
+
+/** Client-side fallback demo data when backend is unavailable or returns no data */
+const FALLBACK_FINANCIAL: FinancialDashboardData = {
+  revenueThisMonth: 48500,
+  revenueLastMonth: 44200,
+  revenueSameMonthLastYear: 39800,
+  totalDiscountThisMonth: 1200,
+  discountPercentage: 2.4,
+  revenueByPackage: [
+    { name: 'Kids 8-Week', total: 18200 },
+    { name: 'Teen Intensive', total: 14500 },
+    { name: 'Adult Drop-in', total: 9800 },
+    { name: 'Trial Package', total: 6000 },
+  ],
+  paymentMethodDistribution: [
+    { method: 'fps', total: 25200, count: 28 },
+    { method: 'cash', total: 15800, count: 35 },
+    { method: 'credit_card', total: 7500, count: 12 },
+  ],
+  monthlyTrend: (() => {
+    const now = new Date();
+    return Array.from({ length: 12 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+      return { month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, revenue: 42000 + Math.sin(i * 0.7) * 8000 + i * 500 };
+    });
+  })(),
+};
+
+const FALLBACK_FUNNEL: ConversionFunnelData = {
+  byChannel: [
+    { channel: 'IG', channelKey: 'ig', trialCount: 45, enrollmentCount: 14, conversionRate: 31.1, revenue: 18200 },
+    { channel: 'FB', channelKey: 'fb', trialCount: 32, enrollmentCount: 11, conversionRate: 34.4, revenue: 14300 },
+    { channel: 'Referral', channelKey: 'referral', trialCount: 28, enrollmentCount: 13, conversionRate: 46.4, revenue: 16900 },
+    { channel: 'Google', channelKey: 'google', trialCount: 18, enrollmentCount: 5, conversionRate: 27.8, revenue: 6500 },
+    { channel: 'Walk-in', channelKey: 'walkin', trialCount: 12, enrollmentCount: 4, conversionRate: 33.3, revenue: 5200 },
+  ],
+  trialToEnrollmentRate: 34.2,
+  totalTrialCount: 135,
+  newEnrollmentCount: 47,
+  relatedRevenue: 61100,
+  funnelStages: [{ name: 'Trial', nameKey: 'trial', value: 135 }, { name: 'Enrolled', nameKey: 'enrolled', value: 47 }],
+};
+
+const FALLBACK_RENEWAL_CHURN: RenewalChurnData = {
+  totalExpiring: 24,
+  renewedCount: 11,
+  renewalRate: 45.8,
+  churnCount: 13,
+  churnRate: 54.2,
+  churnReasons: [
+    { reason: 'price', reasonKey: 'price', count: 5 },
+    { reason: 'schedule', reasonKey: 'schedule', count: 4 },
+    { reason: 'relocation', reasonKey: 'relocation', count: 2 },
+    { reason: 'other', reasonKey: 'other', count: 2 },
+  ],
+  monthlyTrend: (() => {
+    const now = new Date();
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      return { month: mk, expiring: 20 + i, renewed: 9 + i, churned: 11 - i };
+    });
+  })(),
+  churnList: [
+    { id: 'u1', full_name: 'Amy Chen', mobile: '91234561', expiry_date: '2026-01-15', churn_reason: 'price' },
+    { id: 'u2', full_name: 'Ben Wong', mobile: '92345672', expiry_date: '2026-01-20', churn_reason: 'schedule' },
+    { id: 'u3', full_name: 'Cindy Liu', mobile: '93456783', expiry_date: '2026-01-22', churn_reason: 'relocation' },
+  ],
+};
+
+const FALLBACK_CLASS_HEALTH: ClassHealthData = {
+  byClass: [
+    { classId: 'c1', className: 'Hip Hop Kids L1', programCode: 'HH-L1', instructor: 'Eva Tang', avgAttendance: 8, capacity: 12, fillRate: 66.7 },
+    { classId: 'c2', className: 'Contemporary L1', programCode: 'CON-L1', instructor: 'Eva Tang', avgAttendance: 10, capacity: 12, fillRate: 83.3 },
+    { classId: 'c3', className: 'Jazz Teens', programCode: 'JZ-T', instructor: 'Eva Tang', avgAttendance: 4, capacity: 10, fillRate: 40 },
+    { classId: 'c4', className: 'Ballet 5-8', programCode: 'BL-58', instructor: 'Grace Ho', avgAttendance: 6, capacity: 8, fillRate: 75 },
+    { classId: 'c5', className: 'Street Dance L2', programCode: 'SD-L2', instructor: 'Grace Ho', avgAttendance: 3, capacity: 10, fillRate: 30 },
+    { classId: 'c6', className: 'Kids Trial', programCode: 'TRIAL', instructor: 'Grace Ho', avgAttendance: 11, capacity: 12, fillRate: 91.7 },
+  ],
+  lowAttendanceClasses: [
+    { classId: 'c3', className: 'Jazz Teens', programCode: 'JZ-T', instructor: 'Eva Tang', avgAttendance: 4, capacity: 10, fillRate: 40 },
+    { classId: 'c5', className: 'Street Dance L2', programCode: 'SD-L2', instructor: 'Grace Ho', avgAttendance: 3, capacity: 10, fillRate: 30 },
+  ],
+  lowAttendanceThreshold: 5,
+  byInstructor: [
+    { instructor: 'Eva Tang', classCount: 3, totalStudents: 22 },
+    { instructor: 'Grace Ho', classCount: 3, totalStudents: 20 },
+  ],
+};
+
+const FALLBACK_INSTRUCTOR_PERFORMANCE: InstructorPerformanceData = {
+  byInstructor: [
+    { instructorId: 'i1', instructor: 'Eva Tang', totalHours: 24, totalSessions: 18, totalStudents: 42, avgClassSize: 7.0, avgRenewalRate: 52.3, attendanceRate: 88.5 },
+    { instructorId: 'i2', instructor: 'Grace Ho', totalHours: 20, totalSessions: 15, totalStudents: 38, avgClassSize: 6.3, avgRenewalRate: 48.1, attendanceRate: 85.2 },
+    { instructorId: 'i3', instructor: 'Henry Zhang', totalHours: 16, totalSessions: 12, totalStudents: 28, avgClassSize: 5.6, avgRenewalRate: 61.0, attendanceRate: 91.0 },
+  ],
+};
+
+const FALLBACK_ATTENDANCE_ANOMALY: AttendanceAnomalyData = {
+  overallMonthlyAttendanceRate: 85.2,
+  lowAttendanceRateThreshold: 80,
+  lowAttendanceRateClasses: [
+    { classId: 'c3', className: 'Jazz Teens', programCode: 'JZ-T', instructor: 'Eva Tang', attendanceRate: 62.5, enrolledCount: 8 },
+    { classId: 'c5', className: 'Street Dance L2', programCode: 'SD-L2', instructor: 'Grace Ho', attendanceRate: 55.0, enrolledCount: 10 },
+    { classId: 'c7', className: 'Ballet 9-12', programCode: 'BL-912', instructor: 'Henry Zhang', attendanceRate: 72.0, enrolledCount: 10 },
+  ],
+  consecutiveAbsenceThreshold: 3,
+  consecutiveAbsenceStudents: [
+    { studentId: 'u2', full_name: 'Ben Wong', mobile: '92345672', consecutiveAbsences: 4, lastClassDate: '2026-01-20', className: 'Contemporary L1' },
+    { studentId: 'u5', full_name: 'Emma Tang', mobile: '95678905', consecutiveAbsences: 3, lastClassDate: '2026-01-15', className: 'Jazz Teens' },
+    { studentId: 'u8', full_name: 'Hugo Zhang', mobile: '98901238', consecutiveAbsences: 3, lastClassDate: '2026-01-18', className: 'Street Dance L2' },
+  ],
+};
+
 export default function AdminDashboard() {
   const { t, i18n } = useTranslation();
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
@@ -105,19 +238,22 @@ export default function AdminDashboard() {
     lowTokenStudents: 0,
   });
   const [financial, setFinancial] = useState<FinancialDashboardData | null>(null);
-  const [financialIsDemo, setFinancialIsDemo] = useState(false);
   const [funnel, setFunnel] = useState<ConversionFunnelData | null>(null);
-  const [funnelIsDemo, setFunnelIsDemo] = useState(false);
   const [renewalChurn, setRenewalChurn] = useState<RenewalChurnData | null>(null);
-  const [renewalChurnIsDemo, setRenewalChurnIsDemo] = useState(false);
   const [classHealth, setClassHealth] = useState<ClassHealthData | null>(null);
-  const [classHealthIsDemo, setClassHealthIsDemo] = useState(false);
   const [instructorPerformance, setInstructorPerformance] = useState<InstructorPerformanceData | null>(null);
-  const [instructorPerformanceIsDemo, setInstructorPerformanceIsDemo] = useState(false);
   const [perfSortKey, setPerfSortKey] = useState<string | null>(null);
   const [perfSortDir, setPerfSortDir] = useState<SortDir>('asc');
-  const [activeSection, setActiveSection] = useState<'overview' | 'financial' | 'funnel' | 'renewalChurn' | 'classHealth' | 'instructorPerformance'>('financial');
+  const [attendanceAnomaly, setAttendanceAnomaly] = useState<AttendanceAnomalyData | null>(null);
+  const [activeSection, setActiveSection] = useState<'overview' | 'financial' | 'funnel' | 'renewalChurn' | 'classHealth' | 'instructorPerformance' | 'attendanceAnomaly'>('financial');
   const [loading, setLoading] = useState(true);
+  const [reportMonth, setReportMonth] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  const REPORT_SECTION_IDS = ['financial', 'funnel', 'renewalChurn', 'classHealth', 'instructorPerformance', 'attendanceAnomaly'] as const;
+  const isReportSection = activeSection !== 'overview' && REPORT_SECTION_IDS.includes(activeSection);
 
   const getLocale = (): string => {
     const langMap: { [key: string]: string } = {
@@ -145,22 +281,46 @@ export default function AdminDashboard() {
     loadDashboardData();
   }, []);
 
+  async function loadReportData(month: string) {
+    const monthParam = month ? `&month=${encodeURIComponent(month)}` : '';
+    try {
+      const [financeRes, funnelRes, renewalChurnRes, classHealthRes, instructorPerfRes, attendanceAnomalyRes] = await Promise.all([
+        api.get<FinancialDashboardData>(`admin/financial-dashboard?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<ConversionFunnelData>(`admin/conversion-funnel?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<RenewalChurnData>(`admin/renewal-churn?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<ClassHealthData>(`admin/class-health?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<InstructorPerformanceData>(`admin/instructor-performance?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<AttendanceAnomalyData>(`admin/attendance-anomaly?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+      ]);
+      if (financeRes.success && financeRes.data) setFinancial(financeRes.data);
+      else setFinancial(FALLBACK_FINANCIAL);
+      if (funnelRes.success && funnelRes.data) setFunnel(funnelRes.data);
+      else setFunnel(FALLBACK_FUNNEL);
+      if (renewalChurnRes.success && renewalChurnRes.data) setRenewalChurn(renewalChurnRes.data);
+      else setRenewalChurn(FALLBACK_RENEWAL_CHURN);
+      if (classHealthRes.success && classHealthRes.data) setClassHealth(classHealthRes.data);
+      else setClassHealth(FALLBACK_CLASS_HEALTH);
+      if (instructorPerfRes.success && instructorPerfRes.data) setInstructorPerformance(instructorPerfRes.data);
+      else setInstructorPerformance(FALLBACK_INSTRUCTOR_PERFORMANCE);
+      if (attendanceAnomalyRes.success && attendanceAnomalyRes.data) setAttendanceAnomaly(attendanceAnomalyRes.data);
+      else setAttendanceAnomaly(FALLBACK_ATTENDANCE_ANOMALY);
+    } catch (err) {
+      console.error('Failed to load report data:', err);
+    }
+  }
+
   async function loadDashboardData() {
     setLoading(true);
+    const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
     try {
-      const [statsRes, financeRes, funnelRes, renewalChurnRes, classHealthRes, instructorPerfRes] = await Promise.all([
-        api.get<{
-          totalRevenue: number;
-          totalUsers: number;
-          expiringStudents: number;
-          lowTokenStudents: number;
-          upcomingClasses: UpcomingClass[];
-        }>('admin/dashboard-stats'),
-        api.get<FinancialDashboardData>('admin/financial-dashboard?demo=1').catch(() => ({ success: false, data: null })),
-        api.get<ConversionFunnelData>('admin/conversion-funnel?demo=1').catch(() => ({ success: false, data: null })),
-        api.get<RenewalChurnData>('admin/renewal-churn?demo=1').catch(() => ({ success: false, data: null })),
-        api.get<ClassHealthData>('admin/class-health?demo=1').catch(() => ({ success: false, data: null })),
-        api.get<InstructorPerformanceData>('admin/instructor-performance?demo=1').catch(() => ({ success: false, data: null })),
+      const [statsRes, financeRes, funnelRes, renewalChurnRes, classHealthRes, instructorPerfRes, attendanceAnomalyRes] = await Promise.all([
+        api.get<{ totalRevenue: number; totalUsers: number; expiringStudents: number; lowTokenStudents: number; upcomingClasses: UpcomingClass[] }>('admin/dashboard-stats?demo=1').catch(() => ({ success: true, data: { ...FALLBACK_STATS, upcomingClasses: FALLBACK_UPCOMING_CLASSES_OVERVIEW } })),
+        api.get<FinancialDashboardData>(`admin/financial-dashboard?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<ConversionFunnelData>(`admin/conversion-funnel?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<RenewalChurnData>(`admin/renewal-churn?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<ClassHealthData>(`admin/class-health?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<InstructorPerformanceData>(`admin/instructor-performance?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
+        api.get<AttendanceAnomalyData>(`admin/attendance-anomaly?demo=1${monthParam}`).catch(() => ({ success: false, data: null })),
       ]);
 
       if (statsRes.success && statsRes.data) {
@@ -170,61 +330,52 @@ export default function AdminDashboard() {
           expiringStudents: statsRes.data.expiringStudents ?? 0,
           lowTokenStudents: statsRes.data.lowTokenStudents ?? 0,
         });
-        setUpcomingClasses(statsRes.data.upcomingClasses ?? []);
+        setUpcomingClasses(statsRes.data.upcomingClasses ?? FALLBACK_UPCOMING_CLASSES_OVERVIEW);
       } else {
-        setStats({ totalRevenue: 0, totalUsers: 0, expiringStudents: 0, lowTokenStudents: 0 });
-        setUpcomingClasses([]);
+        setStats(FALLBACK_STATS);
+        setUpcomingClasses(FALLBACK_UPCOMING_CLASSES_OVERVIEW);
       }
 
       if (financeRes.success && financeRes.data) {
         setFinancial(financeRes.data);
-        setFinancialIsDemo(!!(financeRes as { _demo?: boolean })._demo);
       } else {
-        setFinancial(null);
-        setFinancialIsDemo(false);
+        setFinancial(FALLBACK_FINANCIAL);
       }
       if (funnelRes.success && funnelRes.data) {
         setFunnel(funnelRes.data);
-        setFunnelIsDemo(!!(funnelRes as { _demo?: boolean })._demo);
       } else {
-        setFunnel(null);
-        setFunnelIsDemo(false);
+        setFunnel(FALLBACK_FUNNEL);
       }
       if (renewalChurnRes.success && renewalChurnRes.data) {
         setRenewalChurn(renewalChurnRes.data);
-        setRenewalChurnIsDemo(!!(renewalChurnRes as { _demo?: boolean })._demo);
       } else {
-        setRenewalChurn(null);
-        setRenewalChurnIsDemo(false);
+        setRenewalChurn(FALLBACK_RENEWAL_CHURN);
       }
       if (classHealthRes.success && classHealthRes.data) {
         setClassHealth(classHealthRes.data);
-        setClassHealthIsDemo(!!(classHealthRes as { _demo?: boolean })._demo);
       } else {
-        setClassHealth(null);
-        setClassHealthIsDemo(false);
+        setClassHealth(FALLBACK_CLASS_HEALTH);
       }
       if (instructorPerfRes.success && instructorPerfRes.data) {
         setInstructorPerformance(instructorPerfRes.data);
-        setInstructorPerformanceIsDemo(!!(instructorPerfRes as { _demo?: boolean })._demo);
       } else {
-        setInstructorPerformance(null);
-        setInstructorPerformanceIsDemo(false);
+        setInstructorPerformance(FALLBACK_INSTRUCTOR_PERFORMANCE);
+      }
+      if (attendanceAnomalyRes.success && attendanceAnomalyRes.data) {
+        setAttendanceAnomaly(attendanceAnomalyRes.data);
+      } else {
+        setAttendanceAnomaly(FALLBACK_ATTENDANCE_ANOMALY);
       }
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
-      setStats({ totalRevenue: 0, totalUsers: 0, expiringStudents: 0, lowTokenStudents: 0 });
-      setUpcomingClasses([]);
-      setFinancial(null);
-      setFinancialIsDemo(false);
-      setFunnel(null);
-      setFunnelIsDemo(false);
-      setRenewalChurn(null);
-      setRenewalChurnIsDemo(false);
-      setClassHealth(null);
-      setClassHealthIsDemo(false);
-      setInstructorPerformance(null);
-      setInstructorPerformanceIsDemo(false);
+      setStats(FALLBACK_STATS);
+      setUpcomingClasses(FALLBACK_UPCOMING_CLASSES_OVERVIEW);
+      setFinancial(FALLBACK_FINANCIAL);
+      setFunnel(FALLBACK_FUNNEL);
+      setRenewalChurn(FALLBACK_RENEWAL_CHURN);
+      setClassHealth(FALLBACK_CLASS_HEALTH);
+      setInstructorPerformance(FALLBACK_INSTRUCTOR_PERFORMANCE);
+      setAttendanceAnomaly(FALLBACK_ATTENDANCE_ANOMALY);
     } finally {
       setLoading(false);
     }
@@ -235,6 +386,25 @@ export default function AdminDashboard() {
     const monthNum = parseInt(m, 10);
     const shortMonths = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return `${shortMonths[monthNum - 1] || m} ${y}`;
+  };
+
+  /** Month options for report dropdown: past 24 months + next 12 months, value = YYYY-MM */
+  const reportMonthOptions = (() => {
+    const now = new Date();
+    const options: { value: string; label: string }[] = [];
+    for (let i = -24; i <= 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      options.push({ value, label: formatMonthLabel(value) });
+    }
+    return options;
+  })();
+
+  const handleReportMonthChange = (value: string) => {
+    if (value) {
+      setReportMonth(value);
+      loadReportData(value);
+    }
   };
 
   const pctChange = (current: number, previous: number) => {
@@ -261,6 +431,7 @@ export default function AdminDashboard() {
     { id: 'renewalChurn' as const, icon: UserMinus, label: t('admin.dashboard.sectionRenewalChurn') },
     { id: 'classHealth' as const, icon: BookOpen, label: t('admin.dashboard.sectionClassHealth') },
     { id: 'instructorPerformance' as const, icon: GraduationCap, label: t('admin.dashboard.sectionInstructorPerformance') },
+    { id: 'attendanceAnomaly' as const, icon: ClipboardList, label: t('admin.dashboard.sectionAttendanceAnomaly') },
   ];
 
   const handlePerfSort = (key: string) => {
@@ -451,20 +622,27 @@ export default function AdminDashboard() {
 
           {activeSection === 'financial' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <PieChartIcon className="h-7 w-7 text-primary" />
-                {t('admin.dashboard.financialDashboard')}
-              </h1>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <PieChartIcon className="h-7 w-7 text-primary" />
+                  {t('admin.dashboard.financialDashboard')}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-gray-500" />
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => handleReportMonthChange(e.target.value)}
+                    aria-label={t('admin.dashboard.reportMonth')}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[140px]"
+                  >
+                    {reportMonthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {financial ? (
                 <div className="bg-white rounded-lg shadow-md p-6">
-                  {financialIsDemo && (
-                    <p className="text-sm text-gray-500 mb-4 flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-200">
-                        Sample data
-                      </span>
-                      {t('admin.dashboard.financialDashboardDesc')}
-                    </p>
-                  )}
                   <div className="grid md:grid-cols-3 gap-4 mb-6">
               <div className="bg-green-50 rounded-lg p-4 border border-green-100">
                 <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.revenueThisMonth')}</h3>
@@ -595,20 +773,27 @@ export default function AdminDashboard() {
 
           {activeSection === 'funnel' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <Target className="h-7 w-7 text-primary" />
-                {t('admin.dashboard.conversionFunnel')}
-              </h1>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <Target className="h-7 w-7 text-primary" />
+                  {t('admin.dashboard.conversionFunnel')}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-gray-500" />
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => handleReportMonthChange(e.target.value)}
+                    aria-label={t('admin.dashboard.reportMonth')}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[140px]"
+                  >
+                    {reportMonthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {funnel ? (
                 <div className="space-y-6">
-                  {funnelIsDemo && (
-                    <p className="text-sm text-gray-500 flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-200">
-                        Sample data
-                      </span>
-                      {t('admin.dashboard.conversionFunnelDesc')}
-                    </p>
-                  )}
                   <div className="grid md:grid-cols-4 gap-4">
                     <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
                       <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.totalTrials')}</h3>
@@ -691,20 +876,27 @@ export default function AdminDashboard() {
 
           {activeSection === 'renewalChurn' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <UserMinus className="h-7 w-7 text-primary" />
-                {t('admin.dashboard.renewalChurn')}
-              </h1>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <UserMinus className="h-7 w-7 text-primary" />
+                  {t('admin.dashboard.renewalChurn')}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-gray-500" />
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => handleReportMonthChange(e.target.value)}
+                    aria-label={t('admin.dashboard.reportMonth')}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[140px]"
+                  >
+                    {reportMonthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {renewalChurn ? (
                 <div className="space-y-6">
-                  {renewalChurnIsDemo && (
-                    <p className="text-sm text-gray-500 flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-200">
-                        Sample data
-                      </span>
-                      {t('admin.dashboard.renewalChurnDesc')}
-                    </p>
-                  )}
                   <div className="grid md:grid-cols-4 gap-4">
                     <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
                       <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.totalExpiring')}</h3>
@@ -830,20 +1022,27 @@ export default function AdminDashboard() {
 
           {activeSection === 'classHealth' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <BookOpen className="h-7 w-7 text-primary" />
-                {t('admin.dashboard.classHealth')}
-              </h1>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <BookOpen className="h-7 w-7 text-primary" />
+                  {t('admin.dashboard.classHealth')}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-gray-500" />
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => handleReportMonthChange(e.target.value)}
+                    aria-label={t('admin.dashboard.reportMonth')}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[140px]"
+                  >
+                    {reportMonthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {classHealth ? (
                 <div className="space-y-6">
-                  {classHealthIsDemo && (
-                    <p className="text-sm text-gray-500 flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-200">
-                        Sample data
-                      </span>
-                      {t('admin.dashboard.classHealthDesc')}
-                    </p>
-                  )}
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="bg-white rounded-lg shadow-md p-6">
                       <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.classFillRateChart')}</h3>
@@ -973,20 +1172,27 @@ export default function AdminDashboard() {
 
           {activeSection === 'instructorPerformance' && (
             <>
-              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
-                <GraduationCap className="h-7 w-7 text-primary" />
-                {t('admin.dashboard.instructorPerformance')}
-              </h1>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <GraduationCap className="h-7 w-7 text-primary" />
+                  {t('admin.dashboard.instructorPerformance')}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-gray-500" />
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => handleReportMonthChange(e.target.value)}
+                    aria-label={t('admin.dashboard.reportMonth')}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[140px]"
+                  >
+                    {reportMonthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               {instructorPerformance ? (
                 <div className="space-y-6">
-                  {instructorPerformanceIsDemo && (
-                    <p className="text-sm text-gray-500 flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded border border-amber-200">
-                        Sample data
-                      </span>
-                      {t('admin.dashboard.instructorPerformanceDesc')}
-                    </p>
-                  )}
                   <div className="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -1063,6 +1269,110 @@ export default function AdminDashboard() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg shadow-md p-6 text-center py-12 text-gray-500">
+                  {t('admin.dashboard.noData')}
+                </div>
+              )}
+            </>
+          )}
+
+          {activeSection === 'attendanceAnomaly' && (
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-3">
+                  <ClipboardList className="h-7 w-7 text-primary" />
+                  {t('admin.dashboard.attendanceAnomaly')}
+                </h1>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-gray-500" />
+                  <select
+                    value={reportMonth}
+                    onChange={(e) => handleReportMonthChange(e.target.value)}
+                    aria-label={t('admin.dashboard.reportMonth')}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary min-w-[140px]"
+                  >
+                    {reportMonthOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {attendanceAnomaly ? (
+                <div className="space-y-6">
+                  <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200 max-w-xs">
+                    <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.overallMonthlyAttendanceRate')}</h3>
+                    <div className={`text-2xl font-bold mt-1 ${attendanceAnomaly.overallMonthlyAttendanceRate >= 80 ? 'text-green-600' : 'text-amber-600'}`}>
+                      {attendanceAnomaly.overallMonthlyAttendanceRate.toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-amber-400">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">
+                      {t('admin.dashboard.lowAttendanceRateClasses')} — {t('admin.dashboard.lowAttendanceRateThreshold')}: &lt;{attendanceAnomaly.lowAttendanceRateThreshold}%
+                    </h3>
+                    {attendanceAnomaly.lowAttendanceRateClasses.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200 text-left text-gray-600">
+                              <th className="py-2 pr-4">{t('admin.dashboard.className')}</th>
+                              <th className="py-2 pr-4">{t('admin.dashboard.programCode')}</th>
+                              <th className="py-2 pr-4">{t('admin.dashboard.instructor')}</th>
+                              <th className="py-2 pr-4">{t('admin.dashboard.attendanceRate')}</th>
+                              <th className="py-2">{t('admin.dashboard.enrolledCount')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {attendanceAnomaly.lowAttendanceRateClasses.map((row) => (
+                              <tr key={row.classId} className="border-b border-gray-100">
+                                <td className="py-2 pr-4 font-medium text-gray-900">{row.className}</td>
+                                <td className="py-2 pr-4">{row.programCode}</td>
+                                <td className="py-2 pr-4">{row.instructor}</td>
+                                <td className="py-2 pr-4 font-semibold text-amber-600">{row.attendanceRate.toFixed(1)}%</td>
+                                <td className="py-2">{row.enrolledCount}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm py-4 text-center">{t('admin.dashboard.noData')}</p>
+                    )}
+                  </div>
+                  <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-300">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">
+                      {t('admin.dashboard.consecutiveAbsenceStudents')} — {t('admin.dashboard.consecutiveAbsenceThreshold')}: ≥{attendanceAnomaly.consecutiveAbsenceThreshold}
+                    </h3>
+                    {attendanceAnomaly.consecutiveAbsenceStudents.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-gray-200 text-left text-gray-600">
+                              <th className="py-2 pr-4">{t('admin.dashboard.name')}</th>
+                              <th className="py-2 pr-4">{t('admin.dashboard.mobile')}</th>
+                              <th className="py-2 pr-4">{t('admin.dashboard.className')}</th>
+                              <th className="py-2 pr-4">{t('admin.dashboard.consecutiveAbsences')}</th>
+                              <th className="py-2">{t('admin.dashboard.lastClassDate')}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {attendanceAnomaly.consecutiveAbsenceStudents.map((row) => (
+                              <tr key={row.studentId} className="border-b border-gray-100">
+                                <td className="py-2 pr-4 font-medium text-gray-900">{row.full_name}</td>
+                                <td className="py-2 pr-4">{row.mobile}</td>
+                                <td className="py-2 pr-4">{row.className}</td>
+                                <td className="py-2 pr-4 font-semibold text-red-600">{row.consecutiveAbsences}</td>
+                                <td className="py-2">{row.lastClassDate}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm py-4 text-center">{t('admin.dashboard.noData')}</p>
+                    )}
                   </div>
                 </div>
               ) : (

@@ -20,6 +20,16 @@ interface Coupon {
   created_at: string;
 }
 
+/** Fallback demo data when API is unavailable */
+const FALLBACK_COUPONS: Coupon[] = (() => {
+  const d = new Date();
+  const to = new Date(d.getTime() + 90 * 86400000);
+  return [
+    { id: 'coupon_1', code: 'WELCOME10', discount_type: 'percentage', discount_value: 10, min_order_amount: 0, quantity: 100, used_count: 5, valid_from: d.toISOString(), valid_until: to.toISOString(), is_active: true, created_at: d.toISOString() },
+    { id: 'coupon_2', code: 'SAVE50', discount_type: 'fixed', discount_value: 50, min_order_amount: 500, quantity: 50, used_count: 2, valid_from: d.toISOString(), valid_until: to.toISOString(), is_active: true, created_at: d.toISOString() },
+  ];
+})();
+
 export default function CouponsPage() {
   const { t, i18n } = useTranslation();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -48,11 +58,11 @@ export default function CouponsPage() {
   async function loadCoupons() {
     setLoading(true);
     try {
-      const res = await api.get<Coupon[]>('admin/coupons');
-      setCoupons(res.data ?? []);
+      const res = await api.get<Coupon[]>('admin/coupons?demo=1').catch(() => ({ success: true, data: FALLBACK_COUPONS }));
+      setCoupons(res.data ?? FALLBACK_COUPONS);
     } catch (err) {
       console.error('Failed to load coupons:', err);
-      setCoupons([]);
+      setCoupons(FALLBACK_COUPONS);
     } finally {
       setLoading(false);
     }

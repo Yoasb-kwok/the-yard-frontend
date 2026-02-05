@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Layout from '../../components/Layout';
 import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext';
 import { getAgeTagFromDateOfBirth } from '../../lib/utils';
+import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { useTranslation } from 'react-i18next';
 import { User, Copy, Check, Plus, Pencil, Trash2 } from 'lucide-react';
 
@@ -472,12 +473,16 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.residentialDistrict')}</label>
-                <input
-                  type="text"
+                <select
                   value={form.residential_district || ''}
                   onChange={(e) => setForm((f) => ({ ...f, residential_district: e.target.value || null }))}
                   className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                >
+                  <option value="">{t('profile.notProvided')}</option>
+                  {HK_DISTRICT_KEYS.map((key) => (
+                    <option key={key} value={key}>{t(`districts.${key}`)}</option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.hasJoinedCourses')}</label>
