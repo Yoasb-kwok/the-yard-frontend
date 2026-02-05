@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
-import { Plus, Edit, Trash2, Search, CalendarOff } from 'lucide-react';
+import { api } from '../../lib/api';
+import { Plus, Edit, Trash2, Search, CalendarOff, RefreshCw } from 'lucide-react';
+import { TableSortButton } from '../../components/TableSortButton';
 
 export interface Holiday {
   id: string;
@@ -12,31 +14,16 @@ export interface Holiday {
   created_at: string;
 }
 
-// Mock data – replace with API calls when backend is ready
-const MOCK_HOLIDAYS: Holiday[] = [
-  {
-    id: '1',
-    name: 'Chinese New Year',
-    date: '2025-01-29',
-    description: 'Lunar New Year - Academy closed',
-    created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    name: 'Christmas Day',
-    date: '2025-12-25',
-    description: 'Public holiday',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
 export default function HolidaysPage() {
   const { t, i18n } = useTranslation();
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sortKey, setSortKey] = useState<string | null>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [showModal, setShowModal] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [form, setForm] = useState({
     name: '',
     date: '',
@@ -57,9 +44,16 @@ export default function HolidaysPage() {
   }, []);
 
   async function loadHolidays() {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    setHolidays(MOCK_HOLIDAYS);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const res = await api.get<Holiday[]>('admin/holidays');
+      setHolidays(res.data ?? []);
+    } catch (err) {
+      console.error('Failed to load holidays:', err);
+      setHolidays([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function openCreateModal() {
@@ -100,39 +94,65 @@ export default function HolidaysPage() {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    if (editingHoliday) {
-      const updated: Holiday = {
-        ...editingHoliday,
-        name: form.name.trim(),
-        date: form.date,
-        description: form.description.trim() || undefined,
-      };
-      setHolidays(holidays.map((h) => (h.id === editingHoliday.id ? updated : h)));
-      alert(t('admin.holidays.holidayUpdated'));
-    } else {
-      const newHoliday: Holiday = {
-        id: Date.now().toString(),
-        name: form.name.trim(),
-        date: form.date,
-        description: form.description.trim() || undefined,
-        created_at: new Date().toISOString(),
-      };
-      setHolidays([newHoliday, ...holidays]);
-      alert(t('admin.holidays.holidayCreated'));
+    try {
+      if (editingHoliday) {
+        await api.patch(`admin/holidays/${editingHoliday.id}`, {
+          name: form.name.trim(),
+          date: form.date,
+          description: form.description.trim() || undefined,
+        });
+        await loadHolidays();
+        alert(t('admin.holidays.holidayUpdated'));
+      } else {
+        await api.post('admin/holidays', {
+          name: form.name.trim(),
+          date: form.date,
+          description: form.description.trim() || undefined,
+        });
+        await loadHolidays();
+        alert(t('admin.holidays.holidayCreated'));
+      }
+      closeModal();
+    } catch (err) {
+      console.error('Holiday save failed:', err);
+      alert(err instanceof Error ? err.message : t('common.error'));
     }
-
-    closeModal();
   }
 
   async function handleDelete(holiday: Holiday) {
     if (!confirm(t('admin.holidays.confirmDelete', { name: holiday.name }))) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    setHolidays(holidays.filter((h) => h.id !== holiday.id));
-    alert(t('admin.holidays.holidayDeleted'));
+    try {
+      await api.delete(`admin/holidays/${holiday.id}`);
+      await loadHolidays();
+      alert(t('admin.holidays.holidayDeleted'));
+    } catch (err) {
+      console.error('Delete holiday failed:', err);
+      alert(err instanceof Error ? err.message : t('common.error'));
+    }
+  }
+
+  async function handleSyncFromHK() {
+    setSyncing(true);
+    try {
+      const y = new Date().getFullYear();
+      const res = await api.post<{ years: number[]; added: number; updated: number }>(
+        `admin/holidays/sync?years=${y},${y + 1}`
+      );
+      await loadHolidays();
+      const data = res.data;
+      if (data) {
+        alert(t('admin.holidays.syncFromHKSuccess', { added: data.added ?? 0, updated: data.updated ?? 0 }));
+      } else {
+        alert(t('admin.holidays.syncFromHKDone'));
+      }
+    } catch (err) {
+      console.error('Sync holidays failed:', err);
+      alert(err instanceof Error ? err.message : t('admin.holidays.syncFromHKFailed'));
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const filteredHolidays = holidays.filter(
@@ -142,10 +162,25 @@ export default function HolidaysPage() {
       h.date.includes(search)
   );
 
-  // Sort by date descending (upcoming first)
-  const sortedHolidays = [...filteredHolidays].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
+  const sortedHolidays = [...filteredHolidays].sort((a, b) => {
+    if (!sortKey) return 0;
+    let cmp = 0;
+    if (sortKey === 'name') {
+      cmp = (a.name || '').localeCompare(b.name || '', undefined, { sensitivity: 'base' });
+    } else if (sortKey === 'date') {
+      cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  function handleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
 
   if (loading) {
     return (
@@ -165,13 +200,25 @@ export default function HolidaysPage() {
             <CalendarOff className="h-8 w-8 text-primary" />
             {t('admin.holidays.title')}
           </h1>
-          <button
-            onClick={openCreateModal}
-            className="flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark sm:w-auto"
-          >
-            <Plus className="mr-2 h-5 w-5" />
-            {t('admin.holidays.addHoliday')}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleSyncFromHK}
+              disabled={syncing}
+              className="flex w-full items-center justify-center rounded-md border border-primary bg-white px-4 py-2 text-primary hover:bg-primary/5 disabled:opacity-50 sm:w-auto"
+              title={t('admin.holidays.syncFromHKTooltip')}
+            >
+              <RefreshCw className={`mr-2 h-5 w-5 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? t('admin.holidays.syncing') : t('admin.holidays.syncFromHK')}
+            </button>
+            <button
+              onClick={openCreateModal}
+              className="flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark sm:w-auto"
+            >
+              <Plus className="mr-2 h-5 w-5" />
+              {t('admin.holidays.addHoliday')}
+            </button>
+          </div>
         </div>
 
         <p className="text-sm text-gray-600">
@@ -237,12 +284,8 @@ export default function HolidaysPage() {
                 <table className="w-full min-w-[500px]">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 lg:px-4">
-                        {t('admin.holidays.name')}
-                      </th>
-                      <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 lg:px-4">
-                        {t('admin.holidays.date')}
-                      </th>
+                      <TableSortButton label={t('admin.holidays.name')} sortKey="name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-3 py-3 text-left text-xs lg:px-4" />
+                      <TableSortButton label={t('admin.holidays.date')} sortKey="date" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-3 py-3 text-left text-xs lg:px-4" />
                       <th className="px-3 py-3 text-left text-xs font-medium uppercase text-gray-500 lg:px-4">
                         {t('admin.holidays.description')}
                       </th>

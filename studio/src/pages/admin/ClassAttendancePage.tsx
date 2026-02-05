@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { appendRefundRecord } from '../../lib/refundRecords';
 import { useAuth } from '../../contexts/AuthContext';
+import { api } from '../../lib/api';
 import { ArrowLeft, Search, X, AlertTriangle, Users, RefreshCw } from 'lucide-react';
 
 interface Class {
@@ -41,106 +41,17 @@ interface Enrollment {
   reassigned_to_class_end_time?: string | null;
 }
 
-// Mock classes data
-const MOCK_CLASSES: Class[] = [
-  {
-    id: '1',
-    name: 'Yoga Basics',
-    class_code: 'YB001',
-    instructor: 'Jane Smith',
-    start_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    capacity: 12,
-    enrolled_count: 8,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'sanpokong',
-    attendance_confirmed: false,
-  },
-  {
-    id: '2',
-    name: 'Pilates Intermediate',
-    class_code: 'PI002',
-    instructor: 'John Doe',
-    start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-    capacity: 15,
-    enrolled_count: 10,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'causewaybay',
-    attendance_confirmed: true,
-  },
-];
+function toTimeString(date: Date): string {
+  const h = date.getHours();
+  const m = date.getMinutes();
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 
-// Mock enrollments data
-const MOCK_ENROLLMENTS: Enrollment[] = [
-  {
-    id: '1',
-    class_id: '1',
-    user_id: 'user1',
-    user_name: '張三',
-    user_mobile: '91234567',
-    status: 'attended',
-    check_in_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
-    check_out_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    class_id: '1',
-    user_id: 'user2',
-    user_name: '李四',
-    user_mobile: '98765432',
-    status: 'attended',
-    check_in_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 25 * 60 * 1000).toISOString(),
-    check_out_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 55 * 60 * 1000).toISOString(),
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    class_id: '1',
-    user_id: 'user3',
-    user_name: '王五',
-    user_mobile: '92345678',
-    status: 'absent',
-    check_in_time: null,
-    check_out_time: null,
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '4',
-    class_id: '1',
-    user_id: 'user4',
-    user_name: '陳六',
-    user_mobile: '93456789',
-    status: 'sick_leave',
-    check_in_time: null,
-    check_out_time: null,
-    sick_leave_document_url: 'https://example.com/sick-leave-doc.pdf',
-    created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '5',
-    class_id: '1',
-    user_id: 'user5',
-    user_name: '劉七',
-    user_mobile: '94567890',
-    status: 'enrolled',
-    check_in_time: null,
-    check_out_time: null,
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    reassigned_to_class_id: '2',
-    reassigned_to_class_name: 'Pilates Intermediate',
-    reassigned_to_class_code: 'PI002',
-    reassigned_to_class_start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    reassigned_to_class_end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-  },
-];
+function formatCheckInTime(value: string | null, locale: string): string {
+  if (!value) return '-';
+  if (value.includes('T') || value.includes('-')) return formatDateTime(value, locale);
+  return value;
+}
 
 export default function ClassAttendancePage() {
   const { t, i18n } = useTranslation();
@@ -152,6 +63,7 @@ export default function ClassAttendancePage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [cancelModal, setCancelModal] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [refundModal, setRefundModal] = useState<{
     isOpen: boolean;
     enrollmentId: string;
@@ -169,49 +81,111 @@ export default function ClassAttendancePage() {
   }, [classId]);
 
   async function loadClassAndEnrollments(classId: string) {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Find the class
-    const foundClass = MOCK_CLASSES.find(c => c.id === classId);
-    if (foundClass) {
-      setSelectedClass(foundClass);
-      // Load enrollments for this class
-      await loadEnrollments(classId);
+    try {
+      const [classRes, enrollRes] = await Promise.all([
+        api.get<any>(`/admin/classes/${classId}`),
+        api.get<any[]>(`/admin/classes/${classId}/enrollments`),
+      ]);
+      if (classRes.success && classRes.data) {
+        const c = classRes.data;
+        setSelectedClass({
+          id: String(c.id),
+          name: c.name ?? '',
+          class_code: c.class_code ?? c.program_code ?? '',
+          instructor: c.instructor ?? '',
+          substitute_instructor: c.substitute_instructor ?? null,
+          start_time: c.start_time ?? '',
+          end_time: c.end_time ?? '',
+          capacity: Number(c.capacity) || 0,
+          enrolled_count: Number(c.enrolled_count) ?? 0,
+          is_internal: c.is_internal === 1 || c.is_internal === true,
+          is_cancelled: c.is_cancelled === 1 || c.is_cancelled === true,
+          location: c.location,
+          attendance_confirmed: c.attendance_confirmed === 1 || c.attendance_confirmed === true,
+        });
+      } else {
+        setSelectedClass(null);
+      }
+      if (enrollRes.success && Array.isArray(enrollRes.data)) {
+        setEnrollments(
+          enrollRes.data.map((e: any) => ({
+            id: String(e.id),
+            class_id: classId,
+            user_id: e.user_id ?? '',
+            user_name: e.user_name ?? '',
+            user_mobile: e.user_mobile ?? null,
+            status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+            check_in_time: e.check_in_time ?? null,
+            check_out_time: e.check_out_time ?? null,
+            sick_leave_document_url: e.sick_leave_document_url ?? null,
+            created_at: e.created_at ?? '',
+          }))
+        );
+      } else {
+        setEnrollments([]);
+      }
+    } catch {
+      setSelectedClass(null);
+      setEnrollments([]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }
-
-  async function loadEnrollments(classId: string) {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const classEnrollments = MOCK_ENROLLMENTS.filter(e => e.class_id === classId);
-    setEnrollments(classEnrollments);
   }
 
   async function updateAttendanceStatus(enrollmentId: string, newStatus: 'enrolled' | 'attended' | 'absent' | 'sick_leave') {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
+    const now = new Date();
+    const payload: any = { status: newStatus };
+    if (newStatus === 'attended') {
+      payload.check_in_time = toTimeString(now);
+      payload.check_out_time = toTimeString(now);
+    }
+    try {
+      await api.patch(`/admin/class-enrollments/${enrollmentId}`, payload);
+      setEnrollments((prev) =>
+        prev.map((e) =>
+          e.id === enrollmentId
+            ? {
+                ...e,
+                status: newStatus,
+                check_in_time: newStatus === 'attended' ? payload.check_in_time : e.check_in_time,
+                check_out_time: newStatus === 'attended' ? payload.check_out_time : e.check_out_time,
+              }
+            : e
+        )
+      );
+    } catch (err) {
+      console.error('Failed to update attendance:', err);
+      alert((err as Error).message || t('common.error'));
+    }
+  }
 
-    setEnrollments(enrollments.map(e => {
-      if (e.id === enrollmentId) {
-        const now = new Date().toISOString();
-        return {
-          ...e,
-          status: newStatus,
-          check_in_time: newStatus === 'attended' ? (e.check_in_time || now) : e.check_in_time,
-          check_out_time: newStatus === 'attended' ? (e.check_out_time || now) : e.check_out_time,
-        };
-      }
-      return e;
-    }));
+  async function handleMarkMultipleAttended(enrollmentIds: string[]) {
+    const now = new Date();
+    const checkIn = toTimeString(now);
+    const checkOut = toTimeString(now);
+    try {
+      await Promise.all(
+        enrollmentIds.map((id) =>
+          api.patch(`/admin/class-enrollments/${id}`, { status: 'attended', check_in_time: checkIn, check_out_time: checkOut })
+        )
+      );
+      setEnrollments((prev) =>
+        prev.map((e) =>
+          enrollmentIds.includes(e.id)
+            ? { ...e, status: 'attended' as const, check_in_time: checkIn, check_out_time: checkOut }
+            : e
+        )
+      );
+    } catch (err) {
+      console.error('Failed to mark as attended:', err);
+      alert((err as Error).message || t('common.error'));
+    }
   }
 
   async function handleRefundToken(enrollmentId: string, userId: string, userName: string, remarks: string) {
-    // Simulate API call to refund token
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    if (selectedClass) {
-      appendRefundRecord({
+    if (!selectedClass) return;
+    try {
+      await api.post('admin/refund-records', {
         enrollment_id: enrollmentId,
         user_id: userId,
         user_name: userName,
@@ -222,8 +196,12 @@ export default function ClassAttendancePage() {
         remarks,
         refunded_by: profile?.full_name ?? 'Admin',
       });
+      window.dispatchEvent(new CustomEvent('refund-record-added'));
+      alert(t('admin.attendance.tokenRefunded', { name: userName }));
+    } catch (err) {
+      console.error('Refund record failed:', err);
+      alert((err as Error).message || t('common.error'));
     }
-    alert(t('admin.attendance.tokenRefunded', { name: userName }));
   }
 
   async function toggleAttendanceConfirmation() {
@@ -324,6 +302,43 @@ export default function ClassAttendancePage() {
     e.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     e.user_mobile?.includes(searchTerm)
   );
+  const selectedCount = filteredEnrollments.filter((e) => selectedIds.has(e.id)).length;
+  const allSelected = filteredEnrollments.length > 0 && selectedCount === filteredEnrollments.length;
+  const canMarkAttended = filteredEnrollments.some((e) => e.status !== 'attended');
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredEnrollments.forEach((e) => next.delete(e.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredEnrollments.forEach((e) => next.add(e.id));
+        return next;
+      });
+    }
+  }
+  async function onMarkSelectedAsAttended() {
+    const ids = filteredEnrollments.filter((e) => selectedIds.has(e.id)).map((e) => e.id);
+    if (ids.length === 0) return;
+    await handleMarkMultipleAttended(ids);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  }
 
   if (loading) {
     return (
@@ -487,6 +502,22 @@ export default function ClassAttendancePage() {
                 />
               </div>
             </div>
+            {canMarkAttended && (
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <button type="button" onClick={toggleSelectAll} className="text-sm text-primary hover:underline">
+                  {allSelected ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
+                </button>
+                {selectedCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={onMarkSelectedAsAttended}
+                    className="px-3 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700"
+                  >
+                    {t('admin.attendance.markSelectedAsAttended')} ({selectedCount})
+                  </button>
+                )}
+              </div>
+            )}
 
             {filteredEnrollments.length === 0 ? (
               <div className="text-center py-8 text-gray-600 text-sm sm:text-base">
@@ -499,6 +530,15 @@ export default function ClassAttendancePage() {
                   <table className="w-full">
                     <thead className="bg-gray-50">
                       <tr>
+                        <th className="px-2 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            checked={allSelected}
+                            onChange={toggleSelectAll}
+                            className="rounded border-gray-300 text-primary focus:ring-primary"
+                            aria-label={t('admin.attendance.selectAll')}
+                          />
+                        </th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.studentName')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.mobile')}</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.status')}</th>
@@ -515,6 +555,17 @@ export default function ClassAttendancePage() {
                     <tbody className="divide-y divide-gray-200">
                       {filteredEnrollments.map((enrollment) => (
                         <tr key={enrollment.id}>
+                          <td className="px-2 py-3 w-10">
+                            {enrollment.status !== 'attended' && (
+                              <input
+                                type="checkbox"
+                                checked={selectedIds.has(enrollment.id)}
+                                onChange={() => toggleSelect(enrollment.id)}
+                                className="rounded border-gray-300 text-primary focus:ring-primary"
+                                aria-label={enrollment.user_name}
+                              />
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{enrollment.user_name}</td>
                           <td className="px-4 py-3 text-sm text-gray-600">{formatMobile(enrollment.user_mobile)}</td>
                           <td className="px-4 py-3 text-sm">
@@ -523,7 +574,7 @@ export default function ClassAttendancePage() {
                             </span>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-600">
-                            {enrollment.check_in_time ? formatDateTime(enrollment.check_in_time, getLocale()) : '-'}
+                            {formatCheckInTime(enrollment.check_in_time, getLocale())}
                           </td>
                           {selectedClass.is_cancelled && (
                             <td className="px-4 py-3 text-sm text-gray-600">
@@ -598,7 +649,7 @@ export default function ClassAttendancePage() {
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-gray-500 font-medium">{t('admin.attendance.checkIn')}:</span>
                           <span className="text-gray-900">
-                            {enrollment.check_in_time ? formatDateTime(enrollment.check_in_time, getLocale()) : '-'}
+                            {formatCheckInTime(enrollment.check_in_time, getLocale())}
                           </span>
                         </div>
                         {selectedClass.is_cancelled && (

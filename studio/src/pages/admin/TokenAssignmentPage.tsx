@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDate, formatDateTime } from '../../lib/utils';
+import { api } from '../../lib/api';
 import { ArrowLeft, Search, Calendar, User, Package, CheckCircle, X, Filter, MapPin, Play, Clock } from 'lucide-react';
 
 interface Class {
@@ -45,86 +46,6 @@ const MOCK_USER: User = {
   expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Latest expiry date
 };
 
-const now = Date.now();
-const hour = 60 * 60 * 1000;
-const day = 24 * 60 * 60 * 1000;
-const MOCK_CLASSES: Class[] = [
-  {
-    id: '0a',
-    name: 'Yoga Basics',
-    class_code: 'YB001',
-    instructor: 'Jane Smith',
-    start_time: new Date(now - 2 * day).toISOString(),
-    end_time: new Date(now - 2 * day + hour).toISOString(),
-    capacity: 12,
-    enrolled_count: 3,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'sanpokong',
-  },
-  {
-    id: '0b',
-    name: '幼兒街舞入門班',
-    class_code: 'PSW6R3',
-    instructor: 'Wawa',
-    start_time: new Date(now - 5 * day).toISOString(),
-    end_time: new Date(now - 5 * day + hour).toISOString(),
-    capacity: 15,
-    enrolled_count: 8,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'fotan',
-  },
-  {
-    id: '1',
-    name: 'Yoga Basics',
-    class_code: 'YB001',
-    instructor: 'Jane Smith',
-    start_time: new Date(now + 1 * day).toISOString(),
-    end_time: new Date(now + 1 * day + hour).toISOString(),
-    capacity: 12,
-    enrolled_count: 2,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'sanpokong',
-  },
-  {
-    id: '2',
-    name: 'Pilates Intermediate',
-    class_code: 'PI002',
-    instructor: 'John Doe',
-    start_time: new Date(now + 2 * day).toISOString(),
-    end_time: new Date(now + 2 * day + 90 * 60000).toISOString(),
-    capacity: 15,
-    enrolled_count: 5,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'causewaybay',
-  },
-  {
-    id: '3',
-    name: '補課 - Yoga Basics',
-    class_code: 'YB-MK001',
-    instructor: 'Jane Smith',
-    start_time: new Date(now + 3 * day).toISOString(),
-    end_time: new Date(now + 3 * day + hour).toISOString(),
-    capacity: 5,
-    enrolled_count: 1,
-    is_internal: true,
-    is_cancelled: false,
-    location: 'fotan',
-  },
-];
-
-const MOCK_ENROLLMENTS: Enrollment[] = [
-  {
-    id: 'enroll-1',
-    class_id: '1',
-    status: 'enrolled',
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
 export default function TokenAssignmentPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -146,19 +67,42 @@ export default function TokenAssignmentPage() {
   }, [userId]);
 
   async function loadData() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setUser(MOCK_USER);
-    
-    // Load classes
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setClasses(MOCK_CLASSES);
-    
-    // Load enrollments
-    await new Promise(resolve => setTimeout(resolve, 200));
-    setEnrollments(MOCK_ENROLLMENTS);
-    
-    setLoading(false);
+    setLoading(true);
+    try {
+      // User: keep mock for now until user-detail API is wired
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setUser(MOCK_USER);
+
+      // Classes from database
+      const classesRes = await api.get<any[]>('/admin/classes');
+      if (classesRes.success && Array.isArray(classesRes.data)) {
+        const mapped: Class[] = classesRes.data.map((cls: any) => ({
+          id: String(cls.id),
+          name: cls.name || '',
+          class_code: cls.program_code || '',
+          instructor: cls.instructor || '',
+          start_time: cls.start_time,
+          end_time: cls.end_time,
+          capacity: cls.capacity ?? 0,
+          enrolled_count: cls.enrolled_count ?? 0,
+          is_internal: cls.is_internal === 1 || cls.is_internal === true,
+          is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
+          location: cls.location,
+        }));
+        setClasses(mapped);
+      } else {
+        setClasses([]);
+      }
+
+      // Enrollments: empty until enrollments-by-user API is wired
+      setEnrollments([]);
+    } catch (err) {
+      console.error('TokenAssignment loadData:', err);
+      setClasses([]);
+      setEnrollments([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const getLocale = (): string => {

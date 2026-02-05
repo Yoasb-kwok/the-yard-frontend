@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { api, ApiError } from '../lib/api';
 
 export type CourseLevel = 'entry' | 'intermediate' | 'advanced';
 
@@ -72,7 +73,8 @@ interface AuthContextType {
     parentsName: string | null,
     contactNumber: string | null,
     residentialDistrict: string | null,
-    hasJoinedCourses: boolean | null
+    hasJoinedCourses: boolean | null,
+    extra?: { idLastFour: string; countryCode: string; mobile: string }
   ) => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
@@ -178,38 +180,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : profiles?.[0] ?? null;
 
   useEffect(() => {
-    const stored = localStorage.getItem('auth_session');
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setUser(parsed.user);
-        setSession(parsed.session ?? null);
-        if (parsed.profiles && Array.isArray(parsed.profiles)) {
-          setProfiles(parsed.profiles);
-          setActiveProfileId(parsed.activeProfileId ?? parsed.profiles[0]?.id ?? null);
-        } else if (parsed.profile) {
-          const profs = [parsed.profile];
-          setProfiles(profs);
-          setActiveProfileId(parsed.profile.id);
-          // Migrate to new format
-          try {
-            localStorage.setItem('auth_session', JSON.stringify({
-              ...parsed,
-              profiles: profs,
-              activeProfileId: parsed.profile.id,
-              profile: undefined,
-            }));
-          } catch (_) {}
-        } else {
-          setProfiles(null);
-          setActiveProfileId(null);
+    const token = localStorage.getItem('token');
+    async function restoreSession() {
+      if (token) {
+        try {
+          const res = await api.get<{ user: { id: string; email: string }; profiles: Profile[] }>('user/me');
+          const userFromMe = (res as any).user ?? (res as any).data?.user;
+          const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
+          if (res.success && userFromMe && Array.isArray(profilesFromMe) && profilesFromMe.length) {
+            const u = userFromMe;
+            const p = profilesFromMe;
+            const userObj: User = { id: u.id, email: u.email };
+            const sessionObj: Session = { user: userObj };
+            setUser(userObj);
+            setProfiles(p);
+            setActiveProfileId(p[0]?.id ?? null);
+            setSession(sessionObj);
+            persistSession({
+              user: userObj,
+              profiles: p,
+              activeProfileId: p[0]?.id ?? null,
+              session: sessionObj,
+            });
+            setLoading(false);
+            return;
+          }
+        } catch {
+          localStorage.removeItem('token');
+          localStorage.removeItem('auth_session');
         }
-      } catch (error) {
-        console.error('Error parsing stored session:', error);
-        localStorage.removeItem('auth_session');
       }
+      const stored = localStorage.getItem('auth_session');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          setUser(parsed.user);
+          setSession(parsed.session ?? null);
+          if (parsed.profiles && Array.isArray(parsed.profiles)) {
+            setProfiles(parsed.profiles);
+            setActiveProfileId(parsed.activeProfileId ?? parsed.profiles[0]?.id ?? null);
+          } else if (parsed.profile) {
+            const profs = [parsed.profile];
+            setProfiles(profs);
+            setActiveProfileId(parsed.profile.id);
+            try {
+              localStorage.setItem('auth_session', JSON.stringify({
+                ...parsed,
+                profiles: profs,
+                activeProfileId: parsed.profile.id,
+                profile: undefined,
+              }));
+            } catch (_) {}
+          } else {
+            setProfiles(null);
+            setActiveProfileId(null);
+          }
+        } catch (error) {
+          console.error('Error parsing stored session:', error);
+          localStorage.removeItem('auth_session');
+        }
+      }
+      setLoading(false);
     }
-    setLoading(false);
+    restoreSession();
   }, []);
 
   function persistSession(payload: {
@@ -304,19 +337,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  async function signIn(email: string, password: string) {
-    const account = HARDCODED_ACCOUNTS[email];
+  async function signIn(loginIdentifier: string, password: string) {
+    // API login with JWT – database accounts
+    try {
+      const res = await api.post<{ token?: string; user?: any }>('user/login', {
+        loginIdentifier,
+        password,
+        rememberMe: true,
+      });
+      if (res.success && res.token && res.user) {
+        const u = res.user;
+        localStorage.setItem('token', res.token);
+        const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? loginIdentifier };
+        try {
+          const meRes = await api.get<{ user: { id: string; email: string }; profiles: Profile[] }>('user/me');
+          const profilesFromMe = (meRes as any).profiles ?? (meRes as any).data?.profiles;
+          if (meRes.success && Array.isArray(profilesFromMe) && profilesFromMe.length) {
+            const sessionObj: Session = { user: userObj };
+            setUser(userObj);
+            setProfiles(profilesFromMe);
+            setActiveProfileId(profilesFromMe[0]?.id ?? null);
+            setSession(sessionObj);
+            persistSession({
+              user: userObj,
+              profiles: profilesFromMe,
+              activeProfileId: profilesFromMe[0]?.id ?? null,
+              session: sessionObj,
+            });
+            return;
+          }
+        } catch {
+          // /me failed; use single profile from login response
+        }
+        const mainProfile: Profile = {
+          id: userObj.id,
+          full_name: u.name ?? u.username ?? userObj.email,
+          role: u.role === 'admin' || (u.name && String(u.name).includes('管理')) ? 'admin' : 'student',
+          mobile: u.mobile ?? null,
+          id_first_four: u.id_first_four ?? null,
+          student_id: u.student_id ?? null,
+          nick_name: null,
+          date_of_birth: null,
+          sex: null,
+          parents_name: null,
+          contact_number: u.mobile ?? null,
+          residential_district: null,
+          has_joined_courses: null,
+          level: null,
+        };
+        const sessionObj: Session = { user: userObj };
+        setUser(userObj);
+        setProfiles([mainProfile]);
+        setActiveProfileId(mainProfile.id);
+        setSession(sessionObj);
+        persistSession({
+          user: userObj,
+          profiles: [mainProfile],
+          activeProfileId: mainProfile.id,
+          session: sessionObj,
+        });
+        return;
+      }
+    } catch (apiErr) {
+      if (apiErr instanceof ApiError && apiErr.status === 401) {
+        throw new Error('Invalid email or password');
+      }
+      if (apiErr instanceof Error && (apiErr.message.includes('Network') || apiErr.message.includes('fetch'))) {
+        // Fall through to hardcoded when API unreachable
+      } else {
+        throw apiErr;
+      }
+    }
 
+    const account = HARDCODED_ACCOUNTS[loginIdentifier];
     if (account && account.password === password) {
       const main = account.profiles[0];
-      const userObj: User = { id: main.id, email };
+      const userObj: User = { id: main.id, email: loginIdentifier };
       const sessionObj: Session = { user: userObj };
-
+      // Use a sheet-style token so student dashboard APIs can identify the user.
+      // For student@student.com testing we use user_002 so dashboard shows real token/enrollment data.
+      const sheetUserId = loginIdentifier === 'student@student.com' ? 'user_002' : main.id;
+      const token = `sheet_${sheetUserId}_${Date.now()}`;
+      localStorage.setItem('token', token);
       setUser(userObj);
       setProfiles(account.profiles);
       setActiveProfileId(main.id);
       setSession(sessionObj);
-
       persistSession({
         user: userObj,
         profiles: account.profiles,
@@ -326,16 +432,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const storedPassword = localStorage.getItem(`user_password_${email}`);
+    const storedPassword = localStorage.getItem(`user_password_${loginIdentifier}`);
     const storedSession = localStorage.getItem('auth_session');
-
     if (storedPassword === password && storedSession) {
       try {
         const parsed = JSON.parse(storedSession);
-        if (parsed.user?.email === email) {
+        if (parsed.user?.email === loginIdentifier) {
           setUser(parsed.user);
           setSession(parsed.session ?? null);
-          if (parsed.profiles && Array.isArray(parsed.profiles)) {
+          if (parsed.profiles?.length) {
             setProfiles(parsed.profiles);
             setActiveProfileId(parsed.activeProfileId ?? parsed.profiles[0]?.id ?? null);
           } else if (parsed.profile) {
@@ -347,9 +452,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
           return;
         }
-      } catch (error) {
-        console.error('Error parsing stored session:', error);
-      }
+      } catch (_) {}
     }
 
     throw new Error('Invalid email or password');
@@ -372,17 +475,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     parentsName: string | null,
     contactNumber: string | null,
     residentialDistrict: string | null,
-    hasJoinedCourses: boolean | null
+    hasJoinedCourses: boolean | null,
+    extra?: { idLastFour: string; countryCode: string; mobile: string }
   ) {
-    // For demo purposes, create a student account
-    const userObj: User = {
-      id: `user-${Date.now()}`,
-      email: email,
+    const confirmPassword = password;
+    const body: Record<string, string> = {
+      email,
+      password,
+      confirmPassword,
+      fullName,
+      idLastFour: extra?.idLastFour ?? '',
+      countryCode: extra?.countryCode ?? '852',
+      mobile: extra?.mobile ?? contactNumber ?? '',
     };
+    try {
+      const res = await api.post('user/register', body) as { success?: boolean; user?: any; profile?: any; token?: string };
+      if (res.success && res.user) {
+        const u = res.user;
+        const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? email };
+        const profileData = res.profile ?? {};
+        const profileObj: Profile = {
+          id: userObj.id,
+          full_name: u.name ?? fullName,
+          role: 'student',
+          mobile: profileData.mobile ?? contactNumber ?? null,
+          id_first_four: profileData.id_first_four ?? extra?.idLastFour ?? null,
+          student_id: profileData.student_id ?? null,
+          nick_name: nickName,
+          date_of_birth: dateOfBirth,
+          sex: sex,
+          parents_name: parentsName,
+          contact_number: contactNumber,
+          residential_district: residentialDistrict,
+          has_joined_courses: hasJoinedCourses,
+          level: null,
+        };
+        const sessionObj: Session = { user: userObj };
+        if (res.token) localStorage.setItem('token', res.token);
+        setUser(userObj);
+        setProfiles([profileObj]);
+        setActiveProfileId(profileObj.id);
+        setSession(sessionObj);
+        persistSession({
+          user: userObj,
+          profiles: [profileObj],
+          activeProfileId: profileObj.id,
+          session: sessionObj,
+        });
+        return;
+      }
+    } catch (apiErr) {
+      const msg = apiErr instanceof Error ? apiErr.message : '';
+      if (msg && !msg.includes('Network')) throw apiErr;
+    }
 
-    // Generate unique Student ID for students
+    // Fallback: local-only account (no API)
+    const userObj: User = { id: `user-${Date.now()}`, email };
     const studentId = generateStudentId();
-
     const profileObj: Profile = {
       id: userObj.id,
       full_name: fullName,
@@ -395,28 +544,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       has_joined_courses: hasJoinedCourses,
       student_id: studentId,
       role: 'student',
-      mobile: contactNumber, // Keep for backward compatibility
-      id_first_four: null, // No longer used
-      level: null, // Default to null, can be set later
+      mobile: contactNumber,
+      id_first_four: null,
+      level: null,
     };
-
     const sessionObj: Session = { user: userObj };
-
     setUser(userObj);
     setProfiles([profileObj]);
     setActiveProfileId(profileObj.id);
     setSession(sessionObj);
-
     persistSession({
       user: userObj,
       profiles: [profileObj],
       activeProfileId: profileObj.id,
       session: sessionObj,
     });
-
-    if (password) {
-      localStorage.setItem(`user_password_${email}`, password);
-    }
+    if (password) localStorage.setItem(`user_password_${email}`, password);
   }
 
   async function signOut() {
@@ -425,6 +568,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setActiveProfileId(null);
     setSession(null);
     localStorage.removeItem('auth_session');
+    localStorage.removeItem('token');
   }
 
   const value = {

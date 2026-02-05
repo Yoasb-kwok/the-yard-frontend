@@ -2,15 +2,33 @@ import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { getRefundRecords, type RefundRecord } from '../../lib/refundRecords';
+import { api } from '../../lib/api';
 import { Search, RefreshCw, RotateCcw } from 'lucide-react';
+import { TableSortButton } from '../../components/TableSortButton';
+
+export interface RefundRecord {
+  id: string;
+  enrollment_id: string;
+  user_id: string;
+  user_name: string;
+  class_id: string;
+  class_name: string;
+  class_code: string;
+  tokens_refunded: number;
+  remarks: string;
+  refunded_by: string;
+  refunded_at: string;
+}
 
 export default function RefundRecordsPage() {
   const { t, i18n } = useTranslation();
   const [records, setRecords] = useState<RefundRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [sortKey, setSortKey] = useState<string | null>('refunded_at');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const getLocale = (): string => {
     const langMap: { [key: string]: string } = {
@@ -21,8 +39,17 @@ export default function RefundRecordsPage() {
     return langMap[i18n.language] || i18n.language || 'en-US';
   };
 
-  const loadRecords = useCallback(() => {
-    setRecords(getRefundRecords());
+  const loadRecords = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get<RefundRecord[]>('admin/refund-records');
+      setRecords(res.data ?? []);
+    } catch (err) {
+      console.error('Failed to load refund records:', err);
+      setRecords([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -39,7 +66,7 @@ export default function RefundRecordsPage() {
     const matchSearch =
       !searchTerm ||
       r.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.class_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (r.class_name && r.class_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (r.class_code && r.class_code.toLowerCase().includes(searchTerm.toLowerCase()));
     if (!matchSearch) return false;
     if (dateFrom || dateTo) {
@@ -49,6 +76,38 @@ export default function RefundRecordsPage() {
     }
     return true;
   });
+
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortKey) return 0;
+    let cmp = 0;
+    if (sortKey === 'refunded_at') {
+      cmp = new Date(a.refunded_at).getTime() - new Date(b.refunded_at).getTime();
+    } else if (sortKey === 'user_name') {
+      cmp = (a.user_name || '').localeCompare(b.user_name || '', undefined, { sensitivity: 'base' });
+    } else if (sortKey === 'class_name') {
+      cmp = (a.class_name || '').localeCompare(b.class_name || '', undefined, { sensitivity: 'base' });
+    }
+    return sortDir === 'asc' ? cmp : -cmp;
+  });
+
+  function handleSort(key: string) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
+  }
+
+  if (loading && records.length === 0) {
+    return (
+      <Layout>
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -102,7 +161,7 @@ export default function RefundRecordsPage() {
             </div>
           </div>
 
-          {filtered.length === 0 ? (
+          {sorted.length === 0 ? (
             <div className="py-16 text-center">
               <RotateCcw className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-600">{t('admin.refundRecords.noRecords')}</p>
@@ -114,16 +173,16 @@ export default function RefundRecordsPage() {
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.refundRecords.date')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.refundRecords.student')}</th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.refundRecords.class')}</th>
+                      <TableSortButton label={t('admin.refundRecords.date')} sortKey="refunded_at" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
+                      <TableSortButton label={t('admin.refundRecords.student')} sortKey="user_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
+                      <TableSortButton label={t('admin.refundRecords.class')} sortKey="class_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.refundRecords.tokens')}</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.refundRecords.remarks')}</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.refundRecords.refundedBy')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filtered.map((r) => (
+                    {sorted.map((r) => (
                       <tr key={r.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                           {formatDateTime(r.refunded_at, getLocale())}
@@ -143,7 +202,7 @@ export default function RefundRecordsPage() {
               </div>
 
               <div className="md:hidden divide-y divide-gray-200">
-                {filtered.map((r) => (
+                {sorted.map((r) => (
                   <div key={r.id} className="p-4">
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-sm font-medium text-gray-900">{r.user_name}</span>

@@ -42,6 +42,44 @@ export function formatCurrency(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+/**
+ * Format program code for display with lesson number, e.g. HH-SPK-1 + 1 → "HH-SPK-1-L01".
+ * If lesson_number is null/undefined, returns the program_code as-is.
+ */
+export function formatProgramCodeDisplay(
+  programCode: string | null | undefined,
+  lessonNumber?: number | null
+): string {
+  const code = (programCode ?? '').trim();
+  if (!code) return '';
+  if (lessonNumber == null || lessonNumber < 1) return code;
+  const pad = String(lessonNumber).padStart(2, '0');
+  return `${code}-L${pad}`;
+}
+
+/**
+ * Get YYYY-MM-DD from a class/lesson start_time (API may return ISO string, "YYYY-MM-DD HH:mm:ss", or Date).
+ * Used by calendar and admin classes page so date matching is consistent.
+ */
+export function getDateStringFromStartTime(
+  startTime: string | Date | null | undefined
+): string | null {
+  if (startTime == null) return null;
+  if (typeof startTime === 'string') {
+    const s = startTime.trim();
+    if (s.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    const d = new Date(s);
+    if (!isNaN(d.getTime()))
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return null;
+  }
+  if (startTime instanceof Date) {
+    if (isNaN(startTime.getTime())) return null;
+    return `${startTime.getFullYear()}-${String(startTime.getMonth() + 1).padStart(2, '0')}-${String(startTime.getDate()).padStart(2, '0')}`;
+  }
+  return null;
+}
+
 export function isExpiringSoon(date: string, daysThreshold: number = 7): boolean {
   const expiryDate = new Date(date);
   const now = new Date();
@@ -173,4 +211,43 @@ export function shouldPostponeClass(date: Date): { shouldPostpone: boolean; newD
     return { shouldPostpone: true, newDate };
   }
   return { shouldPostpone: false, newDate: date };
+}
+
+/** Holiday from API: date (YYYY-MM-DD), name. */
+export type HolidayItem = { date: string; name: string };
+
+/** Get holiday name for a date from a list (from admin holidays API). */
+export function getHolidayNameFromList(date: Date, list: HolidayItem[]): string | null {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  const key = `${y}-${m}-${d}`;
+  const found = list.find((h) => h.date === key);
+  return found ? found.name : null;
+}
+
+/** Check if date is in the holiday set (YYYY-MM-DD strings). */
+export function isDateHoliday(date: Date, holidayDates: Set<string>): boolean {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return holidayDates.has(`${y}-${m}-${d}`);
+}
+
+/** Get next non-holiday date (same weekday) using admin holiday set. */
+export function getNextNonHolidayDateWithSet(date: Date, holidayDates: Set<string>): Date {
+  if (!isDateHoliday(date, holidayDates)) return new Date(date);
+  const next = new Date(date);
+  next.setDate(date.getDate() + 7);
+  return isDateHoliday(next, holidayDates) ? getNextNonHolidayDateWithSet(next, holidayDates) : next;
+}
+
+/** Use admin holiday list for postpone check when creating a single class. */
+export function shouldPostponeClassWithHolidays(
+  date: Date,
+  holidayDates: Set<string>
+): { shouldPostpone: boolean; newDate: Date } {
+  if (!isDateHoliday(date, holidayDates)) return { shouldPostpone: false, newDate: date };
+  const newDate = getNextNonHolidayDateWithSet(date, holidayDates);
+  return { shouldPostpone: true, newDate };
 }

@@ -1,5 +1,5 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw } from 'lucide-react';
@@ -27,6 +27,7 @@ export default function Layout({ children }: LayoutProps) {
   const hasMultipleProfiles = !isAdmin && profiles.length > 1;
   const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -50,12 +51,17 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [userMenuOpen]);
 
-  const studentNavItems = [
-    { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
+  // Student: show only Schedule + Profile when on schedule/profile; only Dashboard + Payment when on dashboard/payment-history
+  const studentNavItemsScheduleProfile = [
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
-    { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
     { path: '/profile', icon: User, label: t('nav.profile') },
   ];
+  const studentNavItemsDashboard = [
+    { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
+    { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
+  ];
+  const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history';
+  const studentNavItems = isOnDashboardSection ? studentNavItemsDashboard : studentNavItemsScheduleProfile;
 
   const adminNavItems = [
     { path: '/admin', icon: LayoutDashboard, label: t('nav.dashboard') },
@@ -123,16 +129,20 @@ export default function Layout({ children }: LayoutProps) {
                   <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {userMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
-                    {user && !isAdmin && hasMultipleProfiles && (
+                  <div className="absolute right-0 mt-2 w-52 bg-white rounded-md shadow-lg py-1 z-50 border">
+                    {/* Student: show name(s) – single name or family members – click goes to schedule + profile view */}
+                    {user && !isAdmin && profiles.length > 0 && (
                       <div className="border-b border-gray-100 px-3 py-2">
-                        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+                          {hasMultipleProfiles ? t('profile.familyMembers') : t('nav.profile')}
+                        </p>
                         {profiles.map((p) => (
                           <button
                             key={p.id}
                             onClick={() => {
-                              switchProfile(p.id);
+                              if (hasMultipleProfiles) switchProfile(p.id);
                               setUserMenuOpen(false);
+                              navigate('/schedule');
                             }}
                             className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
                               p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
@@ -144,9 +154,10 @@ export default function Layout({ children }: LayoutProps) {
                         ))}
                       </div>
                     )}
-                    {user && isAdmin && (
+                    {/* Dashboard: for admin -> /admin, for student -> /dashboard */}
+                    {user && (
                       <Link
-                        to="/admin"
+                        to={isAdmin ? '/admin' : '/dashboard'}
                         onClick={() => setUserMenuOpen(false)}
                         className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       >
@@ -154,16 +165,18 @@ export default function Layout({ children }: LayoutProps) {
                         {t('nav.dashboard')}
                       </Link>
                     )}
+                    {/* Logout */}
                     {user && (
                       <>
-                        <div className="border-t border-gray-200 my-1"></div>
+                        <div className="border-t border-gray-200 my-1" />
                         <button
                           onClick={() => {
                             signOut();
                             setUserMenuOpen(false);
                           }}
-                          className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                         >
+                          <LogOut className="h-4 w-4" />
                           {t('nav.signOut')}
                         </button>
                       </>
@@ -214,16 +227,19 @@ export default function Layout({ children }: LayoutProps) {
                 {/* User Menu Items */}
                 {!isAdmin && (
                   <>
-                    {hasMultipleProfiles && (
+                    {profiles.length > 0 && (
                       <div className="border-t border-gray-200 pt-3">
-                        <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
+                        <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                          {hasMultipleProfiles ? t('profile.familyMembers') : t('nav.profile')}
+                        </p>
                         <div className="flex flex-wrap gap-2 px-4">
                           {profiles.map((p) => (
                             <button
                               key={p.id}
                               onClick={() => {
-                                switchProfile(p.id);
+                                if (hasMultipleProfiles) switchProfile(p.id);
                                 setMobileMenuOpen(false);
+                                navigate('/schedule');
                               }}
                               className={`rounded-lg px-3 py-2 text-sm font-medium ${
                                 p.id === activeProfileId ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
@@ -235,7 +251,15 @@ export default function Layout({ children }: LayoutProps) {
                         </div>
                       </div>
                     )}
-                    <div className="pt-2">
+                    <div className="pt-2 space-y-2">
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200 ring-1 ring-gray-300"
+                      >
+                        <LayoutDashboard className="h-5 w-5 text-gray-500" />
+                        {t('nav.dashboard')}
+                      </Link>
                       <button
                         onClick={() => {
                           signOut();

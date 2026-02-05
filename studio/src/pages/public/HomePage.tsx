@@ -7,6 +7,8 @@ import { Calendar, Clock, MapPin, ChevronRight, LogIn } from 'lucide-react';
 import greenBgImage from '../../assets/images/green_bg.jpg';
 import roomRentalImage from '../../assets/images/room_rental.jpg';
 import kidsDanceCoursesImage from '../../assets/images/s5-kids-dance-courses.jpg';
+import { api } from '../../lib/api';
+import { getDateStringFromStartTime, formatProgramCodeDisplay } from '../../lib/utils';
 
 interface TodayClass {
   id: string;
@@ -18,49 +20,15 @@ interface TodayClass {
   enrolled_count: number;
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   program_code: string;
+  /** Lesson number in the course (1, 2, 3…). Shown as L01, L02. */
+  lesson_number?: number | null;
 }
-
-// Dummy data
-const DUMMY_TODAY_CLASSES: TodayClass[] = [
-  {
-    id: '1',
-    name: '幼兒街舞入門班',
-    instructor: 'Wawa',
-    start_time: new Date().toISOString(),
-    end_time: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    capacity: 15,
-    enrolled_count: 10,
-    location: 'sanpokong',
-    program_code: 'PSW6R3',
-  },
-  {
-    id: '2',
-    name: '初階街舞基礎班',
-    instructor: 'C+',
-    start_time: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-    capacity: 12,
-    enrolled_count: 8,
-    location: 'sanpokong',
-    program_code: 'BSW6R9',
-  },
-  {
-    id: '3',
-    name: '韓風小明星KPOP班',
-    instructor: 'Shirley',
-    start_time: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString(),
-    capacity: 20,
-    enrolled_count: 15,
-    location: 'fotan',
-    program_code: 'KPW1L1-FT',
-  },
-];
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Format today's date based on current locale
   const todayDate = new Date().toLocaleDateString(i18n.language, {
@@ -90,10 +58,41 @@ export default function HomePage() {
   }, []);
 
   async function loadTodayClasses() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setTodayClasses(DUMMY_TODAY_CLASSES);
-    setLoading(false);
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const response = await api.get<any[]>('/admin/classes');
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      if (!response?.success) {
+        setTodayClasses([]);
+        setLoadError(response?.msg || t('home.failedToLoadClasses', 'Failed to load classes'));
+        return;
+      }
+      const today = new Date();
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const forToday: TodayClass[] = rows
+        .filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true))
+        .filter((row: any) => getDateStringFromStartTime(row.start_time) === todayStr)
+        .map((cls: any) => ({
+          id: String(cls.id),
+          name: cls.name || '',
+          instructor: cls.instructor || cls.substitute_instructor || '',
+          start_time: typeof cls.start_time === 'string' ? cls.start_time : new Date(cls.start_time).toISOString(),
+          end_time: typeof cls.end_time === 'string' ? cls.end_time : new Date(cls.end_time).toISOString(),
+          capacity: cls.capacity ?? 0,
+          enrolled_count: cls.enrolled_count ?? 0,
+          location: (cls.location || 'sanpokong') as TodayClass['location'],
+          program_code: (cls.program_code || '').toString().trim(),
+          lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
+        }));
+      setTodayClasses(forToday);
+    } catch (error) {
+      console.error('Error loading today classes:', error);
+      setTodayClasses([]);
+      setLoadError(error instanceof Error ? error.message : t('home.failedToLoadClasses', 'Failed to load classes'));
+    } finally {
+      setLoading(false);
+    }
   }
 
   const bannerSlides = [
@@ -145,6 +144,11 @@ export default function HomePage() {
           <p className="text-lg text-gray-600">{todayDate}</p>
         </div>
 
+        {loadError && (
+          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+            {loadError}
+          </div>
+        )}
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
@@ -164,7 +168,7 @@ export default function HomePage() {
                 <div className="flex items-start justify-between mb-6">
                   <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">{classItem.name}</h3>
                   <span className="text-xs font-bold text-white bg-primary px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0">
-                    {classItem.program_code}
+                    {formatProgramCodeDisplay(classItem.program_code, classItem.lesson_number) || classItem.program_code}
                   </span>
                 </div>
 

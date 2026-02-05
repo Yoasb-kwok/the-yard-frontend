@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatDateTime, isExpiringSoon } from '../../lib/utils';
-import { Calendar, Coins, AlertCircle, MoreVertical, Clock, FileText, X, Home } from 'lucide-react';
+import { api } from '../../lib/api';
+import { Calendar, Coins, AlertCircle, MoreVertical, Clock, FileText, X, Home, ShoppingBag } from 'lucide-react';
 
 interface UserToken {
   id: string;
@@ -15,6 +17,8 @@ interface UserToken {
 interface UpcomingClass {
   id: string;
   status: string;
+  user_id?: string;
+  user_name?: string;
   class: {
     name: string;
     instructor: string;
@@ -38,59 +42,6 @@ interface ApplicationModalProps {
   type: 'extension' | 'sickLeave';
   enrollment: UpcomingClass;
   onSubmit: (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string) => void;
-}
-
-// Profile-specific mock data for testing (each child has different tokens and courses)
-function getMockTokensForProfile(profileId: string | undefined): UserToken[] {
-  const base = Date.now();
-  const day = 24 * 60 * 60 * 1000;
-  if (profileId === 'student-001') {
-    return [
-      { id: 't1', remaining_tokens: 5, total_tokens: 10, expiry_date: new Date(base + 30 * day).toISOString().split('T')[0] },
-      { id: 't2', remaining_tokens: 8, total_tokens: 8, expiry_date: new Date(base + 60 * day).toISOString().split('T')[0] },
-    ];
-  }
-  if (profileId === 'student-001-sub-2') {
-    return [
-      { id: 't1', remaining_tokens: 12, total_tokens: 12, expiry_date: new Date(base + 45 * day).toISOString().split('T')[0] },
-    ];
-  }
-  if (profileId === 'student-001-sub-3') {
-    return [
-      { id: 't1', remaining_tokens: 3, total_tokens: 10, expiry_date: new Date(base + 7 * day).toISOString().split('T')[0] },
-      { id: 't2', remaining_tokens: 15, total_tokens: 15, expiry_date: new Date(base + 90 * day).toISOString().split('T')[0] },
-    ];
-  }
-  return [
-    { id: 't1', remaining_tokens: 6, total_tokens: 10, expiry_date: new Date(base + 20 * day).toISOString().split('T')[0] },
-  ];
-}
-
-function getMockUpcomingClassesForProfile(profileId: string | undefined): UpcomingClass[] {
-  const base = Date.now();
-  const day = 24 * 60 * 60 * 1000;
-  const hour = 60 * 60 * 1000;
-  if (profileId === 'student-001') {
-    return [
-      { id: 'u1', status: 'enrolled', class: { name: 'Yoga Basics', instructor: 'Jane Smith', start_time: new Date(base + 1 * day).toISOString(), end_time: new Date(base + 1 * day + hour).toISOString(), program_code: 'YG001' } },
-      { id: 'u2', status: 'enrolled', class: { name: 'Pilates Intermediate', instructor: 'John Doe', start_time: new Date(base + 3 * day).toISOString(), end_time: new Date(base + 3 * day + 90 * 60000).toISOString(), program_code: 'PL002' } },
-    ];
-  }
-  if (profileId === 'student-001-sub-2') {
-    return [
-      { id: 'u1', status: 'enrolled', class: { name: '韓風小明星KPOP班', instructor: 'Shirley', start_time: new Date(base + 2 * day).toISOString(), end_time: new Date(base + 2 * day + hour).toISOString(), program_code: 'KPW1L1' } },
-      { id: 'u2', status: 'enrolled', class: { name: '幼兒街舞入門班', instructor: 'Wawa', start_time: new Date(base + 4 * day).toISOString(), end_time: new Date(base + 4 * day + hour).toISOString(), program_code: 'PSW6R3' } },
-    ];
-  }
-  if (profileId === 'student-001-sub-3') {
-    return [
-      { id: 'u1', status: 'enrolled', class: { name: '進階街舞', instructor: 'C+', start_time: new Date(base + 1 * day + 12 * hour).toISOString(), end_time: new Date(base + 1 * day + 13 * hour).toISOString(), program_code: 'BSW6R9' } },
-      { id: 'u2', status: 'enrolled', class: { name: 'Hip Hop 基礎', instructor: 'John', start_time: new Date(base + 5 * day).toISOString(), end_time: new Date(base + 5 * day + hour).toISOString(), program_code: 'HH001' } },
-    ];
-  }
-  return [
-    { id: 'u1', status: 'enrolled', class: { name: 'Yoga Basics', instructor: 'Jane Smith', start_time: new Date(base + 1 * day).toISOString(), end_time: new Date(base + 1 * day + hour).toISOString(), program_code: 'YG001' } },
-  ];
 }
 
 function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: ApplicationModalProps) {
@@ -220,10 +171,21 @@ export default function DashboardPage() {
 
   async function loadData() {
     setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setTokens(getMockTokensForProfile(profile?.id));
-    setUpcomingClasses(getMockUpcomingClassesForProfile(profile?.id));
-    setLoading(false);
+    try {
+      const [tokensRes, classesRes] = await Promise.all([
+        api.get<UserToken[]>('student/tokens'),
+        api.get<UpcomingClass[]>('student/upcoming-classes'),
+      ]);
+      const tokensData = (tokensRes as any).data ?? tokensRes;
+      const classesData = (classesRes as any).data ?? classesRes;
+      setTokens(Array.isArray(tokensData) ? tokensData : []);
+      setUpcomingClasses(Array.isArray(classesData) ? classesData : []);
+    } catch {
+      setTokens([]);
+      setUpcomingClasses([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const totalTokens = tokens.reduce((sum, t) => sum + t.remaining_tokens, 0);
@@ -282,13 +244,46 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           <Home className="h-6 w-6 md:h-8 md:w-8 text-primary" />
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
-            {profile?.full_name ? t('dashboard.titleFor', { name: profile.full_name }) : t('dashboard.title')}
+            {t('dashboard.title')}
           </h1>
         </div>
 
         {successMessage && (
           <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-md">
             {successMessage}
+          </div>
+        )}
+
+        {totalTokens === 0 && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-amber-900">{t('dashboard.insufficientTokens')}</p>
+              <p className="text-sm text-amber-800 mt-1">{t('dashboard.insufficientTokensDesc')}</p>
+              <Link
+                to="/student/shop"
+                className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
+              >
+                <ShoppingBag className="h-4 w-4" />
+                {t('dashboard.insufficientTokensCta')}
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {totalTokens > 0 && totalTokens < 2 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="h-6 w-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-medium text-yellow-900">{t('dashboard.lowTokensWarning')}</p>
+              <Link
+                to="/student/shop"
+                className="inline-flex items-center gap-2 mt-2 text-sm font-medium text-yellow-800 hover:text-yellow-900 underline"
+              >
+                <ShoppingBag className="h-4 w-4" />
+                {t('dashboard.lowTokensCta')}
+              </Link>
+            </div>
           </div>
         )}
 
@@ -347,6 +342,11 @@ export default function DashboardPage() {
                         className="w-12 h-12 md:w-16 md:h-16 rounded-full object-cover flex-shrink-0 border-2 border-primary-lighter"
                       />
                       <div className="flex-1 min-w-0">
+                        {enrollment.user_name && (
+                          <div className="text-xs font-medium text-primary mb-1">
+                            {t('dashboard.childName', { name: enrollment.user_name })}
+                          </div>
+                        )}
                         <div className="flex items-center gap-2 mb-1">
                           <div className="font-medium text-gray-900">{enrollment.class.name}</div>
                           {enrollment.class.program_code && (

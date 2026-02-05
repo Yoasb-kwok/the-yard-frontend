@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
-import { formatDateTime, shouldPostponeClass, getHongKongHolidayName } from '../../lib/utils';
-import { appendRefundRecord } from '../../lib/refundRecords';
+import { formatDateTime, shouldPostponeClassWithHolidays, formatProgramCodeDisplay } from '../../lib/utils';
+import { api } from '../../lib/api';
+import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
 import { type CourseLevel, type AgeTag, useAuth } from '../../contexts/AuthContext';
 
@@ -12,6 +13,8 @@ interface Class {
   id: string;
   name: string;
   class_code: string;
+  /** Lesson number in the course (1, 2, 3…). Displayed as L01, L02 behind program code. */
+  lesson_number?: number | null;
   instructor: string;
   substitute_instructor?: string | null;
   start_time: string;
@@ -34,148 +37,6 @@ interface Instructor {
 
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
-// Mock instructors data
-const MOCK_INSTRUCTORS: Instructor[] = [
-  {
-    id: '1',
-    name: 'Jane Smith',
-    profile_image_url: 'https://ui-avatars.com/api/?name=Jane+Smith&size=128&background=007257&color=fff&bold=true',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    name: 'John Doe',
-    profile_image_url: 'https://ui-avatars.com/api/?name=John+Doe&size=128&background=2563eb&color=fff&bold=true',
-    created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    name: 'Sarah Johnson',
-    profile_image_url: 'https://ui-avatars.com/api/?name=Sarah+Johnson&size=128&background=7c3aed&color=fff&bold=true',
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
-
-// Mock data
-const MOCK_CLASSES: Class[] = [
-  {
-    id: '1',
-    name: 'Yoga Basics',
-    class_code: 'YB001',
-    instructor: 'Jane Smith',
-    start_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    capacity: 12,
-    enrolled_count: 8,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'sanpokong',
-    level: 'entry',
-    age_tag: '5-8',
-  },
-  {
-    id: '2',
-    name: 'Pilates Intermediate',
-    class_code: 'PI002',
-    instructor: 'John Doe',
-    start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-    capacity: 15,
-    enrolled_count: 10,
-    is_internal: false,
-    is_cancelled: false,
-    location: 'causewaybay',
-    level: 'intermediate',
-    age_tag: '9-12',
-  },
-  {
-    id: '3',
-    name: '補課 - Yoga Basics',
-    class_code: 'YB-MK001',
-    instructor: 'Jane Smith',
-    start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    capacity: 5,
-    enrolled_count: 3,
-    is_internal: true,
-    is_cancelled: false,
-    location: 'fotan',
-    level: 'entry',
-    age_tag: '13-16',
-  },
-];
-
-// Mock enrollments for attendance (class_id matches MOCK_CLASSES)
-const MOCK_ENROLLMENTS: Enrollment[] = [
-  {
-    id: '1',
-    class_id: '1',
-    user_id: 'user1',
-    user_name: '張三',
-    user_mobile: '91234567',
-    status: 'attended',
-    check_in_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 30 * 60 * 1000).toISOString(),
-    check_out_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    class_id: '1',
-    user_id: 'user2',
-    user_name: '李四',
-    user_mobile: '98765432',
-    status: 'attended',
-    check_in_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 25 * 60 * 1000).toISOString(),
-    check_out_time: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 + 55 * 60 * 1000).toISOString(),
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    class_id: '1',
-    user_id: 'user3',
-    user_name: '王五',
-    user_mobile: '92345678',
-    status: 'absent',
-    check_in_time: null,
-    check_out_time: null,
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '4',
-    class_id: '1',
-    user_id: 'user4',
-    user_name: '陳六',
-    user_mobile: '93456789',
-    status: 'sick_leave',
-    check_in_time: null,
-    check_out_time: null,
-    sick_leave_document_url: 'https://example.com/sick-leave-doc.pdf',
-    created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '5',
-    class_id: '1',
-    user_id: 'user5',
-    user_name: '劉七',
-    user_mobile: '94567890',
-    status: 'enrolled',
-    check_in_time: null,
-    check_out_time: null,
-    sick_leave_document_url: null,
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    reassigned_to_class_id: '2',
-    reassigned_to_class_name: 'Pilates Intermediate',
-    reassigned_to_class_code: 'PI002',
-    reassigned_to_class_start_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    reassigned_to_class_end_time: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-  },
-];
-
-const MOCK_ATTENDANCE_CONFIRMED: Record<string, boolean> = { '2': true };
-
 // Location labels will be retrieved from translations
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
@@ -184,6 +45,7 @@ export default function ClassesPage() {
   const { t, i18n } = useTranslation();
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const { getHolidayName, holidayDatesSet } = useHolidays();
   const [classes, setClasses] = useState<Class[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,15 +61,16 @@ export default function ClassesPage() {
     class_code: '',
     instructor: '',
     substitute_instructor: '',
-    start_time: '',
-    end_time: '',
+    date: '', // YYYY-MM-DD, first lesson date
+    start_time: '', // HH:mm
+    end_time: '', // HH:mm
     capacity: 10,
     is_internal: false,
     location: 'sanpokong' as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui',
     level: 'entry' as CourseLevel,
     age_tag: '5-8' as AgeTag,
     repeat_weekly: false,
-    repeat_until: '',
+    total_lessons: 8,
   });
   const [expandedAttendanceClassId, setExpandedAttendanceClassId] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<{
@@ -272,57 +135,161 @@ export default function ClassesPage() {
   }, [view]);
 
   async function loadClasses() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setClasses(MOCK_CLASSES);
-    setLoading(false);
+    try {
+      setLoading(true);
+      // Get classes from API
+      const response = await api.get<Class[]>('/admin/classes');
+      if (response.success && response.data) {
+        // Transform API response to match frontend Class interface
+        const transformedClasses: Class[] = response.data.map((cls: any) => ({
+          id: cls.id.toString(),
+          name: cls.name,
+          class_code: cls.program_code || '',
+          lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
+          instructor: cls.instructor || '',
+          substitute_instructor: cls.substitute_instructor || null,
+          start_time: cls.start_time,
+          end_time: cls.end_time,
+          capacity: cls.capacity,
+          enrolled_count: cls.enrolled_count || 0,
+          is_internal: cls.is_internal === 1 || cls.is_internal === true,
+          is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
+          location: cls.location,
+          level: cls.level,
+          age_tag: cls.age_group as AgeTag,
+        }));
+        setClasses(transformedClasses);
+      } else {
+        throw new Error(response.msg || 'Failed to load classes');
+      }
+    } catch (error) {
+      console.error('Error loading classes:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load classes';
+      
+      // Check if it's a network error
+      if (errorMessage.includes('Network error') || errorMessage.includes('Failed to fetch')) {
+        alert(t('admin.classes.apiConnectionError') || `Cannot connect to API server. Please ensure the backend is running on http://localhost:3001`);
+      } else {
+        alert(errorMessage);
+      }
+      
+      setClasses([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadInstructors() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setInstructors(MOCK_INSTRUCTORS);
+    try {
+      const response = await api.get<{ id: string; name: string; profile_image_url: string | null; created_at: string }[]>('admin/instructors');
+      if (response.success && Array.isArray(response.data)) {
+        setInstructors(response.data.map((inst: any) => ({
+          id: String(inst.id),
+          name: inst.name || '',
+          profile_image_url: inst.profile_image_url ?? null,
+          created_at: inst.created_at || new Date().toISOString(),
+        })));
+      } else {
+        setInstructors([]);
+      }
+    } catch (error) {
+      console.error('Error loading instructors:', error);
+      setInstructors([]);
+    }
   }
 
   async function loadAttendanceData(
     classId: string
   ): Promise<{ class: ClassWithAttendance; enrollments: Enrollment[] } | null> {
-    await new Promise((resolve) => setTimeout(resolve, 400));
     const c = classes.find((x) => x.id === classId);
     if (!c) return null;
-    const classWithAttendance: ClassWithAttendance = {
-      ...c,
-      attendance_confirmed: MOCK_ATTENDANCE_CONFIRMED[classId] ?? false,
-    };
-    const enrollments = MOCK_ENROLLMENTS.filter((e) => e.class_id === classId);
-    return { class: classWithAttendance, enrollments };
+    try {
+      const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
+      const list = res.success && Array.isArray(res.data) ? res.data : [];
+      const enrollments: Enrollment[] = list.map((e: any) => ({
+        id: String(e.id),
+        class_id: classId,
+        user_id: e.user_id ?? '',
+        user_name: e.user_name ?? '',
+        user_mobile: e.user_mobile ?? null,
+        status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+        check_in_time: e.check_in_time ?? null,
+        check_out_time: e.check_out_time ?? null,
+        sick_leave_document_url: e.sick_leave_document_url ?? null,
+        created_at: e.created_at ?? '',
+      }));
+      const classWithAttendance: ClassWithAttendance = { ...c, attendance_confirmed: false };
+      return { class: classWithAttendance, enrollments };
+    } catch {
+      return null;
+    }
   }
 
   function toggleAttendance(classId: string) {
     setExpandedAttendanceClassId((prev) => (prev === classId ? null : classId));
   }
 
+  function toTimeString(date: Date): string {
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
+
   async function updateAttendanceStatus(
     enrollmentId: string,
     newStatus: 'enrolled' | 'attended' | 'absent' | 'sick_leave'
   ) {
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    setAttendanceData((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        enrollments: prev.enrollments.map((e) =>
-          e.id === enrollmentId
-            ? {
-                ...e,
-                status: newStatus,
-                check_in_time: newStatus === 'attended' ? e.check_in_time || new Date().toISOString() : e.check_in_time,
-                check_out_time: newStatus === 'attended' ? e.check_out_time || new Date().toISOString() : e.check_out_time,
-              }
-            : e
-        ),
-      };
-    });
+    const now = new Date();
+    const payload: any = { status: newStatus };
+    if (newStatus === 'attended') {
+      payload.check_in_time = toTimeString(now);
+      payload.check_out_time = toTimeString(now);
+    }
+    try {
+      await api.patch(`/admin/class-enrollments/${enrollmentId}`, payload);
+      setAttendanceData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          enrollments: prev.enrollments.map((e) =>
+            e.id === enrollmentId
+              ? {
+                  ...e,
+                  status: newStatus,
+                  check_in_time: newStatus === 'attended' ? payload.check_in_time : e.check_in_time,
+                  check_out_time: newStatus === 'attended' ? payload.check_out_time : e.check_out_time,
+                }
+              : e
+          ),
+        };
+      });
+    } catch (err) {
+      console.error('Failed to update attendance:', err);
+    }
+  }
+
+  async function handleMarkMultipleAttended(enrollmentIds: string[]) {
+    const now = new Date();
+    const checkIn = toTimeString(now);
+    const checkOut = toTimeString(now);
+    try {
+      await Promise.all(
+        enrollmentIds.map((id) =>
+          api.patch(`/admin/class-enrollments/${id}`, { status: 'attended', check_in_time: checkIn, check_out_time: checkOut })
+        )
+      );
+      setAttendanceData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          enrollments: prev.enrollments.map((e) =>
+            enrollmentIds.includes(e.id)
+              ? { ...e, status: 'attended' as const, check_in_time: checkIn, check_out_time: checkOut }
+              : e
+          ),
+        };
+      });
+    } catch (err) {
+      console.error('Failed to mark as attended:', err);
+    }
   }
 
   function toggleAttendanceConfirmation() {
@@ -341,21 +308,25 @@ export default function ClassesPage() {
   }
 
   async function handleRefundToken(enrollmentId: string, userId: string, userName: string, remarks: string) {
-    // Simulate API call to refund token
-    await new Promise((resolve) => setTimeout(resolve, 500));
     const cls = attendanceData?.class;
-    appendRefundRecord({
-      enrollment_id: enrollmentId,
-      user_id: userId,
-      user_name: userName,
-      class_id: cls?.id ?? '',
-      class_name: cls?.name ?? '',
-      class_code: cls?.class_code ?? '',
-      tokens_refunded: 1,
-      remarks,
-      refunded_by: profile?.full_name ?? 'Admin',
-    });
-    alert(t('admin.attendance.tokenRefunded', { name: userName }));
+    try {
+      await api.post('admin/refund-records', {
+        enrollment_id: enrollmentId,
+        user_id: userId,
+        user_name: userName,
+        class_id: cls?.id ?? '',
+        class_name: cls?.name ?? '',
+        class_code: cls?.class_code ?? cls?.program_code ?? '',
+        tokens_refunded: 1,
+        remarks,
+        refunded_by: profile?.full_name ?? 'Admin',
+      });
+      window.dispatchEvent(new CustomEvent('refund-record-added'));
+      alert(t('admin.attendance.tokenRefunded', { name: userName }));
+    } catch (err) {
+      console.error('Refund record failed:', err);
+      alert(err instanceof Error ? err.message : t('common.error'));
+    }
   }
 
   function findRepeatedClasses(classItem: Class): Class[] {
@@ -371,58 +342,85 @@ export default function ClassesPage() {
     );
   }
 
-  function formatDateTimeLocal(dateString: string): string {
-    // Convert ISO string to local datetime-local format (YYYY-MM-DDTHH:mm)
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  /** Build ISO string from date (YYYY-MM-DD) + time (HH:mm) in local timezone */
+  function toISOFromDateAndTime(dateStr: string, timeStr: string): string {
+    if (!dateStr || !timeStr) return '';
+    const [hours, minutes] = timeStr.split(':').map((x) => parseInt(x, 10) || 0);
+    const d = new Date(dateStr);
+    d.setHours(hours, minutes, 0, 0);
+    return d.toISOString();
+  }
+
+  function dateFromISO(iso: string): string {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  function timeFromISO(iso: string): string {
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  // Time options for touch-friendly dropdowns (iPad / mobile)
+  const TIME_HOURS = Array.from({ length: 16 }, (_, i) => String(i + 7).padStart(2, '0')); // 07–22
+  const TIME_MINUTES = ['00', '15', '30', '45'];
+
+  function parseTimeToHourMin(timeStr: string): { hour: string; minute: string } {
+    if (!timeStr || !timeStr.includes(':')) return { hour: '14', minute: '00' };
+    const [h, m] = timeStr.split(':').map((x) => parseInt(x, 10) || 0);
+    const hour = Math.max(7, Math.min(22, h));
+    const minIdx = Math.round(m / 15) % 4;
+    const minute = TIME_MINUTES[minIdx];
+    return { hour: String(hour).padStart(2, '0'), minute };
+  }
+
+  function setStartTime(hour: string, minute: string) {
+    setForm((f) => ({ ...f, start_time: `${hour}:${minute}` }));
+  }
+  function setEndTime(hour: string, minute: string) {
+    setForm((f) => ({ ...f, end_time: `${hour}:${minute}` }));
   }
 
   function openEditModal(classItem: Class) {
     setEditingClass(classItem);
-    setEditAllRepeats(false); // Default to single edit
-    // Format datetime for input fields (YYYY-MM-DDTHH:mm) using local time
-    const startDateTime = formatDateTimeLocal(classItem.start_time);
-    const endDateTime = formatDateTimeLocal(classItem.end_time);
-    
+    setEditAllRepeats(false);
     setForm({
       name: classItem.name,
       class_code: classItem.class_code,
       instructor: classItem.instructor,
       substitute_instructor: classItem.substitute_instructor ?? '',
-      start_time: startDateTime,
-      end_time: endDateTime,
+      date: dateFromISO(classItem.start_time),
+      start_time: timeFromISO(classItem.start_time),
+      end_time: timeFromISO(classItem.end_time),
       capacity: classItem.capacity,
       is_internal: classItem.is_internal,
       location: classItem.location || 'sanpokong',
       level: classItem.level || 'entry',
       age_tag: classItem.age_tag || '5-8',
       repeat_weekly: false,
-      repeat_until: '',
+      total_lessons: 8,
     });
     setShowModal(true);
   }
 
   function openCreateModal() {
     setEditingClass(null);
+    const today = new Date().toISOString().slice(0, 10);
     setForm({
       name: '',
       class_code: '',
       instructor: '',
       substitute_instructor: '',
-      start_time: '',
-      end_time: '',
+      date: today,
+      start_time: '14:00',
+      end_time: '15:00',
       capacity: 10,
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
       age_tag: '5-8',
       repeat_weekly: false,
-      repeat_until: '',
+      total_lessons: 8,
     });
     setShowModal(true);
   }
@@ -432,190 +430,265 @@ export default function ClassesPage() {
 
     // If editing, update the existing class(es)
     if (editingClass) {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      if (editAllRepeats) {
-        // Update all repeated classes
-        const repeatedClasses = findRepeatedClasses(editingClass);
-        const allClassesToUpdate = [editingClass, ...repeatedClasses];
-        
-        setClasses(classes.map(c => {
-          const shouldUpdate = allClassesToUpdate.some(updateClass => updateClass.id === c.id);
-          if (shouldUpdate) {
-            // Calculate time difference from original class
-            const originalStart = new Date(editingClass.start_time);
-            const originalEnd = new Date(editingClass.end_time);
-            const newStart = new Date(form.start_time);
-            const newEnd = new Date(form.end_time);
-            const timeDiff = newStart.getTime() - originalStart.getTime();
-            const duration = newEnd.getTime() - newStart.getTime();
-            
+      try {
+        if (editAllRepeats) {
+          // Update all repeated classes
+          const repeatedClasses = findRepeatedClasses(editingClass);
+          const allClassesToUpdate = [editingClass, ...repeatedClasses];
+          
+          const newStart = new Date(toISOFromDateAndTime(form.date, form.start_time));
+          const newEnd = new Date(toISOFromDateAndTime(form.date, form.end_time));
+          const originalStart = new Date(editingClass.start_time);
+          const originalEnd = new Date(editingClass.end_time);
+          const timeDiff = newStart.getTime() - originalStart.getTime();
+          const duration = newEnd.getTime() - newStart.getTime();
+          
+          // Update each class via API
+          const updatePromises = allClassesToUpdate.map(async (c) => {
             // Calculate new times for this class
             const classStart = new Date(c.start_time);
-            const classEnd = new Date(c.end_time);
             const newClassStart = new Date(classStart.getTime() + timeDiff);
             const newClassEnd = new Date(newClassStart.getTime() + duration);
             
-            return {
-              ...c,
+            const updateData = {
               name: form.name,
-              class_code: form.class_code,
+              program_code: form.class_code,
               instructor: form.instructor,
               substitute_instructor: form.substitute_instructor || null,
               start_time: newClassStart.toISOString(),
               end_time: newClassEnd.toISOString(),
               capacity: form.capacity,
-              is_internal: form.is_internal,
+              is_internal: form.is_internal ? 1 : 0,
               location: form.location,
               level: form.level,
-              age_tag: form.age_tag,
+              age_group: form.age_tag,
             };
+            
+            return api.patch(`/admin/classes/${c.id}`, updateData);
+          });
+          
+          await Promise.all(updatePromises);
+          
+          // Reload classes from API
+          await loadClasses();
+          alert(t('admin.classes.classesUpdated', { count: allClassesToUpdate.length }));
+        } else {
+          // Update single class via API
+          const startISO = toISOFromDateAndTime(form.date, form.start_time);
+          const endISO = toISOFromDateAndTime(form.date, form.end_time);
+          const updateData = {
+            name: form.name,
+            program_code: form.class_code,
+            instructor: form.instructor,
+            substitute_instructor: form.substitute_instructor || null,
+            start_time: startISO,
+            end_time: endISO,
+            capacity: form.capacity,
+            is_internal: form.is_internal ? 1 : 0,
+            location: form.location,
+            level: form.level,
+            age_group: form.age_tag,
+          };
+          
+          const response = await api.patch(`/admin/classes/${editingClass.id}`, updateData);
+          
+          if (response.success && response.data) {
+            // Transform API response to match frontend Class interface
+            const updatedClass: Class = {
+              id: response.data.id.toString(),
+              name: response.data.name,
+              class_code: response.data.program_code || '',
+              instructor: response.data.instructor || '',
+              substitute_instructor: response.data.substitute_instructor || null,
+              start_time: response.data.start_time,
+              end_time: response.data.end_time,
+              capacity: response.data.capacity,
+              enrolled_count: response.data.enrolled_count || 0,
+              is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
+              is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
+              location: response.data.location,
+              level: response.data.level,
+              age_tag: response.data.age_group as AgeTag,
+            };
+            
+            setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
+            alert(t('admin.classes.classUpdated'));
+          } else {
+            throw new Error(response.msg || 'Failed to update class');
           }
-          return c;
-        }));
-        alert(t('admin.classes.classesUpdated', { count: allClassesToUpdate.length }));
-      } else {
-        // Update single class
-        const updatedClass: Class = {
-          ...editingClass,
-          name: form.name,
-          class_code: form.class_code,
-          instructor: form.instructor,
-          substitute_instructor: form.substitute_instructor || null,
-          start_time: form.start_time,
-          end_time: form.end_time,
-          capacity: form.capacity,
-          is_internal: form.is_internal,
-          location: form.location,
-          level: form.level,
-          age_tag: form.age_tag,
-        };
-
-        setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
-        alert(t('admin.classes.classUpdated'));
+        }
+        
+        setShowModal(false);
+        setEditingClass(null);
+        setEditAllRepeats(false);
+        const today = new Date().toISOString().slice(0, 10);
+        setForm({
+          name: '',
+          class_code: '',
+          instructor: '',
+          substitute_instructor: '',
+          date: today,
+          start_time: '14:00',
+          end_time: '15:00',
+          capacity: 10,
+          is_internal: false,
+          location: 'sanpokong',
+          level: 'entry',
+          age_tag: '5-8',
+          repeat_weekly: false,
+          total_lessons: 8,
+        });
+      } catch (error) {
+        console.error('Error updating class:', error);
+        alert(error instanceof Error ? error.message : 'Failed to update class');
       }
-      
-      setShowModal(false);
-      setEditingClass(null);
-      setEditAllRepeats(false);
-      setForm({
-        name: '',
-        class_code: '',
-        instructor: '',
-        substitute_instructor: '',
-        start_time: '',
-        end_time: '',
-        capacity: 10,
-        is_internal: false,
-        location: 'sanpokong',
-        level: 'entry',
-        age_tag: '5-8',
-        repeat_weekly: false,
-        repeat_until: '',
-      });
       return;
     }
 
     // Creating new class(es)
-    if (form.repeat_weekly && !form.repeat_until) {
-      alert(t('admin.classes.repeatUntilRequired'));
+    const newClasses: Class[] = [];
+    const createdClasses: Class[] = [];
+
+    // 每週重覆：依課堂總堂數建立，每週同一天、自動跳過假期
+    if (form.repeat_weekly && form.date && form.start_time && form.end_time) {
+      const total = Math.floor(Number(form.total_lessons)) || 0;
+      if (total < 1 || total > 99) {
+        alert(t('admin.classes.totalLessonsRequired'));
+        return;
+      }
+      try {
+        const firstDate = form.date;
+        const startTimeOfDay = form.start_time;
+        const endTimeOfDay = form.end_time;
+        const res = await api.post<{ id: string; name: string; program_code?: string; instructor: string; start_time: string; end_time: string; capacity: number; enrolled_count: number; is_internal: number; is_cancelled: number; location?: string; level?: string; age_group?: string }[]>('admin/classes/recurring', {
+          first_date: firstDate,
+          start_time: startTimeOfDay,
+          end_time: endTimeOfDay,
+          number_of_lessons: total,
+          name: form.name,
+          instructor: form.instructor,
+          capacity: form.capacity,
+          location: form.location,
+          program_code: form.class_code || undefined,
+          level: form.level,
+          age_group: form.age_tag,
+          is_internal: form.is_internal ? 1 : 0,
+        });
+        const data = res.data ?? [];
+        for (const c of data) {
+          createdClasses.push({
+            id: String(c.id),
+            name: c.name,
+            class_code: c.program_code || '',
+            lesson_number: c.lesson_number != null ? Number(c.lesson_number) : null,
+            instructor: c.instructor,
+            substitute_instructor: null,
+            start_time: c.start_time,
+            end_time: c.end_time,
+            capacity: c.capacity,
+            enrolled_count: c.enrolled_count || 0,
+            is_internal: c.is_internal === 1,
+            is_cancelled: c.is_cancelled === 1,
+            location: c.location,
+            level: (c.level as CourseLevel) || 'entry',
+            age_tag: (c.age_group as AgeTag) || '5-8',
+          });
+        }
+        newClasses.push(...createdClasses);
+        await loadClasses();
+        setShowModal(false);
+        setEditingClass(null);
+        const today = new Date().toISOString().slice(0, 10);
+        setForm({
+          name: '',
+          class_code: '',
+          instructor: '',
+          substitute_instructor: '',
+          date: today,
+          start_time: '14:00',
+          end_time: '15:00',
+          capacity: 10,
+          is_internal: false,
+          location: 'sanpokong',
+          level: 'entry',
+          age_tag: '5-8',
+          repeat_weekly: false,
+          total_lessons: 8,
+        });
+        alert(t('admin.classes.recurringCourseCreated', { count: createdClasses.length }));
+      } catch (err) {
+        console.error('Recurring course create failed:', err);
+        alert(err instanceof Error ? err.message : t('common.error'));
+      }
       return;
     }
 
-    if (form.repeat_weekly && form.repeat_until && form.start_time) {
-      const startDate = new Date(form.start_time);
-      const repeatUntilDate = new Date(form.repeat_until);
-      if (repeatUntilDate <= startDate) {
-        alert(t('admin.classes.repeatUntilAfterStart'));
+    // Single class (no repeat weekly)
+    // Create single class - check for holidays and postpone if needed
+    if (!form.date || !form.start_time || !form.end_time) {
+      alert(t('admin.classes.dateAndTimeRequired'));
+      return;
+    }
+    {
+      const startISO = toISOFromDateAndTime(form.date, form.start_time);
+      const endISO = toISOFromDateAndTime(form.date, form.end_time);
+      const startDate = new Date(startISO);
+      const { shouldPostpone, newDate } = shouldPostponeClassWithHolidays(startDate, holidayDatesSet);
+      const adjustedStartDate = shouldPostpone ? newDate : startDate;
+      const timeDiff = new Date(endISO).getTime() - startDate.getTime();
+      const adjustedEndDate = new Date(adjustedStartDate.getTime() + timeDiff);
+      const adjustedDateStr = `${adjustedStartDate.getFullYear()}-${String(adjustedStartDate.getMonth() + 1).padStart(2, '0')}-${String(adjustedStartDate.getDate()).padStart(2, '0')}`;
+      const adjustedStartTimeStr = `${String(adjustedStartDate.getHours()).padStart(2, '0')}:${String(adjustedStartDate.getMinutes()).padStart(2, '0')}`;
+      const adjustedEndTimeStr = `${String(adjustedEndDate.getHours()).padStart(2, '0')}:${String(adjustedEndDate.getMinutes()).padStart(2, '0')}`;
+
+      // Send date + time-only to API (API combines and stores full datetime in DB)
+      const classData = {
+        name: form.name,
+        instructor: form.instructor,
+        date: adjustedDateStr,
+        start_time: adjustedStartTimeStr,
+        end_time: adjustedEndTimeStr,
+        capacity: form.capacity,
+        location: form.location,
+        program_code: form.class_code,
+        level: form.level,
+        age_group: form.age_tag,
+        is_internal: form.is_internal ? 1 : 0,
+        repeat_weekly: 0,
+      };
+
+      try {
+        // Create class via API (API builds full start_time/end_time from date + time)
+        const response = await api.post('/admin/classes', classData);
+        if (response.success && response.data) {
+          const createdClass: Class = {
+            id: response.data.id.toString(),
+            name: response.data.name,
+            class_code: response.data.program_code || '',
+            instructor: response.data.instructor || '',
+            substitute_instructor: null,
+            start_time: response.data.start_time,
+            end_time: response.data.end_time,
+            capacity: response.data.capacity,
+            enrolled_count: response.data.enrolled_count || 0,
+            is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
+            is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
+            location: response.data.location,
+            level: response.data.level,
+            age_tag: response.data.age_group as AgeTag,
+          };
+          newClasses.push(createdClass);
+        } else {
+          throw new Error(response.msg || 'Failed to create class');
+        }
+      } catch (error) {
+        console.error('Error creating class:', error);
+        alert(error instanceof Error ? error.message : 'Failed to create class');
         return;
       }
     }
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    const newClasses: Class[] = [];
-
-    if (form.repeat_weekly && form.repeat_until) {
-      // Create multiple classes for weekly repeats
-      const startDate = new Date(form.start_time);
-      const endDate = new Date(form.end_time);
-      // Set repeat_until to end of day to include classes on that date
-      const repeatUntilDate = new Date(form.repeat_until);
-      repeatUntilDate.setHours(23, 59, 59, 999);
-      
-      // Calculate time difference for end_time
-      const timeDiff = endDate.getTime() - startDate.getTime();
-
-      let currentDate = new Date(startDate);
-      let classCounter = 0;
-      let maxIterations = 1000; // Safety limit to prevent infinite loops
-      let iterations = 0;
-
-      while (currentDate <= repeatUntilDate && iterations < maxIterations) {
-        iterations++;
-        
-        // Check if current date is a public holiday and postpone if needed
-        const { shouldPostpone, newDate } = shouldPostponeClass(currentDate);
-        const adjustedStartDate = shouldPostpone ? newDate : currentDate;
-        
-        // Only create class if the adjusted date is still within the repeat_until range
-        if (adjustedStartDate <= repeatUntilDate) {
-          const classStartTime = new Date(adjustedStartDate);
-          const classEndTime = new Date(classStartTime.getTime() + timeDiff);
-
-          const newClass: Class = {
-            id: `${Date.now()}-${classCounter}`,
-            name: form.name,
-            class_code: form.class_code,
-            instructor: form.instructor,
-            start_time: classStartTime.toISOString(),
-            end_time: classEndTime.toISOString(),
-            capacity: form.capacity,
-            enrolled_count: 0,
-            is_internal: form.is_internal,
-            is_cancelled: false,
-            location: form.location,
-            level: form.level,
-            age_tag: form.age_tag,
-          };
-
-          newClasses.push(newClass);
-          classCounter++;
-        }
-
-        // Move to next week (7 days later) from the original currentDate
-        // This ensures we maintain the weekly pattern even if a class was postponed
-        currentDate.setDate(currentDate.getDate() + 7);
-      }
-    } else {
-      // Create single class - check for holidays and postpone if needed
-      const startDate = new Date(form.start_time);
-      const { shouldPostpone, newDate } = shouldPostponeClass(startDate);
-      const adjustedStartDate = shouldPostpone ? newDate : startDate;
-      
-      const timeDiff = new Date(form.end_time).getTime() - startDate.getTime();
-      const adjustedEndDate = new Date(adjustedStartDate.getTime() + timeDiff);
-      
-      const newClass: Class = {
-        id: Date.now().toString(),
-        name: form.name,
-        class_code: form.class_code,
-        instructor: form.instructor,
-        start_time: adjustedStartDate.toISOString(),
-        end_time: adjustedEndDate.toISOString(),
-        capacity: form.capacity,
-        enrolled_count: 0,
-        is_internal: form.is_internal,
-        is_cancelled: false,
-        location: form.location,
-        level: form.level,
-        age_tag: form.age_tag,
-      };
-      newClasses.push(newClass);
-    }
-
+    // Update local state with newly created classes
     setClasses([...newClasses, ...classes]);
     if (newClasses.length === 1) {
       alert(t('admin.classes.classCreated'));
@@ -623,32 +696,70 @@ export default function ClassesPage() {
       alert(t('admin.classes.classesCreated', { count: newClasses.length }));
     }
     setShowModal(false);
+    const today = new Date().toISOString().slice(0, 10);
     setForm({
       name: '',
       class_code: '',
       instructor: '',
       substitute_instructor: '',
-      start_time: '',
-      end_time: '',
+      date: today,
+      start_time: '14:00',
+      end_time: '15:00',
       capacity: 10,
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
       age_tag: '5-8',
       repeat_weekly: false,
-      repeat_until: '',
+      total_lessons: 8,
     });
   }
 
   async function toggleCancel(classId: string, currentStatus: boolean) {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    setClasses(classes.map(c => 
-      c.id === classId 
-        ? { ...c, is_cancelled: !currentStatus }
-        : c
-    ));
+    try {
+      const updateData = {
+        is_cancelled: !currentStatus ? 1 : 0,
+      };
+      
+      const response = await api.patch(`/admin/classes/${classId}`, updateData);
+      
+      if (response.success && response.data) {
+        // Transform API response to match frontend Class interface
+        const updatedClass: Class = {
+          id: response.data.id.toString(),
+          name: response.data.name,
+          class_code: response.data.program_code || '',
+          instructor: response.data.instructor || '',
+          substitute_instructor: response.data.substitute_instructor || null,
+          start_time: response.data.start_time,
+          end_time: response.data.end_time,
+          capacity: response.data.capacity,
+          enrolled_count: response.data.enrolled_count || 0,
+          is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
+          is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
+          location: response.data.location,
+          level: response.data.level,
+          age_tag: response.data.age_group as AgeTag,
+        };
+        
+        setClasses(classes.map(c => 
+          c.id === classId ? updatedClass : c
+        ));
+        
+        // Update attendance data if it's currently expanded
+        if (attendanceData && attendanceData.class.id === classId) {
+          setAttendanceData({
+            ...attendanceData,
+            class: { ...attendanceData.class, is_cancelled: updatedClass.is_cancelled },
+          });
+        }
+      } else {
+        throw new Error(response.msg || 'Failed to update class');
+      }
+    } catch (error) {
+      console.error('Error toggling cancel status:', error);
+      alert(error instanceof Error ? error.message : 'Failed to update class status');
+    }
   }
 
   const getDaysInMonth = (date: Date): Date[] => {
@@ -658,12 +769,10 @@ export default function ClassesPage() {
     const lastDay = new Date(year, month + 1, 0);
     const days: Date[] = [];
     
-    // Add days from previous month to fill first week
-    const startDay = firstDay.getDay();
-    for (let i = startDay - 1; i >= 0; i--) {
-      const d = new Date(firstDay);
-      d.setDate(d.getDate() - i - 1);
-      days.push(d);
+    // Add days from previous month so column 0 = Sunday of the week containing the 1st
+    const startDay = firstDay.getDay(); // 0=Sun, 1=Mon, ...
+    for (let i = 0; i < startDay; i++) {
+      days.push(new Date(year, month, 1 - startDay + i));
     }
     
     // Add days of current month
@@ -683,11 +792,14 @@ export default function ClassesPage() {
   };
 
   const getClassesForDate = (date: Date): Class[] => {
+    // No classes on holidays (admin holidays list)
+    if (getHolidayName(date)) return [];
+
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
+
     return classes.filter(classItem => {
       const classDate = new Date(classItem.start_time);
       const classYear = classDate.getFullYear();
@@ -704,6 +816,16 @@ export default function ClassesPage() {
 
   const getFilteredClasses = (): Class[] => {
     let filtered = classes;
+
+    // Exclude classes that fall on a holiday (admin holidays list)
+    filtered = filtered.filter((classItem) => {
+      const classDate = new Date(classItem.start_time);
+      const y = classDate.getFullYear();
+      const m = String(classDate.getMonth() + 1).padStart(2, '0');
+      const d = String(classDate.getDate()).padStart(2, '0');
+      const classDateStr = `${y}-${m}-${d}`;
+      return !holidayDatesSet.has(classDateStr);
+    });
 
     // Filter by location
     if (locationFilter !== 'all') {
@@ -825,9 +947,20 @@ export default function ClassesPage() {
     });
   };
 
+  // Location colors – same as public calendar for consistent UI
+  const getLocationColors = (location: NonNullable<Class['location']>) => {
+    const colorMap = {
+      sanpokong: { primary: '#10b981', dark: '#059669', light: '#34d399', lighter: '#d1fae5' },
+      causewaybay: { primary: '#a67c52', dark: '#8b6f47', light: '#c49b6a', lighter: '#f0e6d2' },
+      fotan: { primary: '#f97316', dark: '#ea580c', light: '#fb923c', lighter: '#ffedd5' },
+      sheungshui: { primary: '#3b82f6', dark: '#2563eb', light: '#60a5fa', lighter: '#dbeafe' },
+    };
+    return colorMap[location] ?? colorMap.sanpokong;
+  };
+
   const renderDayView = () => {
     const dayClasses = getClassesForDate(currentDate);
-    const holidayName = getHongKongHolidayName(currentDate);
+    const holidayName = getHolidayName(currentDate);
 
     return (
       <div className="space-y-4">
@@ -870,8 +1003,8 @@ export default function ClassesPage() {
                         </span>
                       )}
                     </div>
-                    {classItem.class_code && (
-                      <p className="text-gray-600 mb-1 text-sm font-medium">{classItem.class_code}</p>
+                    {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
+                      <p className="text-gray-600 mb-1 text-sm font-medium">{formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}</p>
                     )}
                     <p className="text-gray-600 mb-1">{classItem.instructor}</p>
                     {classItem.substitute_instructor && (
@@ -938,6 +1071,7 @@ export default function ClassesPage() {
                         onCancelClass={() => handleCancelClass(classItem.id)}
                         onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
                         onRefundToken={handleRefundToken}
+                        onMarkMultipleAttended={handleMarkMultipleAttended}
                         onClose={() => setExpandedAttendanceClassId(null)}
                         inline
                       />
@@ -963,7 +1097,7 @@ export default function ClassesPage() {
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-3 border-b">
           {threeDays.map((day, idx) => {
-            const holidayName = getHongKongHolidayName(day);
+            const holidayName = getHolidayName(day);
             return (
               <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
                 <div className="text-sm font-medium text-gray-600">
@@ -990,7 +1124,7 @@ export default function ClassesPage() {
             const dayClasses = getClassesForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
-            const holidayName = getHongKongHolidayName(day);
+            const holidayName = getHolidayName(day);
             
             return (
               <div
@@ -1005,30 +1139,50 @@ export default function ClassesPage() {
                     {holidayName}
                   </div>
                 )}
-                {dayClasses.map((classItem) => (
-                  <div
-                    key={classItem.id}
-                    className={`mb-2 p-2 rounded text-xs cursor-pointer transition-all hover:shadow-md ${
-                      classItem.is_cancelled
-                        ? 'bg-red-100 text-red-700 line-through'
-                        : classItem.is_internal
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-primary/20 text-primary'
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDateClick(day);
-                    }}
-                  >
-                    <div className="font-medium truncate">{classItem.name}</div>
-                    <div className="text-xs mt-1 truncate">
-                      {classItem.instructor}
+                {dayClasses.map((classItem) => {
+                  const loc = classItem.location ?? 'sanpokong';
+                  const colors = getLocationColors(loc);
+                  const isCancelled = classItem.is_cancelled;
+                  return (
+                    <div
+                      key={classItem.id}
+                      className="mb-2 p-2 rounded text-xs cursor-pointer transition-all hover:shadow-md text-white"
+                      style={{
+                        backgroundColor: isCancelled ? '#fecaca' : colors.primary,
+                        textDecoration: isCancelled ? 'line-through' : undefined,
+                        color: isCancelled ? '#b91c1c' : undefined,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCancelled) {
+                          e.currentTarget.style.backgroundColor = colors.dark;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCancelled) {
+                          e.currentTarget.style.backgroundColor = colors.primary;
+                        }
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEditModal(classItem);
+                      }}
+                      title={classItem.name}
+                    >
+                      <div className="font-medium truncate">{classItem.name}</div>
+                      {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
+                        <div className="text-xs mt-0.5 truncate opacity-90 font-medium">
+                          {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
+                        </div>
+                      )}
+                      <div className="text-xs mt-1 truncate opacity-90">
+                        {classItem.instructor}
+                      </div>
+                      <div className="text-xs mt-0.5">
+                        {formatTime(new Date(classItem.start_time))}
+                      </div>
                     </div>
-                    <div className="text-xs mt-0.5">
-                      {formatTime(new Date(classItem.start_time))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })}
@@ -1049,7 +1203,7 @@ export default function ClassesPage() {
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-7 border-b">
           {weekDays.map((day, idx) => {
-            const holidayName = getHongKongHolidayName(day);
+            const holidayName = getHolidayName(day);
             return (
               <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
                 <div className="text-sm font-medium text-gray-600">
@@ -1076,7 +1230,7 @@ export default function ClassesPage() {
             const dayClasses = getClassesForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
-            const holidayName = getHongKongHolidayName(day);
+            const holidayName = getHolidayName(day);
             
             return (
               <div
@@ -1091,30 +1245,50 @@ export default function ClassesPage() {
                     {holidayName}
                   </div>
                 )}
-                {dayClasses.map((classItem) => (
-                  <div
-                    key={classItem.id}
-                    className={`mb-2 p-2 rounded text-xs cursor-pointer transition-all hover:shadow-md ${
-                      classItem.is_cancelled
-                        ? 'bg-red-100 text-red-700 line-through'
-                        : classItem.is_internal
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-primary/20 text-primary'
-                    }`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDateClick(day);
-                    }}
-                  >
-                    <div className="font-medium truncate">{classItem.name}</div>
-                    <div className="text-xs mt-1 truncate">
-                      {classItem.instructor}
-                    </div>
-                    <div className="text-xs mt-0.5">
-                      {formatTime(new Date(classItem.start_time))}
-                    </div>
-                  </div>
-                ))}
+                {dayClasses.map((classItem) => {
+                  const loc = classItem.location ?? 'sanpokong';
+                  const colors = getLocationColors(loc);
+                  const isCancelled = classItem.is_cancelled;
+                  return (
+                    <div
+                      key={classItem.id}
+                      className="mb-2 p-2 rounded text-xs cursor-pointer transition-all hover:shadow-md text-white"
+                      style={{
+                        backgroundColor: isCancelled ? '#fecaca' : colors.primary,
+                        textDecoration: isCancelled ? 'line-through' : undefined,
+                        color: isCancelled ? '#b91c1c' : undefined,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCancelled) {
+                          e.currentTarget.style.backgroundColor = colors.dark;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCancelled) {
+                          e.currentTarget.style.backgroundColor = colors.primary;
+                        }
+                      }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(classItem);
+                        }}
+                        title={classItem.name}
+                      >
+                        <div className="font-medium truncate">{classItem.name}</div>
+                        {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
+                          <div className="text-xs mt-0.5 truncate opacity-90 font-medium">
+                            {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
+                          </div>
+                        )}
+                        <div className="text-xs mt-1 truncate opacity-90">
+                          {classItem.instructor}
+                        </div>
+                        <div className="text-xs mt-0.5">
+                          {formatTime(new Date(classItem.start_time))}
+                        </div>
+                      </div>
+                    );
+                  })}
               </div>
             );
           })}
@@ -1147,7 +1321,7 @@ export default function ClassesPage() {
             const isToday = day.toDateString() === new Date().toDateString();
             const isCurrentMonth = day.getMonth() === currentDate.getMonth();
             const isSelected = selectedDate && day.toDateString() === selectedDate.toDateString();
-            const holidayName = getHongKongHolidayName(day);
+            const holidayName = getHolidayName(day);
             
             return (
               <div
@@ -1174,25 +1348,58 @@ export default function ClassesPage() {
                   </div>
                 )}
                 <div className="space-y-1">
-                  {dayClasses.slice(0, 2).map((classItem) => (
-                    <div
-                      key={classItem.id}
-                      className={`text-xs p-1 rounded truncate ${
-                        classItem.is_cancelled
-                          ? 'bg-red-100 text-red-700 line-through'
-                          : classItem.is_internal
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-primary/20 text-primary'
-                      }`}
-                      title={classItem.name}
-                    >
-                      {formatTime(new Date(classItem.start_time))} {classItem.name}
-                    </div>
-                  ))}
+                  {dayClasses.slice(0, 2).map((classItem) => {
+                    const loc = classItem.location ?? 'sanpokong';
+                    const colors = getLocationColors(loc);
+                    const isCancelled = classItem.is_cancelled;
+                    return (
+                      <div
+                        key={classItem.id}
+                        className="text-xs p-1 rounded truncate cursor-pointer transition-all hover:shadow text-white"
+                        style={{
+                          backgroundColor: isCancelled ? '#fecaca' : colors.primary,
+                          textDecoration: isCancelled ? 'line-through' : undefined,
+                          color: isCancelled ? '#b91c1c' : undefined,
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isCancelled) {
+                            e.currentTarget.style.backgroundColor = colors.dark;
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isCancelled) {
+                            e.currentTarget.style.backgroundColor = colors.primary;
+                          }
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(classItem);
+                        }}
+                        title={classItem.name}
+                      >
+                        <span>{formatTime(new Date(classItem.start_time))} {classItem.name}</span>
+                        {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
+                          <div className="truncate text-white/90 text-[10px] mt-0.5 font-medium">
+                            {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {dayClasses.length > 2 && (
-                    <div className="text-xs text-gray-500">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setView('day');
+                        setCurrentDate(new Date(day));
+                        setSelectedDate(day);
+                      }}
+                      className="text-xs text-primary font-medium hover:underline cursor-pointer mt-0.5 w-full text-left"
+                      title={t('calendar.viewAllOnDay', { count: dayClasses.length })}
+                    >
                       +{dayClasses.length - 2} more
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1418,8 +1625,8 @@ export default function ClassesPage() {
                       </span>
                     )}
                   </div>
-                  {classItem.class_code && (
-                    <p className="text-gray-600 mb-1 text-sm font-medium">{classItem.class_code}</p>
+                  {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
+                    <p className="text-gray-600 mb-1 text-sm font-medium">{formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}</p>
                   )}
                   <p className="text-gray-600 mb-1">{classItem.instructor}</p>
                   {classItem.substitute_instructor && (
@@ -1486,6 +1693,7 @@ export default function ClassesPage() {
                       onCancelClass={() => handleCancelClass(classItem.id)}
                       onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
                       onRefundToken={handleRefundToken}
+                      onMarkMultipleAttended={handleMarkMultipleAttended}
                       onClose={() => setExpandedAttendanceClassId(null)}
                       inline
                     />
@@ -1626,24 +1834,78 @@ export default function ClassesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.startTime')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.firstLessonDate')}</label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   required
-                  value={form.start_time}
-                  onChange={(e) => setForm({ ...form, start_time: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  value={form.date}
+                  onChange={(e) => setForm({ ...form, date: e.target.value })}
+                  className="w-full min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
+                  style={{ minHeight: '48px' }}
                 />
+                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.firstLessonDateHint')}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.startTime')}</label>
+                <div className="flex gap-3 items-center">
+                  <select
+                    required
+                    value={parseTimeToHourMin(form.start_time).hour}
+                    onChange={(e) => setStartTime(e.target.value, parseTimeToHourMin(form.start_time).minute)}
+                    className="flex-1 min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white"
+                    style={{ minHeight: '48px' }}
+                    aria-label={t('admin.classes.startTime')}
+                  >
+                    {TIME_HOURS.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-500 font-medium">:</span>
+                  <select
+                    required
+                    value={parseTimeToHourMin(form.start_time).minute}
+                    onChange={(e) => setStartTime(parseTimeToHourMin(form.start_time).hour, e.target.value)}
+                    className="flex-1 min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white"
+                    style={{ minHeight: '48px' }}
+                    aria-label={t('admin.classes.minute')}
+                  >
+                    {TIME_MINUTES.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.startTimeHint')}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.endTime')}</label>
-                <input
-                  type="datetime-local"
-                  required
-                  value={form.end_time}
-                  onChange={(e) => setForm({ ...form, end_time: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+                <div className="flex gap-3 items-center">
+                  <select
+                    required
+                    value={parseTimeToHourMin(form.end_time).hour}
+                    onChange={(e) => setEndTime(e.target.value, parseTimeToHourMin(form.end_time).minute)}
+                    className="flex-1 min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white"
+                    style={{ minHeight: '48px' }}
+                    aria-label={t('admin.classes.endTime')}
+                  >
+                    {TIME_HOURS.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-500 font-medium">:</span>
+                  <select
+                    required
+                    value={parseTimeToHourMin(form.end_time).minute}
+                    onChange={(e) => setEndTime(parseTimeToHourMin(form.end_time).hour, e.target.value)}
+                    className="flex-1 min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation bg-white"
+                    style={{ minHeight: '48px' }}
+                    aria-label={t('admin.classes.minute')}
+                  >
+                    {TIME_MINUTES.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.endTimeHint')}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.capacity')}</label>
@@ -1676,7 +1938,7 @@ export default function ClassesPage() {
                     type="checkbox"
                     id="repeat_weekly"
                     checked={form.repeat_weekly}
-                    onChange={(e) => setForm({ ...form, repeat_weekly: e.target.checked, repeat_until: e.target.checked ? form.repeat_until : '' })}
+                    onChange={(e) => setForm({ ...form, repeat_weekly: e.target.checked })}
                     className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                   />
                   <label htmlFor="repeat_weekly" className="ml-2 text-sm text-gray-700">
@@ -1686,21 +1948,17 @@ export default function ClassesPage() {
               )}
               {form.repeat_weekly && !editingClass && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.repeatUntil')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.totalLessons')}</label>
                   <input
-                    type="date"
+                    type="number"
+                    min={1}
+                    max={99}
                     required={form.repeat_weekly}
-                    value={form.repeat_until}
-                    onChange={(e) => setForm({ ...form, repeat_until: e.target.value })}
-                    min={form.start_time ? (() => {
-                      const start = new Date(form.start_time);
-                      const minDate = new Date(start);
-                      minDate.setDate(minDate.getDate() + 7);
-                      return minDate.toISOString().split('T')[0];
-                    })() : ''}
+                    value={form.total_lessons}
+                    onChange={(e) => setForm({ ...form, total_lessons: Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)) })}
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                  <p className="text-xs text-gray-500 mt-1">{t('admin.classes.repeatUntilHint')}</p>
+                  <p className="text-xs text-gray-500 mt-1">{t('admin.classes.totalLessonsHint')}</p>
                 </div>
               )}
               <div className="flex items-center">

@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat, Info } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { getHongKongHolidayName, getAgeTagFromDateOfBirth } from '../../lib/utils';
+import { getAgeTagFromDateOfBirth, getDateStringFromStartTime, formatProgramCodeDisplay } from '../../lib/utils';
+import { useHolidays } from '../../lib/useHolidays';
+import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 
 interface Lesson {
@@ -18,6 +20,8 @@ interface Lesson {
   enrolled_count: number;
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   program_code: string;
+  /** Lesson number in the course (1, 2, 3…). Shown as L01, L02. */
+  lesson_number?: number | null;
   level: CourseLevel;
   age_tag: AgeTag;
   /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
@@ -30,75 +34,19 @@ type ViewType = 'day' | 'threeDay' | 'week' | 'month';
 
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
-// Dummy lesson data for the next 30 days
-const generateDummyLessons = (): Lesson[] => {
-  const lessons: Lesson[] = [];
-  const today = new Date();
-  
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() + i);
-    
-    // Add 2-3 lessons per day
-    const numLessons = Math.floor(Math.random() * 2) + 2;
-    
-    for (let j = 0; j < numLessons; j++) {
-      const hour = 9 + j * 3 + Math.floor(Math.random() * 2);
-      const startTime = new Date(date);
-      startTime.setHours(hour, 0, 0, 0);
-      const endTime = new Date(startTime);
-      endTime.setHours(hour + 1, 0, 0, 0);
-      
-      // Each class has a recurring weekday (0=Sun..6=Sat) and total lessons (8 or 16), randomly assigned
-      const classData = [
-        { name: '幼兒街舞入門班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'PSW6R3', weekday: 3, total_lessons: 8 as 8 | 16 },
-        { name: '初階街舞基礎班', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'BSW6R9', weekday: 5, total_lessons: 16 as 8 | 16 },
-        { name: '韓風小明星KPOP班', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'KPW1L1-FT', weekday: 1, total_lessons: 8 as 8 | 16 },
-        { name: 'Yoga Basics', level: 'entry' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'YG001', weekday: 4, total_lessons: 16 as 8 | 16 },
-        { name: 'Pilates Core', level: 'intermediate' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'PL002', weekday: 2, total_lessons: 8 as 8 | 16 },
-        { name: 'Morning Stretch', level: 'entry' as CourseLevel, ageTag: '5-8' as AgeTag, programCode: 'MS003', weekday: 6, total_lessons: 16 as 8 | 16 },
-        { name: 'Advanced Street Dance', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'ASD001', weekday: 3, total_lessons: 16 as 8 | 16 },
-        { name: 'Intermediate KPOP', level: 'intermediate' as CourseLevel, ageTag: '9-12' as AgeTag, programCode: 'IKP001', weekday: 5, total_lessons: 8 as 8 | 16 },
-        { name: 'Advanced Yoga', level: 'advanced' as CourseLevel, ageTag: '13-16' as AgeTag, programCode: 'AYG001', weekday: 0, total_lessons: 8 as 8 | 16 },
-      ];
-      const instructors = ['Wawa', 'C+', 'Shirley', 'Jane Smith', 'John Doe', 'Sarah Johnson'];
-      const locations: ('sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui')[] = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'];
-      
-      const selectedClass = classData[Math.floor(Math.random() * classData.length)];
-      
-      lessons.push({
-        id: `lesson-${i}-${j}`,
-        name: selectedClass.name,
-        instructor: instructors[Math.floor(Math.random() * instructors.length)],
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        capacity: 15,
-        enrolled_count: Math.floor(Math.random() * 10) + 5,
-        location: locations[Math.floor(Math.random() * locations.length)],
-        program_code: selectedClass.programCode,
-        level: selectedClass.level,
-        age_tag: selectedClass.ageTag,
-        weekday: selectedClass.weekday,
-        total_lessons: selectedClass.total_lessons,
-      });
-    }
-  }
-  
-  return lessons;
-};
-
-const DUMMY_LESSONS = generateDummyLessons();
-
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const { user, profile } = useAuth();
+  const { getHolidayName } = useHolidays();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
+  const [lessonsError, setLessonsError] = useState<string | null>(null);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
@@ -150,20 +98,65 @@ export default function CalendarPage() {
   }, [view, setSearchParams]);
 
   async function loadLessons() {
-    await new Promise(resolve => setTimeout(resolve, 300));
-    let filteredLessons = DUMMY_LESSONS;
-    
-    // Filter lessons by student level if student is logged in
-    if (isStudent && profile?.level) {
-      filteredLessons = filteredLessons.filter(lesson => lesson.level === profile.level);
+    setLessonsLoading(true);
+    setLessonsError(null);
+    try {
+      // Public 課程表: use public endpoint so unauthenticated users get DB data (same getClassesList as admin)
+      const response = await api.get<any[]>('/classes');
+      const rows = Array.isArray(response?.data) ? response.data : [];
+      if (!response?.success) {
+        setLessons([]);
+        setLessonsError(response?.msg || 'Failed to load classes');
+        return;
+      }
+      const programTotalLessons: Record<string, number> = {};
+      for (const row of rows) {
+        const code = (row.program_code || '').toString().trim() || 'default';
+        const num = row.lesson_number != null ? Number(row.lesson_number) : 1;
+        programTotalLessons[code] = Math.max(programTotalLessons[code] ?? 0, num);
+      }
+      const clampTotal = (n: number): 8 | 16 => (n >= 16 ? 16 : 8);
+      const mapped: Lesson[] = rows
+        .filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true))
+        .map((cls: any) => {
+          const startTime = cls.start_time instanceof Date ? cls.start_time : new Date(cls.start_time);
+          const startTimeStr = typeof cls.start_time === 'string' ? cls.start_time : startTime.toISOString();
+          const programCode = (cls.program_code || '').toString().trim();
+          const total = programTotalLessons[programCode || 'default'] ?? 8;
+          return {
+            id: String(cls.id),
+            name: cls.name || '',
+            instructor: cls.instructor || cls.substitute_instructor || '',
+            start_time: startTimeStr,
+            end_time: typeof cls.end_time === 'string' ? cls.end_time : (cls.end_time instanceof Date ? cls.end_time : new Date(cls.end_time)).toISOString(),
+            capacity: cls.capacity ?? 0,
+            enrolled_count: cls.enrolled_count ?? 0,
+            location: (cls.location || 'sanpokong') as Lesson['location'],
+            program_code: programCode,
+            lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
+            level: (cls.level || 'entry') as CourseLevel,
+            age_tag: (cls.age_group || '9-12') as AgeTag,
+            weekday: startTime.getDay(),
+            total_lessons: clampTotal(total) as 8 | 16,
+          };
+        });
+      let filteredLessons = mapped;
+      if (isStudent && profile?.level) {
+        filteredLessons = filteredLessons.filter(lesson => lesson.level === profile.level);
+      }
+      const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
+      if (isStudent && profileAgeTag) {
+        filteredLessons = filteredLessons.filter(lesson => lesson.age_tag === profileAgeTag);
+      }
+      setLessons(filteredLessons);
+    } catch (error) {
+      console.error('Error loading calendar classes:', error);
+      setLessons([]);
+      const msg = error instanceof Error ? error.message : 'Failed to load classes';
+      setLessonsError(msg.includes('Network') || msg.includes('fetch') ? (t('admin.classes.apiConnectionError') || 'Cannot connect to API. Ensure the backend is running (e.g. http://localhost:3001).') : msg);
+    } finally {
+      setLessonsLoading(false);
     }
-    // Filter lessons by student age group (derived from date of birth) if student is logged in
-    const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
-    if (isStudent && profileAgeTag) {
-      filteredLessons = filteredLessons.filter(lesson => lesson.age_tag === profileAgeTag);
-    }
-    
-    setLessons(filteredLessons);
   }
 
   const getStartOfWeek = (date: Date): Date => {
@@ -187,12 +180,10 @@ export default function CalendarPage() {
     const lastDay = new Date(year, month + 1, 0);
     const days: Date[] = [];
     
-    // Add days from previous month to fill first week
-    const startDay = firstDay.getDay();
-    for (let i = startDay - 1; i >= 0; i--) {
-      const d = new Date(firstDay);
-      d.setDate(d.getDate() - i - 1);
-      days.push(d);
+    // Add days from previous month so column 0 = Sunday of the week containing the 1st
+    const startDay = firstDay.getDay(); // 0=Sun, 1=Mon, ...
+    for (let i = 0; i < startDay; i++) {
+      days.push(new Date(year, month, 1 - startDay + i));
     }
     
     // Add days of current month
@@ -212,19 +203,18 @@ export default function CalendarPage() {
   };
 
   const getLessonsForDate = (date: Date): Lesson[] => {
-    // Use local date strings to avoid timezone issues
+    // No lessons on holidays (admin holidays list)
+    if (getHolidayName(date)) return [];
+
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    
+
     return lessons.filter(lesson => {
-      const lessonDate = new Date(lesson.start_time);
-      const lessonYear = lessonDate.getFullYear();
-      const lessonMonth = lessonDate.getMonth();
-      const lessonDay = lessonDate.getDate();
-      const lessonDateStr = `${lessonYear}-${String(lessonMonth + 1).padStart(2, '0')}-${String(lessonDay).padStart(2, '0')}`;
-      
+      const lessonDateStr = typeof lesson.start_time === 'string' && lesson.start_time.length >= 10
+        ? lesson.start_time.slice(0, 10)
+        : `${new Date(lesson.start_time).getFullYear()}-${String(new Date(lesson.start_time).getMonth() + 1).padStart(2, '0')}-${String(new Date(lesson.start_time).getDate()).padStart(2, '0')}`;
       const dateMatches = lessonDateStr === dateStr;
       const locationMatches = locationFilter === 'all' || lesson.location === locationFilter;
       return dateMatches && locationMatches;
@@ -352,7 +342,7 @@ export default function CalendarPage() {
 
   const renderDayView = () => {
     const dayLessons = getLessonsForDate(currentDate);
-    const holidayName = getHongKongHolidayName(currentDate);
+    const holidayName = getHolidayName(currentDate);
     const locations: { value: LocationFilter; label: string }[] = [
       { value: 'all', label: t('calendar.allLocations') },
       { value: 'sanpokong', label: t('home.locations.sanpokong') },
@@ -444,8 +434,13 @@ export default function CalendarPage() {
                           backgroundColor: locationColors.primary,
                         }}
                       >
-                        {lesson.program_code}
+                        {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number) || lesson.program_code}
                       </span>
+                      {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
+                        <span className="text-xs font-medium text-gray-600">
+                          {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
+                        </span>
+                      )}
                       <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(lesson.level).className}`}>
                         {getLevelTag(lesson.level).label}
                       </span>
@@ -496,34 +491,25 @@ export default function CalendarPage() {
                   </div>
 
                   <div className="space-y-3">
-                    <Link
-                      to={`/trial?classId=${lesson.id}`}
-                      state={{
-                        classData: {
-                          id: lesson.id,
-                          name: lesson.name,
-                          instructor: lesson.instructor,
-                          start_time: lesson.start_time,
-                          end_time: lesson.end_time,
-                          location: lesson.location,
-                          program_code: lesson.program_code,
-                          level: lesson.level,
-                          age_tag: lesson.age_tag,
-                        }
-                      }}
-                      className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                    <button
+                      type="button"
+                      onClick={() => handleLessonClick(lesson)}
+                      className="w-full px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg flex items-center justify-center gap-2 border-2"
                       style={{
-                        backgroundColor: theme.colors.primary,
+                        borderColor: locationColors.primary,
+                        color: locationColors.primary,
+                        backgroundColor: 'transparent',
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = theme.colors.primaryDark;
+                        e.currentTarget.style.backgroundColor = locationColors.lighter;
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = theme.colors.primary;
+                        e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                     >
-                      {t('home.bookTrial')}
-                    </Link>
+                      <Info className="w-5 h-5" />
+                      {t('calendar.preview')}
+                    </button>
                     {isStudent && (
                       <Link
                         to="/token-package"
@@ -621,7 +607,7 @@ export default function CalendarPage() {
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-3 border-b">
             {threeDays.map((day, idx) => {
-              const holidayName = getHongKongHolidayName(day);
+              const holidayName = getHolidayName(day);
               return (
                 <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
                   <div className="text-sm font-medium text-gray-600">
@@ -647,7 +633,7 @@ export default function CalendarPage() {
             {threeDays.map((day, idx) => {
               const dayLessons = getLessonsForDate(day);
               const isToday = day.toDateString() === new Date().toDateString();
-              const holidayName = getHongKongHolidayName(day);
+              const holidayName = getHolidayName(day);
               
               return (
                 <div
@@ -668,7 +654,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={lesson.id}
-                        className="mb-2 p-2 text-white rounded text-xs cursor-pointer transition-all hover:shadow-md"
+                        className="mb-2 p-2 text-white rounded text-xs transition-all hover:shadow-md"
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
@@ -678,9 +664,13 @@ export default function CalendarPage() {
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         }}
-                        onClick={() => handleLessonClick(lesson)}
                       >
                         <div className="font-medium truncate">{lesson.name}</div>
+                        {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
+                          <div className="text-white/90 text-xs mt-0.5 font-medium">
+                            {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
+                          </div>
+                        )}
                         <div className="text-white/70 text-xs mt-1 truncate">
                           {lesson.instructor}
                         </div>
@@ -693,6 +683,16 @@ export default function CalendarPage() {
                         <div className="flex flex-wrap gap-1 mt-1">
                           <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
+                        </div>
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
+                            className="w-full px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-[11px] font-medium flex items-center justify-center gap-1"
+                          >
+                            <Info className="w-3 h-3 flex-shrink-0" />
+                            {t('calendar.preview')}
+                          </button>
                         </div>
                       </div>
                     );
@@ -759,7 +759,7 @@ export default function CalendarPage() {
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-7 border-b">
             {weekDays.map((day, idx) => {
-              const holidayName = getHongKongHolidayName(day);
+              const holidayName = getHolidayName(day);
               return (
                 <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
                   <div className="text-sm font-medium text-gray-600">
@@ -785,7 +785,7 @@ export default function CalendarPage() {
             {weekDays.map((day, idx) => {
               const dayLessons = getLessonsForDate(day);
               const isToday = day.toDateString() === new Date().toDateString();
-              const holidayName = getHongKongHolidayName(day);
+              const holidayName = getHolidayName(day);
               
               return (
                 <div
@@ -806,7 +806,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={lesson.id}
-                        className="mb-2 p-2 text-white rounded text-xs cursor-pointer transition-all hover:shadow-md"
+                        className="mb-2 p-2 text-white rounded text-xs transition-all hover:shadow-md"
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
@@ -816,9 +816,13 @@ export default function CalendarPage() {
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         }}
-                        onClick={() => handleLessonClick(lesson)}
                       >
                         <div className="font-medium truncate">{lesson.name}</div>
+                        {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
+                          <div className="text-white/90 text-xs mt-0.5 font-medium">
+                            {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
+                          </div>
+                        )}
                         <div className="text-white/70 text-xs mt-1 truncate">
                           {lesson.instructor}
                         </div>
@@ -831,6 +835,16 @@ export default function CalendarPage() {
                         <div className="flex flex-wrap gap-1 mt-1">
                           <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
                           <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
+                        </div>
+                        <div className="mt-2">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
+                            className="w-full px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-[11px] font-medium flex items-center justify-center gap-1"
+                          >
+                            <Info className="w-3 h-3 flex-shrink-0" />
+                            {t('calendar.preview')}
+                          </button>
                         </div>
                       </div>
                     );
@@ -909,7 +923,7 @@ export default function CalendarPage() {
             const dayLessons = getLessonsForDate(day);
             const isToday = day.toDateString() === new Date().toDateString();
             const isCurrentMonth = day.getMonth() === currentDate.getMonth();
-            const holidayName = getHongKongHolidayName(day);
+            const holidayName = getHolidayName(day);
             
             return (
               <div
@@ -940,7 +954,7 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={lesson.id}
-                        className="text-xs p-1 text-white rounded cursor-pointer transition-colors"
+                        className="text-xs p-1 text-white rounded transition-colors"
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
@@ -950,12 +964,16 @@ export default function CalendarPage() {
                         onMouseLeave={(e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         }}
-                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))} - ${levelTag.label} - ${ageTag.label} - ${t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · ${t('calendar.lessonsInTotal', { count: lesson.total_lessons })}`}
-                        onClick={() => handleLessonClick(lesson)}
+                        title={`${lesson.name}${lesson.lesson_number != null && lesson.lesson_number >= 1 ? ` · ${formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · ${t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}` : ''} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}`}
                       >
                         <div className="truncate">
                           {formatTime(new Date(lesson.start_time))} {lesson.name}
                         </div>
+                        {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
+                          <div className="truncate text-white/90 text-[10px] font-medium">
+                            {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
+                          </div>
+                        )}
                         <div className="truncate text-white/80">
                           {lesson.instructor}
                         </div>
@@ -963,13 +981,32 @@ export default function CalendarPage() {
                           <span className={`text-xs px-1 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
                           <span className={`text-xs px-1 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
                         </div>
+                        <div className="mt-1">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
+                            className="w-full px-1 py-0.5 rounded bg-white/20 hover:bg-white/30 text-[10px] font-medium truncate flex items-center justify-center gap-0.5"
+                          >
+                            <Info className="w-2.5 h-2.5 flex-shrink-0" />
+                            <span className="truncate">{t('calendar.preview')}</span>
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
                   {dayLessons.length > 3 && (
-                    <div className="text-xs text-gray-500">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setView('day');
+                        setCurrentDate(new Date(day));
+                      }}
+                      className="text-xs text-primary font-medium hover:underline cursor-pointer mt-0.5 w-full text-left"
+                      title={t('calendar.viewAllOnDay', { count: dayLessons.length })}
+                    >
                       +{dayLessons.length - 3} more
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -1089,7 +1126,22 @@ export default function CalendarPage() {
         </div>
 
         {/* Calendar View */}
-        <div>
+        <div className="relative">
+          {lessonsError && (
+            <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800" role="alert">
+              {lessonsError}
+            </div>
+          )}
+          {!lessonsError && !lessonsLoading && lessons.length === 0 && (
+            <div className="mb-4 rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
+              {t('calendar.noClasses') || 'No classes this month. Add classes in Admin or run the seed script (e.g. reset-classes-and-seed.sql).'}
+            </div>
+          )}
+          {lessonsLoading && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/70 rounded-lg">
+              <span className="text-sm text-gray-600">{t('common.loading') || 'Loading...'}</span>
+            </div>
+          )}
           {view === 'day' && renderDayView()}
           {view === 'threeDay' && renderThreeDayView()}
           {view === 'week' && renderWeekView()}
@@ -1145,8 +1197,13 @@ export default function CalendarPage() {
                               backgroundColor: locationColors.primary,
                             }}
                           >
-                            {selectedLesson.program_code}
+                            {formatProgramCodeDisplay(selectedLesson.program_code, selectedLesson.lesson_number) || selectedLesson.program_code}
                           </span>
+                          {(selectedLesson.lesson_number != null && selectedLesson.lesson_number >= 1) && (
+                            <span className="text-sm font-medium text-gray-700">
+                              {t('calendar.lessonXOfY', { current: selectedLesson.lesson_number, total: selectedLesson.total_lessons })}
+                            </span>
+                          )}
                           <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(selectedLesson.level).className}`}>
                             {getLevelTag(selectedLesson.level).label}
                           </span>
@@ -1256,7 +1313,7 @@ export default function CalendarPage() {
                           }}
                           onClick={() => setShowLessonModal(false)}
                         >
-                          {t('home.bookTrial')}
+                          {t('calendar.bookTrial')}
                         </Link>
                         {isStudent && (
                           <Link

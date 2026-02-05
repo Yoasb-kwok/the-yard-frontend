@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime } from '../lib/utils';
+import { formatDateTime, formatProgramCodeDisplay } from '../lib/utils';
 import { Search, X, AlertTriangle, Users, ChevronUp, RefreshCw } from 'lucide-react';
 
 export interface Enrollment {
@@ -25,6 +25,7 @@ export interface ClassWithAttendance {
   id: string;
   name: string;
   class_code: string;
+  lesson_number?: number | null;
   instructor: string;
   substitute_instructor?: string | null;
   start_time: string;
@@ -45,6 +46,7 @@ interface ClassAttendancePanelProps {
   onCancelClass: () => void;
   onReassign: () => void;
   onRefundToken?: (enrollmentId: string, userId: string, userName: string, remarks: string) => void;
+  onMarkMultipleAttended?: (enrollmentIds: string[]) => void | Promise<void>;
   onClose?: () => void;
   inline?: boolean;
 }
@@ -65,11 +67,13 @@ export default function ClassAttendancePanel({
   onCancelClass,
   onReassign,
   onRefundToken,
+  onMarkMultipleAttended,
   onClose,
   inline = false,
 }: ClassAttendancePanelProps) {
   const { t, i18n } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [cancelModal, setCancelModal] = useState(false);
   const [refundModal, setRefundModal] = useState<{
     isOpen: boolean;
@@ -88,6 +92,12 @@ export default function ClassAttendancePanel({
       'zh-TW': 'zh-TW',
     };
     return langMap[i18n.language] || i18n.language || 'en-US';
+  };
+
+  const formatCheckInDisplay = (value: string | null): string => {
+    if (!value) return '-';
+    if (value.includes('T') || value.includes('-')) return formatDateTime(value, getLocale());
+    return value;
   };
 
   const getStatusLabel = (status: string): string => {
@@ -112,6 +122,46 @@ export default function ClassAttendancePanel({
       e.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.user_mobile?.includes(searchTerm)
   );
+
+  const canMarkAttended = filteredEnrollments.some((e) => e.status !== 'attended');
+  const selectedCount = filteredEnrollments.filter((e) => selectedIds.has(e.id)).length;
+  const allSelected = filteredEnrollments.length > 0 && selectedCount === filteredEnrollments.length;
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredEnrollments.forEach((e) => next.delete(e.id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredEnrollments.forEach((e) => next.add(e.id));
+        return next;
+      });
+    }
+  }
+
+  async function handleMarkSelectedAsAttended() {
+    const ids = filteredEnrollments.filter((e) => selectedIds.has(e.id)).map((e) => e.id);
+    if (ids.length === 0) return;
+    await onMarkMultipleAttended?.(ids);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  }
 
   function handleCancelClass() {
     if (!confirm(t('admin.attendance.confirmCancelClass'))) return;
@@ -206,6 +256,26 @@ export default function ClassAttendancePanel({
             />
           </div>
         </div>
+        {onMarkMultipleAttended && canMarkAttended && (
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="text-sm text-primary hover:underline"
+            >
+              {allSelected ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
+            </button>
+            {selectedCount > 0 && (
+              <button
+                type="button"
+                onClick={handleMarkSelectedAsAttended}
+                className="px-3 py-1.5 rounded-md text-xs font-medium bg-green-600 text-white hover:bg-green-700"
+              >
+                {t('admin.attendance.markSelectedAsAttended')} ({selectedCount})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Table / Cards */}
@@ -219,6 +289,17 @@ export default function ClassAttendancePanel({
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  {onMarkMultipleAttended && (
+                    <th className="px-2 py-2 text-left w-10">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleSelectAll}
+                        className="rounded border-gray-300 text-primary focus:ring-primary"
+                        aria-label={t('admin.attendance.selectAll')}
+                      />
+                    </th>
+                  )}
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.studentName')}</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.mobile')}</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.status')}</th>
@@ -235,6 +316,19 @@ export default function ClassAttendancePanel({
               <tbody className="divide-y divide-gray-200">
                 {filteredEnrollments.map((enrollment) => (
                   <tr key={enrollment.id}>
+                    {onMarkMultipleAttended && (
+                      <td className="px-2 py-2 w-10">
+                        {enrollment.status !== 'attended' && (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(enrollment.id)}
+                            onChange={() => toggleSelect(enrollment.id)}
+                            className="rounded border-gray-300 text-primary focus:ring-primary"
+                            aria-label={enrollment.user_name}
+                          />
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-2 text-sm font-medium text-gray-900">{enrollment.user_name}</td>
                     <td className="px-4 py-2 text-sm text-gray-600">{formatMobile(enrollment.user_mobile)}</td>
                     <td className="px-4 py-2 text-sm">
@@ -243,7 +337,7 @@ export default function ClassAttendancePanel({
                       </span>
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600">
-                      {enrollment.check_in_time ? formatDateTime(enrollment.check_in_time, getLocale()) : '-'}
+                      {formatCheckInDisplay(enrollment.check_in_time)}
                     </td>
                     {selectedClass.is_cancelled && (
                       <td className="px-4 py-2 text-sm text-gray-600">
@@ -313,9 +407,20 @@ export default function ClassAttendancePanel({
             {filteredEnrollments.map((enrollment) => (
               <div key={enrollment.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                 <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-900 truncate">{enrollment.user_name}</h4>
-                    <p className="text-xs text-gray-600">{formatMobile(enrollment.user_mobile)}</p>
+                  <div className="flex-1 min-w-0 flex items-start gap-2">
+                    {onMarkMultipleAttended && enrollment.status !== 'attended' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(enrollment.id)}
+                        onChange={() => toggleSelect(enrollment.id)}
+                        className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary"
+                        aria-label={enrollment.user_name}
+                      />
+                    )}
+                    <div className="min-w-0">
+                      <h4 className="text-sm font-semibold text-gray-900 truncate">{enrollment.user_name}</h4>
+                      <p className="text-xs text-gray-600">{formatMobile(enrollment.user_mobile)}</p>
+                    </div>
                   </div>
                   <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${getStatusColor(enrollment.status)}`}>
                     {getStatusLabel(enrollment.status)}
@@ -325,7 +430,7 @@ export default function ClassAttendancePanel({
                   <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">{t('admin.attendance.checkIn')}:</span>
                     <span className="text-gray-900">
-                      {enrollment.check_in_time ? formatDateTime(enrollment.check_in_time, getLocale()) : '-'}
+                      {formatCheckInDisplay(enrollment.check_in_time)}
                     </span>
                   </div>
                   {selectedClass.is_cancelled && (
@@ -416,7 +521,7 @@ export default function ClassAttendancePanel({
                 <span className="font-medium">{t('admin.attendance.studentName')}:</span> {refundModal.userName}
               </p>
               <p className="text-sm text-gray-600 mt-1">
-                <span className="font-medium">{t('admin.attendance.class')}:</span> {selectedClass.name} ({selectedClass.class_code})
+                <span className="font-medium">{t('admin.attendance.class')}:</span> {selectedClass.name} ({formatProgramCodeDisplay(selectedClass.class_code, selectedClass.lesson_number) || selectedClass.class_code})
               </p>
             </div>
             <div className="mb-6">
@@ -479,7 +584,7 @@ export default function ClassAttendancePanel({
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <h4 className="font-medium text-gray-900 mb-2">{t('admin.attendance.classToCancel')}</h4>
               <p className="text-sm text-gray-600">
-                {selectedClass.name} ({selectedClass.class_code})
+                {selectedClass.name} ({formatProgramCodeDisplay(selectedClass.class_code, selectedClass.lesson_number) || selectedClass.class_code})
               </p>
               <p className="text-sm text-gray-600">
                 <span className="font-medium">{t('admin.attendance.instructor')}:</span> {selectedClass.instructor}

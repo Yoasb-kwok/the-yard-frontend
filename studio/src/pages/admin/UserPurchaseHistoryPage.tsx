@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
+import { api } from '../../lib/api';
 import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package, X, Printer } from 'lucide-react';
 
 interface Purchase {
@@ -19,116 +20,12 @@ interface Purchase {
   total: number;
   coupon_code: string | null;
   payment_status: 'pending' | 'paid' | 'failed' | 'not_required';
-  payment_method: 'credit_card' | 'fps' | 'cash';
+  payment_method: string | null;
   payment_slip_url: string | null;
   created_at: string;
   paid_at: string | null;
   token_count: number;
 }
-
-// Mock data
-const MOCK_PURCHASES: Purchase[] = [
-  {
-    id: '1',
-    order_id: 'ORD-001',
-    user_id: 'user1',
-    user_name: '張三',
-    user_mobile: '91234567',
-    package_id: '3',
-    package_name: 'Premium Pack',
-    quantity: 1,
-    subtotal: 1600,
-    discount: 0,
-    total: 1600,
-    coupon_code: null,
-    payment_status: 'paid',
-    payment_method: 'credit_card',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 10 * 60 * 1000).toISOString(),
-    token_count: 20,
-  },
-  {
-    id: '2',
-    order_id: 'ORD-002',
-    user_id: 'user2',
-    user_name: '李四',
-    user_mobile: '98765432',
-    package_id: '2',
-    package_name: 'Regular Pack',
-    quantity: 2,
-    subtotal: 1800,
-    discount: 180,
-    total: 1620,
-    coupon_code: 'SAVE10',
-    payment_status: 'paid',
-    payment_method: 'fps',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000).toISOString(),
-    token_count: 20,
-  },
-  {
-    id: '3',
-    order_id: 'ORD-003',
-    user_id: 'user3',
-    user_name: '王五',
-    user_mobile: '92345678',
-    package_id: '1',
-    package_name: 'Starter Pack',
-    quantity: 1,
-    subtotal: 500,
-    discount: 0,
-    total: 500,
-    coupon_code: null,
-    payment_status: 'pending',
-    payment_method: 'cash',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: null,
-    token_count: 5,
-  },
-  {
-    id: '4',
-    order_id: 'ORD-004',
-    user_id: 'user1',
-    user_name: '張三',
-    user_mobile: '91234567',
-    package_id: '2',
-    package_name: 'Regular Pack',
-    quantity: 1,
-    subtotal: 900,
-    discount: 0,
-    total: 900,
-    coupon_code: null,
-    payment_status: 'paid',
-    payment_method: 'credit_card',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000 + 15 * 60 * 1000).toISOString(),
-    token_count: 10,
-  },
-  {
-    id: '5',
-    order_id: 'ORD-005',
-    user_id: 'user4',
-    user_name: '陳六',
-    user_mobile: '93456789',
-    package_id: '3',
-    package_name: 'Premium Pack',
-    quantity: 1,
-    subtotal: 1600,
-    discount: 320,
-    total: 1280,
-    coupon_code: 'PREMIUM20',
-    payment_status: 'failed',
-    payment_method: 'credit_card',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: null,
-    token_count: 20,
-  },
-];
 
 export default function UserPurchaseHistoryPage() {
   const { t, i18n } = useTranslation();
@@ -142,13 +39,21 @@ export default function UserPurchaseHistoryPage() {
 
   useEffect(() => {
     loadPurchases();
-  }, []);
+  }, [statusFilter]);
 
   async function loadPurchases() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setPurchases(MOCK_PURCHASES);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const params: Record<string, string> = {};
+      if (statusFilter && statusFilter !== 'all') params.payment_status = statusFilter;
+      const res = await api.get<Purchase[]>('admin/orders', params);
+      setPurchases(res.data ?? []);
+    } catch (err) {
+      console.error('Failed to load purchases:', err);
+      setPurchases([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const getLocale = (): string => {
@@ -190,7 +95,8 @@ export default function UserPurchaseHistoryPage() {
     }
   };
 
-  const getPaymentMethodLabel = (method: string) => {
+  const getPaymentMethodLabel = (method: string | null) => {
+    if (!method) return '-';
     switch (method) {
       case 'credit_card':
         return t('shop.creditCard');
