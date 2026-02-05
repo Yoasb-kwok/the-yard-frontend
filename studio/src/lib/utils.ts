@@ -1,0 +1,176 @@
+import type { AgeTag } from '../contexts/AuthContext';
+
+/**
+ * Derive age group from date of birth using (today - DOB).
+ * Returns '5-8' | '9-12' | '13-16' if age falls in range, otherwise null.
+ */
+export function getAgeTagFromDateOfBirth(dob: string | null): AgeTag | null {
+  if (!dob) return null;
+  const birth = new Date(dob);
+  if (isNaN(birth.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  if (age >= 5 && age <= 8) return '5-8';
+  if (age >= 9 && age <= 12) return '9-12';
+  if (age >= 13 && age <= 16) return '13-16';
+  return null;
+}
+
+export function formatDate(date: string | Date, locale: string = 'en-US'): string {
+  const d = new Date(date);
+  return d.toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+export function formatDateTime(date: string | Date, locale: string = 'en-US'): string {
+  const d = new Date(date);
+  return d.toLocaleDateString(locale, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function formatCurrency(amount: number): string {
+  return `$${amount.toFixed(2)}`;
+}
+
+export function isExpiringSoon(date: string, daysThreshold: number = 7): boolean {
+  const expiryDate = new Date(date);
+  const now = new Date();
+  const diffTime = expiryDate.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays <= daysThreshold && diffDays >= 0;
+}
+
+export function isExpired(date: string): boolean {
+  const expiryDate = new Date(date);
+  const now = new Date();
+  return expiryDate < now;
+}
+
+export function calculateDiscount(
+  subtotal: number,
+  discountType: 'percentage' | 'fixed',
+  discountValue: number
+): number {
+  if (discountType === 'percentage') {
+    return subtotal * (discountValue / 100);
+  }
+  return Math.min(discountValue, subtotal);
+}
+
+/**
+ * Check if a date is a Hong Kong public holiday
+ * This includes fixed holidays and common lunar calendar holidays
+ * Note: For lunar calendar holidays, we use approximate dates for common years
+ * For production, consider using a proper holiday API or library
+ */
+export function isHongKongPublicHoliday(date: Date): boolean {
+  return getHongKongHolidayName(date) !== null;
+}
+
+/**
+ * Get the name of the Hong Kong public holiday for a given date
+ * Returns null if the date is not a holiday
+ * Uses 2026 Hong Kong public holidays as the reference calendar
+ */
+export function getHongKongHolidayName(date: Date): string | null {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1; // getMonth() returns 0-11
+  const day = date.getDate();
+  
+  // Create a map of holidays by year-month-day for accurate lookup
+  // Using 2026 as the reference calendar
+  const holidays2026: Record<string, string> = {
+    '2026-1-1': 'New Year\'s Day',
+    '2026-2-17': 'Lunar New Year\'s Day',
+    '2026-2-18': 'The Second Day of Lunar New Year',
+    '2026-2-19': 'The Third Day of Lunar New Year',
+    '2026-4-3': 'Good Friday',
+    '2026-4-4': 'The Day Following Good Friday',
+    '2026-4-6': 'Day Following Ching Ming Festival',
+    '2026-4-7': 'Day Following Easter Monday',
+    '2026-5-1': 'Labour Day',
+    '2026-5-25': 'Day Following the Birthday of the Buddha',
+    '2026-6-19': 'Tuen Ng Festival (Dragon Boat Festival)',
+    '2026-7-1': 'Hong Kong SAR Establishment Day',
+    '2026-9-26': 'Day Following Chinese Mid-Autumn Festival',
+    '2026-10-1': 'National Day',
+    '2026-10-19': 'Day Following Chung Yeung Festival',
+    '2026-12-25': 'Christmas Day',
+    '2026-12-26': 'First Weekday after Christmas Day',
+  };
+  
+  // Check if the date matches a 2026 holiday
+  const dateKey = `${year}-${month}-${day}`;
+  if (holidays2026[dateKey]) {
+    return holidays2026[dateKey];
+  }
+  
+  // For other years, check fixed holidays (same date every year)
+  const fixedHolidays: Array<{ month: number; day: number; name: string }> = [
+    { month: 1, day: 1, name: 'New Year\'s Day' },
+    { month: 5, day: 1, name: 'Labour Day' },
+    { month: 7, day: 1, name: 'Hong Kong SAR Establishment Day' },
+    { month: 10, day: 1, name: 'National Day' },
+    { month: 12, day: 25, name: 'Christmas Day' },
+    { month: 12, day: 26, name: 'Boxing Day' },
+  ];
+  
+  // Check fixed holidays for non-2026 years
+  if (year !== 2026) {
+    for (const holiday of fixedHolidays) {
+      if (month === holiday.month && day === holiday.day) {
+        return holiday.name;
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Get the next non-holiday date for a given date, postponing to the same day next week if it's a holiday
+ * @param date The original date
+ * @returns The same date if not a holiday, or the same day next week if it is a holiday
+ */
+export function getNextNonHolidayDate(date: Date): Date {
+  const checkDate = new Date(date);
+  
+  // If it's not a holiday, return the same date
+  if (!isHongKongPublicHoliday(checkDate)) {
+    return checkDate;
+  }
+  
+  // If it's a holiday, postpone to next week (same day of week)
+  const nextWeek = new Date(checkDate);
+  nextWeek.setDate(checkDate.getDate() + 7);
+  
+  // Recursively check if next week is also a holiday (shouldn't happen often, but handle it)
+  if (isHongKongPublicHoliday(nextWeek)) {
+    return getNextNonHolidayDate(nextWeek);
+  }
+  
+  return nextWeek;
+}
+
+/**
+ * Check if a date falls on a Hong Kong public holiday and should be postponed
+ * This is a convenience function that combines the check and postponement logic
+ */
+export function shouldPostponeClass(date: Date): { shouldPostpone: boolean; newDate: Date } {
+  const isHoliday = isHongKongPublicHoliday(date);
+  if (isHoliday) {
+    const newDate = getNextNonHolidayDate(date);
+    return { shouldPostpone: true, newDate };
+  }
+  return { shouldPostpone: false, newDate: date };
+}
