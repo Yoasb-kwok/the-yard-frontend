@@ -5,6 +5,8 @@ import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Plus, Edit, Trash2, User, Upload, X } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
+import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile } from '../../lib/instructorProfiles';
+import InstructorIntroCard from '../../components/InstructorIntroCard';
 
 interface Instructor {
   id: string;
@@ -27,11 +29,14 @@ interface Class {
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 }
 
-/** Fallback demo data when API is unavailable */
-const FALLBACK_INSTRUCTORS: Instructor[] = [
-  { id: 'inst_1', name: 'Amy Lee', profile_image_url: null, created_at: new Date().toISOString(), upcoming_classes_count: 3 },
-  { id: 'inst_2', name: 'Bob Chen', profile_image_url: null, created_at: new Date().toISOString(), upcoming_classes_count: 2 },
-];
+/** Fallback: 10 example teachers with 老師簡介 (see instructorProfiles). */
+const FALLBACK_INSTRUCTORS: Instructor[] = EXAMPLE_INSTRUCTOR_PROFILES.map((p, i) => ({
+  id: `inst_${i + 1}`,
+  name: p.name,
+  profile_image_url: null,
+  created_at: new Date().toISOString(),
+  upcoming_classes_count: 2 + (i % 3),
+}));
 const FALLBACK_CLASSES: Class[] = (() => {
   const d = new Date();
   d.setDate(d.getDate() + 1);
@@ -571,6 +576,14 @@ export default function InstructorsPage() {
                   placeholder={t('admin.instructors.namePlaceholder')}
                 />
               </div>
+
+              {/* Teacher intro preview (example profiles only) */}
+              {getInstructorProfile(form.name) && (
+                <div className="pt-4 border-t border-gray-200">
+                  <p className="text-xs font-medium text-gray-500 mb-2">{t('admin.instructors.introPreviewHint')}</p>
+                  <InstructorIntroCard instructorName={form.name} imageUrl={imagePreview} compact />
+                </div>
+              )}
 
               <div className="flex justify-end space-x-3 mt-6">
                 <button

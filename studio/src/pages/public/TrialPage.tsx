@@ -5,6 +5,8 @@ import PublicLayout from '../../components/PublicLayout';
 import { useAuth, CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
+import InstructorIntroCard from '../../components/InstructorIntroCard';
+import { getInstructorProfile } from '../../lib/instructorProfiles';
 
 interface ClassData {
   id: string;
@@ -32,6 +34,8 @@ export default function TrialPage() {
   const [email, setEmail] = useState('');
   const [residentialDistrict, setResidentialDistrict] = useState('');
   const [hasJoinedCourses, setHasJoinedCourses] = useState<boolean | null>(null);
+  const [hasDanceExperience, setHasDanceExperience] = useState<boolean | null>(null);
+  const [howDidYouHear, setHowDidYouHear] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -242,6 +246,13 @@ export default function TrialPage() {
                   <p className="text-lg font-bold text-gray-900">{classData.instructor}</p>
                 </div>
               </div>
+
+              {/* Teacher intro (awards, experience, dance school) */}
+              {getInstructorProfile(classData.instructor) && (
+                <div className="mb-6 pb-6 border-b-2 border-gray-100">
+                  <InstructorIntroCard instructorName={classData.instructor} />
+                </div>
+              )}
 
               {/* Class Details */}
               <div className="space-y-4">
@@ -544,6 +555,56 @@ export default function TrialPage() {
                           {t('common.no')}
                         </label>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.hasDanceExperience')}
+                      </label>
+                      <div className="flex gap-4">
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="hasDanceExperience"
+                            value="yes"
+                            checked={hasDanceExperience === true}
+                            onChange={() => setHasDanceExperience(true)}
+                            className="mr-2"
+                          />
+                          {t('common.yes')}
+                        </label>
+                        <label className="flex items-center">
+                          <input
+                            type="radio"
+                            name="hasDanceExperience"
+                            value="no"
+                            checked={hasDanceExperience === false}
+                            onChange={() => setHasDanceExperience(false)}
+                            className="mr-2"
+                          />
+                          {t('common.no')}
+                        </label>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="howDidYouHear" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.howDidYouHear')}
+                      </label>
+                      <select
+                        id="howDidYouHear"
+                        name="howDidYouHear"
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        value={howDidYouHear}
+                        onChange={(e) => setHowDidYouHear(e.target.value)}
+                      >
+                        <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
+                        <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
+                        <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
+                        <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
+                        <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
+                        <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
+                      </select>
                     </div>
                   </div>
                 )}

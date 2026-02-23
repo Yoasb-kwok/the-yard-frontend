@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat, Info } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAgeTagFromDateOfBirth, getDateStringFromStartTime, formatProgramCodeDisplay } from '../../lib/utils';
+import { getAgeTagFromDateOfBirth, getDateStringFromStartTime, formatProgramCodeDisplay, getNextNonHolidayDateWithSet } from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
+import InstructorIntroCard from '../../components/InstructorIntroCard';
+import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 
@@ -26,20 +28,72 @@ interface Lesson {
   age_tag: AgeTag;
   /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
   weekday: number;
-  /** Total lessons in the course (8 or 16). */
-  total_lessons: 8 | 16;
+  /** Total lessons in the course (4, 8, or 16 – 每週一次). */
+  total_lessons: 4 | 8 | 16;
 }
 
 type ViewType = 'day' | 'threeDay' | 'week' | 'month';
 
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
+/** Fallback: 4/8/16 堂、每週一次嘅興趣班 example，讓 Calendar 有課堂可顯示 */
+function getFallbackCalendarLessons(): Lesson[] {
+  const lessons: Lesson[] = [];
+  const now = new Date();
+  const hour = (h: number, m: number) => {
+    const d = new Date(now);
+    d.setHours(h, m, 0, 0);
+    return d;
+  };
+  type Program = { name: string; code: string; total: 4 | 8 | 16; weekday: number; hour: number; min: number; instructor: string; location: Lesson['location']; level: CourseLevel; age_tag: AgeTag };
+  const programs: Program[] = [
+    { name: '兒童芭蕾', code: 'KB-A', total: 8, weekday: 1, hour: 16, min: 0, instructor: '李老師', location: 'sanpokong', level: 'entry', age_tag: '5-8' },
+    { name: '青少年街舞', code: 'THH', total: 16, weekday: 3, hour: 17, min: 0, instructor: '陳老師', location: 'causewaybay', level: 'intermediate', age_tag: '9-12' },
+    { name: '幼兒律動', code: 'KIDS', total: 4, weekday: 6, hour: 10, min: 0, instructor: '王老師', location: 'sanpokong', level: 'entry', age_tag: '5-8' },
+    { name: '爵士舞', code: 'JAZZ', total: 8, weekday: 5, hour: 18, min: 0, instructor: '張老師', location: 'fotan', level: 'entry', age_tag: '9-12' },
+    { name: '兒童中國舞', code: 'CCD', total: 8, weekday: 2, hour: 15, min: 30, instructor: '黃老師', location: 'sheungshui', level: 'entry', age_tag: '5-8' },
+  ];
+  let id = 1;
+  for (const p of programs) {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    let daysUntilWeekday = (p.weekday - start.getDay() + 7) % 7;
+    start.setDate(start.getDate() + daysUntilWeekday);
+    start.setHours(p.hour, p.min, 0, 0);
+    if (start.getTime() < now.getTime()) start.setDate(start.getDate() + 7);
+    for (let L = 1; L <= p.total; L++) {
+      const sessionDate = new Date(start);
+      sessionDate.setDate(start.getDate() + (L - 1) * 7);
+      const endDate = new Date(sessionDate);
+      endDate.setHours(endDate.getHours() + 1, 0, 0, 0);
+      if (sessionDate.getTime() < now.getTime() - 86400000) continue;
+      lessons.push({
+        id: `fb-${id++}`,
+        name: p.name,
+        instructor: p.instructor,
+        start_time: sessionDate.toISOString(),
+        end_time: endDate.toISOString(),
+        capacity: 12,
+        enrolled_count: L <= 2 ? 5 + L : 6,
+        location: p.location,
+        program_code: p.code,
+        lesson_number: L,
+        level: p.level,
+        age_tag: p.age_tag,
+        weekday: p.weekday,
+        total_lessons: p.total,
+      });
+    }
+  }
+  return lessons.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+}
+
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const { user, profile } = useAuth();
-  const { getHolidayName } = useHolidays();
+  const { getHolidayName, holidayDatesSet } = useHolidays();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
@@ -61,6 +115,25 @@ export default function CalendarPage() {
       : lessons;
   const isLessonSuggested = (lesson: Lesson): boolean =>
     !isStudent || ((!profile?.level || lesson.level === profile.level) && (!profileAgeTag || lesson.age_tag === profileAgeTag));
+
+  /** Each lesson with display date: if original date is a holiday, show on next week same day (順延). */
+  const lessonsWithDisplay = useMemo(() => {
+    const set = holidayDatesSet;
+    return displayLessons.map((lesson) => {
+      const start = new Date(lesson.start_time);
+      const y = start.getFullYear();
+      const m = String(start.getMonth() + 1).padStart(2, '0');
+      const d = String(start.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+      if (!set.has(dateStr))
+        return { lesson, displayDateStr: dateStr, isPostponed: false as const, originalDateStr: undefined as string | undefined };
+      const next = getNextNonHolidayDateWithSet(start, set);
+      const ny = next.getFullYear();
+      const nm = String(next.getMonth() + 1).padStart(2, '0');
+      const nd = String(next.getDate()).padStart(2, '0');
+      return { lesson, displayDateStr: `${ny}-${nm}-${nd}`, isPostponed: true as const, originalDateStr: dateStr };
+    });
+  }, [displayLessons, holidayDatesSet]);
 
   useEffect(() => {
     loadLessons();
@@ -124,7 +197,7 @@ export default function CalendarPage() {
         const num = row.lesson_number != null ? Number(row.lesson_number) : 1;
         programTotalLessons[code] = Math.max(programTotalLessons[code] ?? 0, num);
       }
-      const clampTotal = (n: number): 8 | 16 => (n >= 16 ? 16 : 8);
+      const clampTotal = (n: number): 4 | 8 | 16 => (n >= 16 ? 16 : n >= 8 ? 8 : 4);
       const mapped: Lesson[] = rows
         .filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true))
         .map((cls: any) => {
@@ -146,13 +219,17 @@ export default function CalendarPage() {
             level: (cls.level || 'entry') as CourseLevel,
             age_tag: (cls.age_group || '9-12') as AgeTag,
             weekday: startTime.getDay(),
-            total_lessons: clampTotal(total) as 8 | 16,
+            total_lessons: clampTotal(total) as 4 | 8 | 16,
           };
         });
-      setLessons(mapped);
+      if (mapped.length > 0) {
+        setLessons(mapped);
+      } else {
+        setLessons(getFallbackCalendarLessons());
+      }
     } catch (error) {
       console.error('Error loading calendar classes:', error);
-      setLessons([]);
+      setLessons(getFallbackCalendarLessons());
       const msg = error instanceof Error ? error.message : 'Failed to load classes';
       setLessonsError(msg.includes('Network') || msg.includes('fetch') ? (t('admin.classes.apiConnectionError') || 'Cannot connect to API. Ensure the backend is running (e.g. http://localhost:3001).') : msg);
     } finally {
@@ -203,23 +280,20 @@ export default function CalendarPage() {
     return days;
   };
 
-  const getLessonsForDate = (date: Date): Lesson[] => {
-    // No lessons on holidays (admin holidays list)
-    if (getHolidayName(date)) return [];
-
+  /** Returns lessons to show on this date (holiday-postponed lessons appear on their 順延 date). */
+  const getLessonsForDate = (date: Date): { lesson: Lesson; _postponedFrom?: string }[] => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const day = date.getDate();
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-    return displayLessons.filter(lesson => {
-      const lessonDateStr = typeof lesson.start_time === 'string' && lesson.start_time.length >= 10
-        ? lesson.start_time.slice(0, 10)
-        : `${new Date(lesson.start_time).getFullYear()}-${String(new Date(lesson.start_time).getMonth() + 1).padStart(2, '0')}-${String(new Date(lesson.start_time).getDate()).padStart(2, '0')}`;
-      const dateMatches = lessonDateStr === dateStr;
-      const locationMatches = locationFilter === 'all' || lesson.location === locationFilter;
-      return dateMatches && locationMatches;
-    });
+    return lessonsWithDisplay
+      .filter(
+        (x) =>
+          x.displayDateStr === dateStr &&
+          (locationFilter === 'all' || x.lesson.location === locationFilter)
+      )
+      .map((x) => ({ lesson: x.lesson, _postponedFrom: x.isPostponed ? x.originalDateStr : undefined }));
   };
 
   // Get level tag styling
@@ -285,6 +359,11 @@ export default function CalendarPage() {
       minute: '2-digit',
       hour12: false,
     });
+  };
+
+  const formatShortDate = (ymd: string): string => {
+    const d = new Date(ymd + 'T12:00:00');
+    return d.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' });
   };
 
   // Generate tutor profile image URL from UI Avatars
@@ -401,7 +480,7 @@ export default function CalendarPage() {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {dayLessons.map((lesson) => {
+            {dayLessons.map(({ lesson, _postponedFrom }) => {
               const locationColors = getLocationColors(lesson.location);
               const suggested = isLessonSuggested(lesson);
               return (
@@ -425,7 +504,11 @@ export default function CalendarPage() {
                       background: `linear-gradient(to right, ${locationColors.primary}, ${locationColors.light})`,
                     }}
                   ></div>
-                  
+                  {_postponedFrom && (
+                    <p className="text-xs text-amber-600 font-medium mb-2">
+                      {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
+                    </p>
+                  )}
                   <div className="flex items-start justify-between mb-6">
                     <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">{lesson.name}</h3>
                     <div className="flex flex-col gap-2 items-end">
@@ -652,7 +735,7 @@ export default function CalendarPage() {
                       {holidayName}
                     </div>
                   )}
-                  {dayLessons.map((lesson) => {
+                  {dayLessons.map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
                     const ageTag = getAgeTag(lesson.age_tag);
@@ -671,6 +754,11 @@ export default function CalendarPage() {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         } : undefined}
                       >
+                        {_postponedFrom && (
+                          <div className="text-white/90 text-[10px] mb-0.5 italic">
+                            {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
+                          </div>
+                        )}
                         <div className="font-medium truncate">{lesson.name}</div>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
                           <div className="text-white/90 text-xs mt-0.5 font-medium">
@@ -805,7 +893,7 @@ export default function CalendarPage() {
                       {holidayName}
                     </div>
                   )}
-                  {dayLessons.map((lesson) => {
+                  {dayLessons.map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
                     const ageTag = getAgeTag(lesson.age_tag);
@@ -824,6 +912,11 @@ export default function CalendarPage() {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         } : undefined}
                       >
+                        {_postponedFrom && (
+                          <div className="text-white/90 text-[10px] mb-0.5 italic">
+                            {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
+                          </div>
+                        )}
                         <div className="font-medium truncate">{lesson.name}</div>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
                           <div className="text-white/90 text-xs mt-0.5 font-medium">
@@ -954,11 +1047,14 @@ export default function CalendarPage() {
                   </div>
                 )}
                 <div className="space-y-1">
-                  {dayLessons.slice(0, 3).map((lesson) => {
+                  {dayLessons.slice(0, 3).map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
                     const ageTag = getAgeTag(lesson.age_tag);
                     const suggested = isLessonSuggested(lesson);
+                    const titleExtra = _postponedFrom
+                      ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}`
+                      : '';
                     return (
                       <div
                         key={lesson.id}
@@ -972,8 +1068,13 @@ export default function CalendarPage() {
                         onMouseLeave={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         } : undefined}
-                        title={`${lesson.name}${lesson.lesson_number != null && lesson.lesson_number >= 1 ? ` · ${formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · ${t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}` : ''} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}`}
+                        title={`${lesson.name}${lesson.lesson_number != null && lesson.lesson_number >= 1 ? ` · ${formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · ${t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}` : ''} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}${titleExtra}`}
                       >
+                        {_postponedFrom && (
+                          <div className="truncate text-white/90 text-[10px] italic">
+                            {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
+                          </div>
+                        )}
                         <div className="truncate">
                           {formatTime(new Date(lesson.start_time))} {lesson.name}
                         </div>
@@ -1254,6 +1355,13 @@ export default function CalendarPage() {
                           <p className="text-lg font-bold text-gray-900">{selectedLesson.instructor}</p>
                         </div>
                       </div>
+
+                      {/* Teacher intro (awards, experience, dance school) */}
+                      {getInstructorProfile(selectedLesson.instructor) && (
+                        <div className="mb-6 pb-6 border-b-2 border-gray-100">
+                          <InstructorIntroCard instructorName={selectedLesson.instructor} compact />
+                        </div>
+                      )}
 
                       {/* Class Details */}
                       <div className="space-y-4 mb-6">

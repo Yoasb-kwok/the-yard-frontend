@@ -206,8 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
         } catch {
+          // API unreachable or invalid token – remove token only; keep auth_session so we can restore below (fixes refresh logout when no backend).
           localStorage.removeItem('token');
-          localStorage.removeItem('auth_session');
         }
       }
       const stored = localStorage.getItem('auth_session');

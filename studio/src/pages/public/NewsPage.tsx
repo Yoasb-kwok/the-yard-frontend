@@ -76,25 +76,46 @@ export default function NewsPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            {posts.map((post) => (
-              <Link
-                key={post.id}
-                to={`/news/${post.id}`}
-                className="block bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
-              >
-                <article>
-                  <div className="p-6">
-                    <div className="text-sm text-gray-500 mb-2">
-                      {formatDate(post.published_at, i18n.language === 'zh-TW' || i18n.language === 'zh-CN' ? 'zh-TW' : 'en-US')}
+            {/* Banner: first post image or gradient */}
+            {posts.length > 0 && posts[0].image_url && (
+              <div className="rounded-xl overflow-hidden shadow-lg h-48 sm:h-56 md:h-64 bg-gray-200">
+                <img
+                  src={posts[0].image_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+            <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2">
+              {posts.map((post) => (
+                <Link
+                  key={post.id}
+                  to={`/news/${post.id}`}
+                  className="block bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition-shadow"
+                >
+                  <article>
+                    {post.image_url && (
+                      <div className="aspect-video w-full bg-gray-100">
+                        <img
+                          src={post.image_url}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="p-6">
+                      <div className="text-sm text-gray-500 mb-2">
+                        {formatDate(post.published_at, i18n.language === 'zh-TW' || i18n.language === 'zh-CN' ? 'zh-TW' : 'en-US')}
+                      </div>
+                      <h2 className="text-xl font-bold text-gray-900 mb-2 hover:text-primary transition-colors">
+                        {post.title}
+                      </h2>
+                      <p className="text-gray-700 line-clamp-3">{post.content}</p>
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-3 hover:text-primary transition-colors">
-                      {post.title}
-                    </h2>
-                    <p className="text-gray-700 line-clamp-3">{post.content}</p>
-                  </div>
-                </article>
-              </Link>
-            ))}
+                  </article>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </div>

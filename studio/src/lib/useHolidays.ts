@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from './api';
 import { getHolidayNameFromList, type HolidayItem } from './utils';
+import { HK_PUBLIC_HOLIDAYS } from './hkPublicHolidays';
 
 export interface HolidayRecord {
   id: string;
@@ -11,8 +12,8 @@ export interface HolidayRecord {
 }
 
 /**
- * Fetch holidays from API (admin list) and expose getHolidayName + holiday set for calendars.
- * Use this so all calendar views show the same holidays as Admin → Holidays.
+ * Fetch holidays from API (admin list), merge with HK statutory holidays, expose for calendars.
+ * Calendar always has 香港法定假期; admin list can override names or add academy-only dates.
  */
 export function useHolidays() {
   const [list, setList] = useState<HolidayRecord[]>([]);
@@ -38,13 +39,14 @@ export function useHolidays() {
     };
   }, []);
 
-  const holidayItems: HolidayItem[] = useMemo(
-    () =>
-      list
-        .filter((h) => h.date && /^\d{4}-\d{2}-\d{2}$/.test(String(h.date).trim().slice(0, 10)))
-        .map((h) => ({ date: String(h.date).trim().slice(0, 10), name: h.name || '' })),
-    [list]
-  );
+  const holidayItems: HolidayItem[] = useMemo(() => {
+    const fromApi = list
+      .filter((h) => h.date && /^\d{4}-\d{2}-\d{2}$/.test(String(h.date).trim().slice(0, 10)))
+      .map((h) => ({ date: String(h.date).trim().slice(0, 10), name: h.name || '' }));
+    const apiDates = new Set(fromApi.map((h) => h.date));
+    const fromHK = HK_PUBLIC_HOLIDAYS.filter((h) => !apiDates.has(h.date));
+    return [...fromApi, ...fromHK];
+  }, [list]);
 
   const holidayDatesSet = useMemo(
     () => new Set(holidayItems.map((h) => h.date)),

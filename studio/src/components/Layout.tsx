@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import logoImage from '../assets/images/the-yard-logo.png';
 
@@ -65,6 +65,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const adminNavItems = [
     { path: '/admin', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { path: '/admin/pending-applications', icon: ClipboardList, label: t('admin.dashboard.pendingApplications') },
     { path: '/admin/users', icon: Users, label: t('nav.users') },
     { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
     { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },

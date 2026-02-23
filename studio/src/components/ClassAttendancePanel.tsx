@@ -304,6 +304,7 @@ export default function ClassAttendancePanel({
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.studentName')}</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.mobile')}</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.status')}</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.sickLeaveDoc')}</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.checkIn')}</th>
                   {selectedClass.is_cancelled && (
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.reassignedTo')}</th>
@@ -336,6 +337,17 @@ export default function ClassAttendancePanel({
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(enrollment.status)}`}>
                         {getStatusLabel(enrollment.status)}
                       </span>
+                    </td>
+                    <td className="px-4 py-2 text-sm text-gray-600">
+                      {enrollment.status === 'sick_leave' && (
+                        enrollment.sick_leave_document_url ? (
+                          <a href={enrollment.sick_leave_document_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            {t('admin.attendance.viewSickLeaveDoc')}
+                          </a>
+                        ) : (
+                          <span className="text-primary">{t('admin.attendance.viewSickLeaveDoc')}</span>
+                        )
+                      )}
                     </td>
                     <td className="px-4 py-2 text-sm text-gray-600">
                       {formatCheckInDisplay(enrollment.check_in_time)}
@@ -434,6 +446,20 @@ export default function ClassAttendancePanel({
                       {formatCheckInDisplay(enrollment.check_in_time)}
                     </span>
                   </div>
+                  {enrollment.status === 'sick_leave' && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 font-medium">{t('admin.attendance.sickLeaveDoc')}:</span>
+                      <span className="text-gray-900">
+                        {enrollment.sick_leave_document_url ? (
+                          <a href={enrollment.sick_leave_document_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            {t('admin.attendance.viewSickLeaveDoc')}
+                          </a>
+                        ) : (
+                          <span className="text-primary">{t('admin.attendance.viewSickLeaveDoc')}</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
                   {selectedClass.is_cancelled && (
                     <div className="pt-1.5 border-t border-gray-200">
                       <div className="flex justify-between">

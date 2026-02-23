@@ -16,8 +16,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  FunnelChart,
-  Funnel,
   BarChart,
   Bar,
   Legend,
@@ -617,6 +615,39 @@ export default function AdminDashboard() {
                   </div>
                 )}
               </div>
+
+              <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-3">{t('admin.dashboard.trialApplications')}</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-left text-gray-600">
+                        <th className="py-2 pr-4">{t('admin.dashboard.name')}</th>
+                        <th className="py-2 pr-4">{t('admin.dashboard.trialClass')}</th>
+                        <th className="py-2 pr-4">{t('admin.dashboard.hasDanceExperience')}</th>
+                        <th className="py-2 pr-4">{t('admin.dashboard.howDidYouHear')}</th>
+                        <th className="py-2">{t('admin.dashboard.date')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      <tr>
+                        <td className="py-2 pr-4 font-medium text-gray-900">王小明</td>
+                        <td className="py-2 pr-4 text-gray-700">兒童芭蕾試堂</td>
+                        <td className="py-2 pr-4 text-gray-700">{t('common.yes')}</td>
+                        <td className="py-2 pr-4 text-gray-700">Instagram</td>
+                        <td className="py-2 text-gray-500">2026-02-20</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 pr-4 font-medium text-gray-900">陳小美</td>
+                        <td className="py-2 pr-4 text-gray-700">青少年街舞試堂</td>
+                        <td className="py-2 pr-4 text-gray-700">{t('common.no')}</td>
+                        <td className="py-2 pr-4 text-gray-700">{t('trial.howDidYouHearOptions.friendReferral')}</td>
+                        <td className="py-2 text-gray-500">2026-02-21</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </>
           )}
 
@@ -814,21 +845,22 @@ export default function AdminDashboard() {
                   </div>
                   <div className="grid md:grid-cols-2 gap-6">
                     <div className="bg-white rounded-lg shadow-md p-6">
-                      <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.conversionFunnel')} – {t('admin.dashboard.trialToEnrollmentRate')}</h3>
+                      <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.conversionFunnel')}</h3>
                       {funnel.funnelStages.length > 0 ? (
-                        <ResponsiveContainer width="100%" height={260}>
-                          <FunnelChart>
-                            <Tooltip />
-                            <Funnel
-                              dataKey="value"
-                              nameKey="name"
-                              data={funnel.funnelStages}
-                              isAnimationActive
-                              fill="#10b981"
-                              stroke="#059669"
-                            />
-                          </FunnelChart>
-                        </ResponsiveContainer>
+                        <div className="space-y-4">
+                          <p className="text-xs text-gray-500 mb-3">{t('admin.dashboard.conversionFunnelDesc')}</p>
+                          <div className="flex flex-col sm:flex-row items-stretch gap-3">
+                            {funnel.funnelStages.map((stage, i) => (
+                              <div key={stage.nameKey} className="flex-1 flex flex-col items-center justify-center rounded-lg border-2 border-primary/30 bg-primary/5 p-4 min-h-[100px]">
+                                <span className="text-2xl font-bold text-primary">{stage.value}</span>
+                                <span className="text-sm font-medium text-gray-700 mt-1">{t(`admin.dashboard.funnelStage.${stage.nameKey}`)}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="text-center pt-2">
+                            <span className="text-sm font-semibold text-primary">{t('admin.dashboard.trialToEnrollmentRate')}: {funnel.trialToEnrollmentRate.toFixed(1)}%</span>
+                          </div>
+                        </div>
                       ) : (
                         <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>
                       )}

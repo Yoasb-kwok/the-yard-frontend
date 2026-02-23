@@ -25,6 +25,7 @@ import PaymentHistoryPage from './pages/student/PaymentHistoryPage';
 import ProfilePage from './pages/student/ProfilePage';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
+import PendingApplicationsPage from './pages/admin/PendingApplicationsPage';
 import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
 import ClassAttendancePage from './pages/admin/ClassAttendancePage';
@@ -99,6 +100,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/pending-applications"
+            element={
+              <ProtectedRoute requireAdmin>
+                <PendingApplicationsPage />
               </ProtectedRoute>
             }
           />

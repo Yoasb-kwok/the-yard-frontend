@@ -5,6 +5,8 @@ import PublicLayout from '../../components/PublicLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, calculateDiscount } from '../../lib/utils';
 import { ShoppingCart, Lock, Check, Calendar, Clock, MapPin } from 'lucide-react';
+import InstructorIntroCard from '../../components/InstructorIntroCard';
+import { getInstructorProfile } from '../../lib/instructorProfiles';
 
 interface ClassData {
   id: string;
@@ -282,6 +284,11 @@ export default function TokenPackagePage() {
                 </div>
               </div>
             </div>
+            {getInstructorProfile(classData.instructor) && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <InstructorIntroCard instructorName={classData.instructor} />
+              </div>
+            )}
           </div>
         )}
 

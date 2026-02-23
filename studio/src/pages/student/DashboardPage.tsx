@@ -59,12 +59,13 @@ interface ApplicationModalProps {
   onClose: () => void;
   type: 'extension' | 'sickLeave';
   enrollment: UpcomingClass;
-  onSubmit: (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string) => void;
+  onSubmit: (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string, documentFile?: File | null) => void;
 }
 
 function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: ApplicationModalProps) {
   const { t, i18n } = useTranslation();
   const [reason, setReason] = useState('');
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Map i18n language codes to locale strings for date formatting
@@ -85,8 +86,9 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
 
     setSubmitting(true);
     await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    onSubmit(enrollment.id, type, reason);
+    onSubmit(enrollment.id, type, reason, type === 'sickLeave' ? documentFile : undefined);
     setReason('');
+    setDocumentFile(null);
     setSubmitting(false);
     onClose();
   };
@@ -95,9 +97,17 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
         <div className="flex items-center justify-between p-6 border-b">
-          <h3 className="text-xl font-semibold text-gray-900">
-            {type === 'extension' ? t('schedule.applyExtension') : t('schedule.applySickLeave')}
-          </h3>
+          <div>
+            <h3 className="text-xl font-semibold text-gray-900">
+              {type === 'extension' ? t('schedule.applyExtension') : t('schedule.applySickLeave')}
+            </h3>
+            <p className="text-sm text-gray-500 mt-1">
+              {type === 'extension' ? t('schedule.extensionHint') : t('schedule.sickLeaveHint')}
+            </p>
+            <p className="text-sm text-primary/90 mt-2 font-medium">
+              {t('schedule.noMakeupRefundNote')}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 transition-colors"
@@ -129,6 +139,22 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
               required
             />
           </div>
+
+          {type === 'sickLeave' && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('schedule.uploadSickLeaveDoc')}
+              </label>
+              <p className="text-xs text-gray-500 mb-2">{t('schedule.uploadSickLeaveDocHint')}</p>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={(e) => setDocumentFile(e.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary-dark"
+              />
+              {documentFile && <p className="text-xs text-green-600 mt-1">{documentFile.name}</p>}
+            </div>
+          )}
 
           <div className="flex gap-3">
             <button
@@ -223,7 +249,7 @@ export default function DashboardPage() {
       }, tokens[0].expiry_date)
     : null;
 
-  const handleApplicationSubmit = (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string) => {
+  const handleApplicationSubmit = (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string, _documentFile?: File | null) => {
     setUpcomingClasses(prev => prev.map(enrollment => {
       if (enrollment.id === enrollmentId) {
         const applicationKey = type === 'sickLeave' ? 'sick_leave_application' : 'extension_application';
@@ -334,6 +360,9 @@ export default function DashboardPage() {
                   {expiringTokens.length} {t('dashboard.tokensExpiring')}
                 </div>
               </div>
+            )}
+            {totalTokens > 0 && (
+              <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">{t('dashboard.newPackageExpiryNote')}</p>
             )}
           </div>
 

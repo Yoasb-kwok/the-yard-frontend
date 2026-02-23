@@ -79,6 +79,7 @@ function getFallbackEnrollments(classId: string): Enrollment[] {
   return [
     { id: 'enr_demo_1', class_id: classId, user_id: 'student-001', user_name: 'Student One', user_mobile: '87654321', status: 'enrolled', check_in_time: null, check_out_time: null, sick_leave_document_url: null, created_at: now },
     { id: 'enr_demo_2', class_id: classId, user_id: 'student-002', user_name: 'Student Two', user_mobile: '98765432', status: 'absent', check_in_time: null, check_out_time: null, sick_leave_document_url: null, created_at: now },
+    { id: 'enr_demo_3', class_id: classId, user_id: 'student-003', user_name: '李小花', user_mobile: '91234567', status: 'sick_leave', check_in_time: null, check_out_time: null, sick_leave_document_url: null, created_at: now },
   ];
 }
 
