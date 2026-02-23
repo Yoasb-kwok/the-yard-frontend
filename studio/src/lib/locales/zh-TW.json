@@ -222,7 +222,8 @@
     "applicationSubmittedDescLoggedIn": "您的試堂申請已成功提交！我們將審核您的申請並盡快與您聯繫。",
     "redirecting": "正在重定向到登入頁面...",
     "redirectingToDashboard": "正在重定向到儀表板...",
-    "free": "免費"
+    "free": "免費",
+    "sameAccountNote": "試堂生與新生使用同一帳戶，無需重複註冊。"
   },
   "login": {
     "title": "登入您的帳戶",
@@ -658,6 +659,7 @@
       "confirmed": "導師已確認",
       "notConfirmed": "尚未確認",
       "confirmAttendanceStatus": "確認名單出席狀態",
+      "confirmAttendanceNote": "確認只表示老師已核對名單，與扣堂無關。",
       "markAsUnconfirmed": "標記為未確認",
       "statuses": {
         "enrolled": "已報名",
@@ -813,7 +815,13 @@
       "syncing": "同步中…",
       "syncFromHKSuccess": "已同步：新增 {{added}} 項，更新 {{updated}} 項。",
       "syncFromHKDone": "同步完成。",
-      "syncFromHKFailed": "同步失敗，請檢查網絡或稍後再試。"
+      "syncFromHKFailed": "同步失敗，請檢查網絡或稍後再試。",
+      "postponeOneWeek": "順延一星期",
+      "postponeOneWeekTooltip": "將此假期當日所有堂及相關代幣到期日順延一星期",
+      "postponeConfirmTitle": "順延一星期",
+      "postponeConfirmMessage": "將於 {{date}}（{{name}}）的所有堂及相關代幣到期日順延一星期。確定？",
+      "postponeSuccess": "已發送順延請求，後端就緒時會處理。",
+      "postponeFailed": "順延請求失敗或後端尚未就緒。"
     },
     "purchaseHistory": {
       "title": "用戶購買記錄",
@@ -960,7 +968,10 @@
     },
     "preview": "課程詳情",
     "bookTrial": "預約試堂",
-    "viewAllOnDay": "查看當日全部 {{count}} 堂"
+    "viewAllOnDay": "查看當日全部 {{count}} 堂",
+    "suggested": "建議",
+    "all": "全部",
+    "notSuggested": "非建議（級別/年齡不符）"
   },
   "faq": {
     "title": "常見問題",

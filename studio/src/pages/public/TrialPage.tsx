@@ -192,6 +192,9 @@ export default function TrialPage() {
                 : t('trial.applicationSubmittedDesc')
               }
             </p>
+            <p className="text-sm text-gray-600 mb-4">
+              {t('trial.sameAccountNote')}
+            </p>
             <p className="text-sm text-gray-500">
               {wasLoggedIn ? t('trial.redirectingToDashboard') : t('trial.redirecting')}
             </p>

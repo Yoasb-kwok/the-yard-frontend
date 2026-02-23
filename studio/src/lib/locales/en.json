@@ -222,7 +222,8 @@
     "applicationSubmittedDescLoggedIn": "Your trial lesson application has been submitted successfully! We will review your application and contact you soon.",
     "redirecting": "Redirecting to login...",
     "redirectingToDashboard": "Redirecting to dashboard...",
-    "free": "FREE"
+    "free": "FREE",
+    "sameAccountNote": "Trial and regular students use the same account; no need to sign up again."
   },
   "login": {
     "title": "Sign in to your account",
@@ -658,6 +659,7 @@
       "confirmed": "Instructor Confirmed",
       "notConfirmed": "Not Confirmed",
       "confirmAttendanceStatus": "Confirm Attendance Status",
+      "confirmAttendanceNote": "Confirming only means the instructor has reviewed the list; it does not affect token deduction.",
       "markAsUnconfirmed": "Mark as Unconfirmed",
       "statuses": {
         "enrolled": "Enrolled",
@@ -813,7 +815,13 @@
       "syncing": "Syncing…",
       "syncFromHKSuccess": "Synced: {{added}} added, {{updated}} updated.",
       "syncFromHKDone": "Sync completed.",
-      "syncFromHKFailed": "Sync failed. Check network or try again later."
+      "syncFromHKFailed": "Sync failed. Check network or try again later.",
+      "postponeOneWeek": "Postpone 1 week",
+      "postponeOneWeekTooltip": "Shift all classes on this date and related token expiry dates by one week",
+      "postponeConfirmTitle": "Postpone by one week",
+      "postponeConfirmMessage": "All classes on {{date}} ({{name}}) and related token expiry dates will be shifted by one week. Continue?",
+      "postponeSuccess": "Postpone request sent. Backend will process when available.",
+      "postponeFailed": "Postpone request failed or backend not ready."
     },
     "purchaseHistory": {
       "title": "User Purchase History",
@@ -960,7 +968,10 @@
     },
     "preview": "View details",
     "bookTrial": "Book Trial",
-    "viewAllOnDay": "View all {{count}} classes on this day"
+    "viewAllOnDay": "View all {{count}} classes on this day",
+    "suggested": "Suggested",
+    "all": "All",
+    "notSuggested": "Not recommended for your level/age"
   },
   "faq": {
     "title": "Frequently Asked Questions",

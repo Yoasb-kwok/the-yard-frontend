@@ -50,8 +50,17 @@ export default function CalendarPage() {
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
+  const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
   
   const isStudent = user && profile?.role === 'student';
+  const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
+  const displayLessons = !isStudent
+    ? lessons
+    : calendarFilterMode === 'suggested'
+      ? lessons.filter((l) => l.level === profile?.level && l.age_tag === profileAgeTag)
+      : lessons;
+  const isLessonSuggested = (lesson: Lesson): boolean =>
+    !isStudent || ((!profile?.level || lesson.level === profile.level) && (!profileAgeTag || lesson.age_tag === profileAgeTag));
 
   useEffect(() => {
     loadLessons();
@@ -140,15 +149,7 @@ export default function CalendarPage() {
             total_lessons: clampTotal(total) as 8 | 16,
           };
         });
-      let filteredLessons = mapped;
-      if (isStudent && profile?.level) {
-        filteredLessons = filteredLessons.filter(lesson => lesson.level === profile.level);
-      }
-      const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
-      if (isStudent && profileAgeTag) {
-        filteredLessons = filteredLessons.filter(lesson => lesson.age_tag === profileAgeTag);
-      }
-      setLessons(filteredLessons);
+      setLessons(mapped);
     } catch (error) {
       console.error('Error loading calendar classes:', error);
       setLessons([]);
@@ -211,7 +212,7 @@ export default function CalendarPage() {
     const day = date.getDate();
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-    return lessons.filter(lesson => {
+    return displayLessons.filter(lesson => {
       const lessonDateStr = typeof lesson.start_time === 'string' && lesson.start_time.length >= 10
         ? lesson.start_time.slice(0, 10)
         : `${new Date(lesson.start_time).getFullYear()}-${String(new Date(lesson.start_time).getMonth() + 1).padStart(2, '0')}-${String(new Date(lesson.start_time).getDate()).padStart(2, '0')}`;
@@ -402,20 +403,20 @@ export default function CalendarPage() {
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {dayLessons.map((lesson) => {
               const locationColors = getLocationColors(lesson.location);
-              
+              const suggested = isLessonSuggested(lesson);
               return (
                 <div 
                   key={lesson.id} 
-                  className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 hover:shadow-2xl transition-all duration-300 flex flex-col transform hover:-translate-y-1"
+                  className={`bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 transition-all duration-300 flex flex-col ${suggested ? 'hover:shadow-2xl hover:-translate-y-1' : 'opacity-75'}`}
                   style={{
-                    borderColor: locationColors.lighter,
+                    borderColor: suggested ? locationColors.lighter : '#e5e7eb',
                   }}
-                  onMouseEnter={(e) => {
+                  onMouseEnter={suggested ? (e) => {
                     e.currentTarget.style.borderColor = locationColors.primary;
-                  }}
-                  onMouseLeave={(e) => {
+                  } : undefined}
+                  onMouseLeave={suggested ? (e) => {
                     e.currentTarget.style.borderColor = locationColors.lighter;
-                  }}
+                  } : undefined}
                 >
                   {/* Top accent border */}
                   <div 
@@ -510,7 +511,7 @@ export default function CalendarPage() {
                       <Info className="w-5 h-5" />
                       {t('calendar.preview')}
                     </button>
-                    {isStudent && (
+                    {isStudent && (suggested ? (
                       <Link
                         to="/token-package"
                         state={{
@@ -539,7 +540,11 @@ export default function CalendarPage() {
                       >
                         {t('calendar.enroll')}
                       </Link>
-                    )}
+                    ) : (
+                      <span className="w-full px-6 py-3 rounded-lg text-base font-medium text-center block bg-gray-200 text-gray-500 cursor-not-allowed">
+                        {t('calendar.notSuggested')}
+                      </span>
+                    ))}
                   </div>
                 </div>
               );
@@ -651,19 +656,20 @@ export default function CalendarPage() {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
                     const ageTag = getAgeTag(lesson.age_tag);
+                    const suggested = isLessonSuggested(lesson);
                     return (
                       <div
                         key={lesson.id}
-                        className="mb-2 p-2 text-white rounded text-xs transition-all hover:shadow-md"
+                        className={`mb-2 p-2 text-white rounded text-xs transition-all ${suggested ? 'hover:shadow-md' : 'opacity-70'}`}
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
-                        onMouseEnter={(e) => {
+                        onMouseEnter={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.dark;
-                        }}
-                        onMouseLeave={(e) => {
+                        } : undefined}
+                        onMouseLeave={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
-                        }}
+                        } : undefined}
                       >
                         <div className="font-medium truncate">{lesson.name}</div>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
@@ -803,19 +809,20 @@ export default function CalendarPage() {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
                     const ageTag = getAgeTag(lesson.age_tag);
+                    const suggested = isLessonSuggested(lesson);
                     return (
                       <div
                         key={lesson.id}
-                        className="mb-2 p-2 text-white rounded text-xs transition-all hover:shadow-md"
+                        className={`mb-2 p-2 text-white rounded text-xs transition-all ${suggested ? 'hover:shadow-md' : 'opacity-70'}`}
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
-                        onMouseEnter={(e) => {
+                        onMouseEnter={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.dark;
-                        }}
-                        onMouseLeave={(e) => {
+                        } : undefined}
+                        onMouseLeave={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
-                        }}
+                        } : undefined}
                       >
                         <div className="font-medium truncate">{lesson.name}</div>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
@@ -951,19 +958,20 @@ export default function CalendarPage() {
                     const locationColors = getLocationColors(lesson.location);
                     const levelTag = getLevelTag(lesson.level);
                     const ageTag = getAgeTag(lesson.age_tag);
+                    const suggested = isLessonSuggested(lesson);
                     return (
                       <div
                         key={lesson.id}
-                        className="text-xs p-1 text-white rounded transition-colors"
+                        className={`text-xs p-1 text-white rounded transition-colors ${suggested ? '' : 'opacity-70'}`}
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
-                        onMouseEnter={(e) => {
+                        onMouseEnter={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.dark;
-                        }}
-                        onMouseLeave={(e) => {
+                        } : undefined}
+                        onMouseLeave={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
-                        }}
+                        } : undefined}
                         title={`${lesson.name}${lesson.lesson_number != null && lesson.lesson_number >= 1 ? ` · ${formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · ${t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}` : ''} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}`}
                       >
                         <div className="truncate">
@@ -1123,6 +1131,27 @@ export default function CalendarPage() {
               }
             </h2>
           </div>
+
+          {isStudent && (
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                onClick={() => setCalendarFilterMode('suggested')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  calendarFilterMode === 'suggested' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('calendar.suggested')}
+              </button>
+              <button
+                onClick={() => setCalendarFilterMode('all')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                  calendarFilterMode === 'all' ? 'bg-primary text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('calendar.all')}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Calendar View */}
@@ -1284,67 +1313,74 @@ export default function CalendarPage() {
 
                       </div>
 
-                      {/* Book Trial Button */}
+                      {/* Book Trial / Enroll */}
                       <div className="space-y-3">
-                        <Link
-                          to={`/trial?classId=${selectedLesson.id}`}
-                          state={{
-                            classData: {
-                              id: selectedLesson.id,
-                              name: selectedLesson.name,
-                              instructor: selectedLesson.instructor,
-                              start_time: selectedLesson.start_time,
-                              end_time: selectedLesson.end_time,
-                              location: selectedLesson.location,
-                              program_code: selectedLesson.program_code,
-                              level: selectedLesson.level,
-                              age_tag: selectedLesson.age_tag,
-                            }
-                          }}
-                          className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
-                          style={{
-                            backgroundColor: locationColors.primary,
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = locationColors.dark;
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = locationColors.primary;
-                          }}
-                          onClick={() => setShowLessonModal(false)}
-                        >
-                          {t('calendar.bookTrial')}
-                        </Link>
-                        {isStudent && (
-                          <Link
-                            to="/token-package"
-                            state={{
-                              classData: {
-                                id: selectedLesson.id,
-                                name: selectedLesson.name,
-                                instructor: selectedLesson.instructor,
-                                start_time: selectedLesson.start_time,
-                                end_time: selectedLesson.end_time,
-                                location: selectedLesson.location,
-                                program_code: selectedLesson.program_code,
-                                level: selectedLesson.level,
-                                age_tag: selectedLesson.age_tag,
-                              }
-                            }}
-                            className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
-                            style={{
-                              backgroundColor: locationColors.primary,
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = locationColors.dark;
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = locationColors.primary;
-                            }}
-                            onClick={() => setShowLessonModal(false)}
-                          >
-                            {t('calendar.enroll')}
-                          </Link>
+                        {selectedLesson && !isLessonSuggested(selectedLesson) && isStudent && (
+                          <p className="text-sm text-gray-500 py-2">{t('calendar.notSuggested')}</p>
+                        )}
+                        {selectedLesson && (isStudent ? isLessonSuggested(selectedLesson) : true) && (
+                          <>
+                            <Link
+                              to={`/trial?classId=${selectedLesson.id}`}
+                              state={{
+                                classData: {
+                                  id: selectedLesson.id,
+                                  name: selectedLesson.name,
+                                  instructor: selectedLesson.instructor,
+                                  start_time: selectedLesson.start_time,
+                                  end_time: selectedLesson.end_time,
+                                  location: selectedLesson.location,
+                                  program_code: selectedLesson.program_code,
+                                  level: selectedLesson.level,
+                                  age_tag: selectedLesson.age_tag,
+                                }
+                              }}
+                              className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                              style={{
+                                backgroundColor: locationColors.primary,
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = locationColors.dark;
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = locationColors.primary;
+                              }}
+                              onClick={() => setShowLessonModal(false)}
+                            >
+                              {t('calendar.bookTrial')}
+                            </Link>
+                            {isStudent && (
+                              <Link
+                                to="/token-package"
+                                state={{
+                                  classData: {
+                                    id: selectedLesson.id,
+                                    name: selectedLesson.name,
+                                    instructor: selectedLesson.instructor,
+                                    start_time: selectedLesson.start_time,
+                                    end_time: selectedLesson.end_time,
+                                    location: selectedLesson.location,
+                                    program_code: selectedLesson.program_code,
+                                    level: selectedLesson.level,
+                                    age_tag: selectedLesson.age_tag,
+                                  }
+                                }}
+                                className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                                style={{
+                                  backgroundColor: locationColors.primary,
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = locationColors.dark;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = locationColors.primary;
+                                }}
+                                onClick={() => setShowLessonModal(false)}
+                              >
+                                {t('calendar.enroll')}
+                              </Link>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>

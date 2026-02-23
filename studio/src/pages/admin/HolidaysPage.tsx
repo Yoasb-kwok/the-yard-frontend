@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { Plus, Edit, Trash2, Search, CalendarOff, RefreshCw } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, CalendarOff, RefreshCw, CalendarClock } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
 
 export interface Holiday {
@@ -33,6 +33,8 @@ export default function HolidaysPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [postponeModal, setPostponeModal] = useState<Holiday | null>(null);
+  const [postponing, setPostponing] = useState(false);
   const [form, setForm] = useState({
     name: '',
     date: '',
@@ -139,6 +141,19 @@ export default function HolidaysPage() {
     } catch (err) {
       console.error('Delete holiday failed:', err);
       alert(err instanceof Error ? err.message : t('common.error'));
+    }
+  }
+
+  async function handlePostponeOneWeek(holiday: Holiday) {
+    setPostponing(true);
+    try {
+      await api.post<{ success?: boolean }>(`admin/holidays/${holiday.id}/postpone`).catch(() => ({}));
+      alert(t('admin.holidays.postponeSuccess'));
+      setPostponeModal(null);
+    } catch {
+      alert(t('admin.holidays.postponeFailed'));
+    } finally {
+      setPostponing(false);
     }
   }
 
@@ -270,6 +285,13 @@ export default function HolidaysPage() {
                       </div>
                       <div className="flex gap-1">
                         <button
+                          onClick={() => setPostponeModal(holiday)}
+                          className="rounded p-1.5 text-amber-600 hover:bg-amber-50"
+                          title={t('admin.holidays.postponeOneWeekTooltip')}
+                        >
+                          <CalendarClock className="h-5 w-5" />
+                        </button>
+                        <button
                           onClick={() => openEditModal(holiday)}
                           className="rounded p-1.5 text-primary hover:bg-primary/10"
                           title={t('common.edit')}
@@ -318,6 +340,13 @@ export default function HolidaysPage() {
                         <td className="px-3 py-3 lg:px-4">
                           <div className="flex items-center gap-2">
                             <button
+                              onClick={() => setPostponeModal(holiday)}
+                              className="text-amber-600 hover:text-amber-800"
+                              title={t('admin.holidays.postponeOneWeekTooltip')}
+                            >
+                              <CalendarClock className="h-4 w-4" />
+                            </button>
+                            <button
                               onClick={() => openEditModal(holiday)}
                               className="text-primary hover:text-primary-dark"
                               title={t('common.edit')}
@@ -342,6 +371,38 @@ export default function HolidaysPage() {
           )}
         </div>
       </div>
+
+      {postponeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white p-4 sm:p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">{t('admin.holidays.postponeConfirmTitle')}</h3>
+            <p className="text-gray-600 mb-6">
+              {t('admin.holidays.postponeConfirmMessage', {
+                date: formatDate(postponeModal.date, getLocale()),
+                name: postponeModal.name,
+              })}
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setPostponeModal(null)}
+                disabled={postponing}
+                className="px-4 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePostponeOneWeek(postponeModal)}
+                disabled={postponing}
+                className="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
+              >
+                {postponing ? t('common.loading') : t('admin.holidays.postponeOneWeek')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
