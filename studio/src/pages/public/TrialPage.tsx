@@ -7,6 +7,8 @@ import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
+import { api } from '../../lib/api';
+import { TRIAL_APPLY_ENDPOINT } from '../../lib/trialApplyFlow';
 
 interface ClassData {
   id: string;
@@ -19,6 +21,33 @@ interface ClassData {
   level: CourseLevel;
   age_tag?: AgeTag;
 }
+
+/** 6 堂試堂選項，整齊展示 */
+function getTrialClassOptions(): ClassData[] {
+  const base = new Date();
+  base.setDate(base.getDate() + ((1 - base.getDay() + 7) % 7) || 7);
+  const at = (dayOffset: number, hour: number, min: number) => {
+    const d = new Date(base);
+    d.setDate(base.getDate() + dayOffset);
+    d.setHours(hour, min, 0, 0);
+    return d;
+  };
+  const end = (start: Date, durMin: number) => {
+    const e = new Date(start);
+    e.setMinutes(e.getMinutes() + durMin);
+    return e;
+  };
+  return [
+    { id: 'trial-1', name: '兒童芭蕾體驗', instructor: '李老師', start_time: at(1, 16, 0).toISOString(), end_time: end(at(1, 16, 0), 60).toISOString(), location: 'sanpokong', program_code: 'KB-A', level: 'entry', age_tag: '5-8' },
+    { id: 'trial-2', name: '青少年街舞體驗', instructor: '陳老師', start_time: at(3, 17, 0).toISOString(), end_time: end(at(3, 17, 0), 60).toISOString(), location: 'causewaybay', program_code: 'THH', level: 'intermediate', age_tag: '9-12' },
+    { id: 'trial-3', name: '幼兒律動體驗', instructor: '王老師', start_time: at(6, 10, 0).toISOString(), end_time: end(at(6, 10, 0), 60).toISOString(), location: 'sanpokong', program_code: 'KIDS', level: 'entry', age_tag: '5-8' },
+    { id: 'trial-4', name: '爵士舞體驗', instructor: '張老師', start_time: at(5, 18, 0).toISOString(), end_time: end(at(5, 18, 0), 60).toISOString(), location: 'fotan', program_code: 'JAZZ', level: 'entry', age_tag: '9-12' },
+    { id: 'trial-5', name: '兒童中國舞體驗', instructor: '黃老師', start_time: at(2, 15, 30).toISOString(), end_time: end(at(2, 15, 30), 60).toISOString(), location: 'sheungshui', program_code: 'CCD', level: 'entry', age_tag: '5-8' },
+    { id: 'trial-6', name: 'K-Pop 流行舞體驗', instructor: '林老師', start_time: at(4, 17, 30).toISOString(), end_time: end(at(4, 17, 30), 60).toISOString(), location: 'causewaybay', program_code: 'KPOP', level: 'entry', age_tag: '9-12' },
+  ];
+}
+
+const TRIAL_CLASS_OPTIONS = getTrialClassOptions();
 
 export default function TrialPage() {
   const { t, i18n } = useTranslation();
@@ -40,8 +69,11 @@ export default function TrialPage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [wasLoggedIn, setWasLoggedIn] = useState(false);
+  const [selectedTrialClass, setSelectedTrialClass] = useState<ClassData | null>(null);
   const navigate = useNavigate();
   const { signUp, user, profile } = useAuth();
+
+  const effectiveClassData = classData || selectedTrialClass;
   
   // Check if user is logged in
   const isLoggedIn = !!user && !!profile;
@@ -109,19 +141,16 @@ export default function TrialPage() {
     e.preventDefault();
     setError('');
 
-    if (!classData) {
+    if (!effectiveClassData) {
       setError(t('trial.noClassSelected'));
       return;
     }
 
     // If logged in, use user's information
     if (isLoggedIn && user && profile) {
-      // For logged-in users, we just need to submit the application
-      // (In a real app, this would be an API call to apply for the trial)
       setLoading(true);
       setWasLoggedIn(true);
       try {
-        // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1000));
         setSuccess(true);
         setTimeout(() => {
@@ -139,7 +168,7 @@ export default function TrialPage() {
       return;
     }
 
-    // For non-logged-in users, validate and register
+    // For non-logged-in users: 後端可自動建立帳號 + random 密碼 + 發 email（見 trialApplyFlow.ts）
     if (!dateOfBirth) {
       setError(t('trial.dateOfBirthRequired'));
       return;
@@ -148,11 +177,38 @@ export default function TrialPage() {
     setLoading(true);
 
     try {
-      // Combine country code with contact number
       const fullContactNumber = `${countryCode}${contactNumber}`;
-      // Generate password from date of birth (YYYYMMDD format)
+      const payload = {
+        email,
+        fullName,
+        nickName: nickName || null,
+        dateOfBirth,
+        sex,
+        parentsName: parentsName || null,
+        contactNumber: fullContactNumber,
+        residentialDistrict: residentialDistrict || null,
+        hasJoinedCourses,
+        hasDanceExperience,
+        howDidYouHear: howDidYouHear || null,
+        classId: effectiveClassData.id,
+        className: effectiveClassData.name,
+        classStartTime: effectiveClassData.start_time,
+        classEndTime: effectiveClassData.end_time,
+        location: effectiveClassData.location,
+        programCode: effectiveClassData.program_code,
+        instructor: effectiveClassData.instructor,
+      };
+
+      const res = await api.post<{ success?: boolean }>(TRIAL_APPLY_ENDPOINT, payload).catch(() => null);
+
+      if (res?.success) {
+        setSuccess(true);
+        setTimeout(() => navigate('/login'), 3000);
+        return;
+      }
+
+      // Fallback: 後端未實作時用現有 signUp（DOB 密碼），成功後仍顯示「已發送臨時密碼及改密碼連結」的說明
       const password = generatePasswordFromBirthdate(dateOfBirth);
-      
       await signUp(
         email,
         password,
@@ -167,9 +223,7 @@ export default function TrialPage() {
       );
 
       setSuccess(true);
-      setTimeout(() => {
-        navigate('/login');
-      }, 3000);
+      setTimeout(() => navigate('/login'), 3000);
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError(err.message);
@@ -190,30 +244,59 @@ export default function TrialPage() {
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               {t('trial.applicationSubmitted')}
             </h2>
-            <p className="text-gray-600 mb-4">
-              {wasLoggedIn 
-                ? t('trial.applicationSubmittedDescLoggedIn')
-                : t('trial.applicationSubmittedDesc')
-              }
-            </p>
-            <p className="text-sm text-gray-600 mb-4">
-              {t('trial.sameAccountNote')}
-            </p>
-            <p className="text-sm text-gray-500">
-              {wasLoggedIn ? t('trial.redirectingToDashboard') : t('trial.redirecting')}
-            </p>
+            {wasLoggedIn ? (
+              <>
+                <p className="text-gray-600 mb-4">{t('trial.applicationSubmittedDescLoggedIn')}</p>
+                <p className="text-sm text-gray-500">{t('trial.redirectingToDashboard')}</p>
+              </>
+            ) : (
+              <>
+                <p className="text-gray-600 mb-2">{t('trial.accountCreated')}</p>
+                <p className="text-gray-600 mb-4">{t('trial.emailSentWithTempPassword', { email })}</p>
+                <p className="text-sm text-gray-600 mb-4">{t('trial.checkEmailAndChangePassword')}</p>
+                <p className="text-sm text-gray-500">{t('trial.redirecting')}</p>
+              </>
+            )}
           </div>
         </div>
       </PublicLayout>
     );
   }
 
-  if (!classData) {
+  if (!effectiveClassData) {
     return (
       <PublicLayout>
-        <div className="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4">
-          <div className="max-w-md w-full text-center">
-            <p className="text-gray-600">{t('trial.noClassSelected')}</p>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('trial.title')}</h1>
+          <p className="text-gray-600 mb-8">{t('trial.chooseTrial')}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {TRIAL_CLASS_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSelectedTrialClass(opt)}
+                className="bg-white rounded-lg shadow-md border border-gray-200 p-5 text-left hover:border-primary hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              >
+                <p className="font-semibold text-gray-900 mb-1">{opt.name}</p>
+                <p className="text-sm text-gray-500 mb-2">{opt.instructor}</p>
+                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                  <Calendar className="h-4 w-4 flex-shrink-0" />
+                  {formatDate(opt.start_time)}
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
+                  <Clock className="h-4 w-4 flex-shrink-0" />
+                  {formatTime(opt.start_time)} - {formatTime(opt.end_time)}
+                </div>
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <MapPin className="h-4 w-4 flex-shrink-0" />
+                  {t(`home.locations.${opt.location}`)}
+                </div>
+                <div className="flex flex-wrap gap-1 mt-3">
+                  <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">{t(`calendar.level.${opt.level}`)}</span>
+                  {opt.age_tag && <span className="text-xs px-2 py-0.5 rounded bg-teal-100 text-teal-800">{t(`calendar.ageTag.${opt.age_tag}`)}</span>}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </PublicLayout>
@@ -223,8 +306,17 @@ export default function TrialPage() {
   return (
     <PublicLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">{t('trial.title')}</h1>
+        <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
+          <h1 className="text-3xl font-bold text-gray-900">{t('trial.title')}</h1>
+          {selectedTrialClass && (
+            <button
+              type="button"
+              onClick={() => setSelectedTrialClass(null)}
+              className="text-sm text-primary font-medium hover:underline"
+            >
+              ← {t('trial.changeClass')}
+            </button>
+          )}
         </div>
 
         <div className="grid lg:grid-cols-2 gap-8">
@@ -237,20 +329,20 @@ export default function TrialPage() {
               {/* Tutor Image and Name */}
               <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
                 <img
-                  src={getTutorImageUrl(classData.instructor)}
-                  alt={classData.instructor}
+                  src={getTutorImageUrl(effectiveClassData.instructor)}
+                  alt={effectiveClassData.instructor}
                   className="w-24 h-24 rounded-full object-cover mr-4 border-4 border-primary-lighter"
                 />
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
-                  <p className="text-lg font-bold text-gray-900">{classData.instructor}</p>
+                  <p className="text-lg font-bold text-gray-900">{effectiveClassData.instructor}</p>
                 </div>
               </div>
 
               {/* Teacher intro (awards, experience, dance school) */}
-              {getInstructorProfile(classData.instructor) && (
+              {getInstructorProfile(effectiveClassData.instructor) && (
                 <div className="mb-6 pb-6 border-b-2 border-gray-100">
-                  <InstructorIntroCard instructorName={classData.instructor} />
+                  <InstructorIntroCard instructorName={effectiveClassData.instructor} />
                 </div>
               )}
 
@@ -258,43 +350,43 @@ export default function TrialPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.className')}</p>
-                  <p className="text-lg font-semibold text-gray-900">{classData.name}</p>
+                  <p className="text-lg font-semibold text-gray-900">{effectiveClassData.name}</p>
                 </div>
 
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classCode')}</p>
-                  <p className="text-lg font-semibold text-primary">{classData.program_code}</p>
+                  <p className="text-lg font-semibold text-primary">{effectiveClassData.program_code}</p>
                 </div>
 
                 <div>
                   <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.level')}</p>
                   <span className={`inline-block text-sm font-semibold px-3 py-1.5 rounded border ${
-                    classData.level === 'entry' 
+                    effectiveClassData.level === 'entry' 
                       ? 'bg-blue-100 text-blue-800 border-blue-200'
-                      : classData.level === 'intermediate'
+                      : effectiveClassData.level === 'intermediate'
                       ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
                       : 'bg-purple-100 text-purple-800 border-purple-200'
                   }`}>
-                    {classData.level === 'entry' 
+                    {effectiveClassData.level === 'entry' 
                       ? t('calendar.level.entry')
-                      : classData.level === 'intermediate'
+                      : effectiveClassData.level === 'intermediate'
                       ? t('calendar.level.intermediate')
                       : t('calendar.level.advanced')
                     }
                   </span>
                 </div>
 
-                {classData.age_tag && (
+                {effectiveClassData.age_tag && (
                   <div>
                     <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.ageTag')}</p>
                     <span className={`inline-block text-sm font-semibold px-3 py-1.5 rounded border ${
-                      classData.age_tag === '5-8' 
+                      effectiveClassData.age_tag === '5-8' 
                         ? 'bg-teal-100 text-teal-800 border-teal-200'
-                        : classData.age_tag === '9-12'
+                        : effectiveClassData.age_tag === '9-12'
                         ? 'bg-cyan-100 text-cyan-800 border-cyan-200'
                         : 'bg-indigo-100 text-indigo-800 border-indigo-200'
                     }`}>
-                      {t(`calendar.ageTag.${classData.age_tag}`)}
+                      {t(`calendar.ageTag.${effectiveClassData.age_tag}`)}
                     </span>
                   </div>
                 )}
@@ -303,7 +395,7 @@ export default function TrialPage() {
                   <Calendar className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
                   <div>
                     <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
-                    <p className="text-base font-semibold">{formatDate(classData.start_time)}</p>
+                    <p className="text-base font-semibold">{formatDate(effectiveClassData.start_time)}</p>
                   </div>
                 </div>
 
@@ -312,7 +404,7 @@ export default function TrialPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classTime')}</p>
                     <p className="text-base font-semibold">
-                      {formatTime(classData.start_time)} - {formatTime(classData.end_time)}
+                      {formatTime(effectiveClassData.start_time)} - {formatTime(effectiveClassData.end_time)}
                     </p>
                   </div>
                 </div>
@@ -321,7 +413,7 @@ export default function TrialPage() {
                   <MapPin className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
                   <div>
                     <p className="text-sm font-medium text-gray-500 mb-1">{t('home.location')}</p>
-                    <p className="text-base font-semibold">{t(`home.locations.${classData.location}`)}</p>
+                    <p className="text-base font-semibold">{t(`home.locations.${effectiveClassData.location}`)}</p>
                   </div>
                 </div>
               </div>

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info, Check } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
-import logoImage from '../assets/images/the-yard-logo.png';
+const logoUrl = '/images/the-yard-logo.png';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -78,7 +78,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <Link to="/" className="flex items-center">
-                <img src={logoImage} alt="The Yard Logo" className="h-8 w-auto" />
+                <img src={logoUrl} alt="The Yard Logo" className="h-8 w-auto" />
               </Link>
             </div>
 

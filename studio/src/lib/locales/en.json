@@ -200,6 +200,7 @@
     "selectedTrial": "Selected Trial Lesson",
     "selectTrialRequired": "Please select a trial lesson",
     "noClassSelected": "No class selected. Please go back and select a class.",
+    "changeClass": "Change class",
     "classInformation": "Class Information",
     "className": "Class Name",
     "classCode": "Class Code",
@@ -236,6 +237,9 @@
     "submitting": "Submitting...",
     "applicationSubmitted": "Application Submitted!",
     "applicationSubmittedDesc": "We've sent you an email confirmation. Please check your inbox to set your password and activate your account.",
+    "accountCreated": "We have created an account for you.",
+    "emailSentWithTempPassword": "We have sent a temporary password and a password-reset link to {{email}}.",
+    "checkEmailAndChangePassword": "Please check your email and change your password after first login.",
     "applicationSubmittedDescLoggedIn": "Your trial lesson application has been submitted successfully! We will review your application and contact you soon.",
     "redirecting": "Redirecting to login...",
     "redirectingToDashboard": "Redirecting to dashboard...",
@@ -334,7 +338,13 @@
     "noUpcomingClasses": "No classes scheduled this week",
     "with": "with",
     "tokens": "tokens",
-    "childName": "{{name}}"
+    "childName": "{{name}}",
+    "notificationsTitle": "Notifications",
+    "tokenUsageTitle": "Token usage",
+    "myTrialApplications": "My trial applications",
+    "trialStatusConfirmed": "Confirmed",
+    "trialStatusPending": "Pending",
+    "courseProgress": "{{current}} / {{total}} lessons attended"
   },
   "schedule": {
     "title": "My Schedule",
@@ -410,7 +420,13 @@
       "completed": "Completed",
       "pending": "Pending",
       "failed": "Failed"
-    }
+    },
+    "downloadReceipt": "Download receipt",
+    "emailReceipt": "Email receipt",
+    "receiptSent": "Receipt has been sent to your email",
+    "actions": "Actions",
+    "receiptTitle": "Payment Receipt",
+    "receiptPrintHint": "You can print this page (Ctrl+P / Cmd+P) and choose \"Save as PDF\"."
   },
   "profile": {
     "title": "Profile",
@@ -435,6 +451,7 @@
     "mobile": "Mobile Number",
     "idFirstFour": "Last 4 characters of ID Card",
     "notProvided": "Not provided",
+    "changePassword": "Change password",
     "student": "Student",
     "admin": "Admin",
     "familyMembers": "Family members",

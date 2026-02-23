@@ -200,6 +200,7 @@
     "selectedTrial": "已選擇的試堂",
     "selectTrialRequired": "請選擇試堂課程",
     "noClassSelected": "未選擇課程。請返回並選擇課程。",
+    "changeClass": "改選其他試堂",
     "classInformation": "課程資訊",
     "className": "課程名稱",
     "classCode": "課程代碼",
@@ -236,6 +237,9 @@
     "submitting": "提交中...",
     "applicationSubmitted": "申請已提交！",
     "applicationSubmittedDesc": "我們已向您發送電子郵件確認。請檢查您的收件箱以設置密碼並激活您的帳戶。",
+    "accountCreated": "我們已為你建立帳號。",
+    "emailSentWithTempPassword": "我們已將臨時密碼及改密碼連結發送至你的電郵 {{email}}。",
+    "checkEmailAndChangePassword": "請查收電郵，首次登入後請盡快更改密碼。",
     "applicationSubmittedDescLoggedIn": "您的試堂申請已成功提交！我們將審核您的申請並盡快與您聯繫。",
     "redirecting": "正在重定向到登入頁面...",
     "redirectingToDashboard": "正在重定向到儀表板...",
@@ -334,7 +338,13 @@
     "noUpcomingClasses": "本週沒有安排的課程",
     "with": "導師",
     "tokens": "代幣",
-    "childName": "{{name}}"
+    "childName": "{{name}}",
+    "notificationsTitle": "最新消息",
+    "tokenUsageTitle": "代幣使用紀錄",
+    "myTrialApplications": "我的試堂申請",
+    "trialStatusConfirmed": "已確認",
+    "trialStatusPending": "待確認",
+    "courseProgress": "已上 {{current}} 堂 / 共 {{total}} 堂"
   },
   "schedule": {
     "title": "我的課程表",
@@ -410,7 +420,13 @@
       "completed": "已完成",
       "pending": "待處理",
       "failed": "失敗"
-    }
+    },
+    "downloadReceipt": "下載收據",
+    "emailReceipt": "電郵收據",
+    "receiptSent": "收據已發送至你的電郵",
+    "actions": "操作",
+    "receiptTitle": "付款收據",
+    "receiptPrintHint": "你可在此頁按 Ctrl+P（Mac：Cmd+P）列印，並選擇「另存為 PDF」。"
   },
   "profile": {
     "title": "個人資料",
@@ -435,6 +451,7 @@
     "mobile": "手機號碼",
     "idFirstFour": "身份證後4位字",
     "notProvided": "未提供",
+    "changePassword": "更改密碼",
     "student": "學生",
     "admin": "管理員",
     "familyMembers": "家庭成員",

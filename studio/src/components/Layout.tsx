@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
-import logoImage from '../assets/images/the-yard-logo.png';
+const logoUrl = '/images/the-yard-logo.png';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = ({ className }: { className?: string }) => (
@@ -99,7 +99,7 @@ export default function Layout({ children }: LayoutProps) {
                 <PanelLeft className="h-6 w-6" />
               </button>
               <Link to={isAdmin ? '/admin' : '/dashboard'} className="flex items-center">
-                <img src={logoImage} alt="The Yard Logo" className="h-8 w-auto" />
+                <img src={logoUrl} alt="The Yard Logo" className="h-8 w-auto" />
               </Link>
             </div>
 

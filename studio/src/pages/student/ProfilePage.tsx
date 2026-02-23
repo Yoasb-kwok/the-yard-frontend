@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext';
 import { getAgeTagFromDateOfBirth } from '../../lib/utils';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { useTranslation } from 'react-i18next';
-import { User, Copy, Check, Plus, Pencil, Trash2 } from 'lucide-react';
+import { User, Copy, Check, Plus, Pencil, Trash2, KeyRound } from 'lucide-react';
 
 const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
   full_name: '',
@@ -330,6 +331,13 @@ export default function ProfilePage() {
               <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
                 {user?.email || t('profile.notProvided')}
               </div>
+              <Link
+                to="/forgot-password"
+                className="inline-flex items-center gap-2 mt-2 text-sm font-medium text-primary hover:text-primary-dark"
+              >
+                <KeyRound className="h-4 w-4" />
+                {t('profile.changePassword')}
+              </Link>
             </div>
 
             <div>

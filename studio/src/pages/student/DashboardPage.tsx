@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatDate, formatDateTime, isExpiringSoon } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { Calendar, Coins, AlertCircle, MoreVertical, Clock, FileText, X, Home, ShoppingBag } from 'lucide-react';
+import { Calendar, Coins, AlertCircle, MoreVertical, Clock, FileText, X, Home, ShoppingBag, Bell, BookOpen, TrendingDown } from 'lucide-react';
 
 interface UserToken {
   id: string;
@@ -29,11 +29,16 @@ interface UpcomingClass {
   extension_application?: {
     status: 'pending' | 'approved' | 'rejected';
     applied_date?: string;
+    rejection_reason?: string;
   };
   sick_leave_application?: {
     status: 'pending' | 'approved' | 'rejected';
     applied_date?: string;
+    rejection_reason?: string;
   };
+  /** Optional: for "已上 X / 共 Y 堂" display */
+  attended_lessons?: number;
+  total_lessons?: number;
 }
 
 /** Profile IDs for 陳小明、陳小美、陳大明 – always show demo data for them */
@@ -49,10 +54,84 @@ function getFallbackUpcomingClasses(profileId?: string, profileName?: string): U
   d.setHours(14, 0, 0, 0);
   const start = d.toISOString();
   const end = new Date(d.getTime() + 3600000).toISOString();
-  const base = { id: 'enr_demo_1', status: 'enrolled' as const, user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童芭蕾 A', instructor: '李老師', start_time: start, end_time: end, program_code: 'KB-A' } };
-  return [base];
+  const d2 = new Date();
+  d2.setDate(d2.getDate() + 3);
+  d2.setHours(16, 0, 0, 0);
+  const start2 = d2.toISOString();
+  const end2 = new Date(d2.getTime() + 3600000).toISOString();
+  const base: UpcomingClass = {
+    id: 'enr_demo_1',
+    status: 'enrolled',
+    user_id: profileId ?? '',
+    user_name: profileName ?? '',
+    class: { name: '兒童芭蕾 A', instructor: '李老師', start_time: start, end_time: end, program_code: 'KB-A' },
+    attended_lessons: 3,
+    total_lessons: 8,
+  };
+  const withExtensionApproved: UpcomingClass = {
+    id: 'enr_demo_2',
+    status: 'enrolled',
+    user_id: profileId ?? '',
+    user_name: profileName ?? '',
+    class: { name: '兒童爵士 B', instructor: '王老師', start_time: start2, end_time: end2, program_code: 'KJ-B' },
+    extension_application: { status: 'approved', applied_date: new Date().toISOString() },
+    attended_lessons: 5,
+    total_lessons: 16,
+  };
+  const withSickLeaveRejected: UpcomingClass = {
+    id: 'enr_demo_3',
+    status: 'enrolled',
+    user_id: profileId ?? '',
+    user_name: profileName ?? '',
+    class: { name: '兒童芭蕾 B', instructor: '李老師', start_time: start2, end_time: end2, program_code: 'KB-B' },
+    sick_leave_application: {
+      status: 'rejected',
+      applied_date: new Date().toISOString(),
+      rejection_reason: '請提供醫生證明以申請病假。',
+    },
+    attended_lessons: 2,
+    total_lessons: 8,
+  };
+  return [base, withExtensionApproved, withSickLeaveRejected];
 }
 const FALLBACK_UPCOMING_CLASSES: UpcomingClass[] = getFallbackUpcomingClasses();
+
+/** Demo: 試堂／報名記錄 */
+interface TrialApplicationItem {
+  id: string;
+  class_name: string;
+  status: 'confirmed' | 'pending';
+  applied_date?: string;
+}
+const FALLBACK_TRIAL_APPLICATIONS: TrialApplicationItem[] = [
+  { id: 't1', class_name: '兒童芭蕾試堂', status: 'confirmed', applied_date: new Date().toISOString() },
+  { id: 't2', class_name: '兒童爵士試堂', status: 'pending', applied_date: new Date().toISOString() },
+];
+
+/** Demo: 代幣使用紀錄 */
+interface TokenUsageItem {
+  id: string;
+  date: string;
+  class_name: string;
+  change: number; // -1 for deduction
+}
+const FALLBACK_TOKEN_USAGE: TokenUsageItem[] = [
+  { id: 'u1', date: new Date(Date.now() - 2 * 86400000).toISOString(), class_name: '兒童芭蕾 A', change: -1 },
+  { id: 'u2', date: new Date(Date.now() - 5 * 86400000).toISOString(), class_name: '兒童爵士 B', change: -1 },
+  { id: 'u3', date: new Date(Date.now() - 7 * 86400000).toISOString(), class_name: '兒童芭蕾 A', change: -1 },
+];
+
+/** Demo: In-app 通知 */
+interface NotificationItem {
+  id: string;
+  title: string;
+  message: string;
+  date: string;
+}
+const FALLBACK_NOTIFICATIONS: NotificationItem[] = [
+  { id: 'n1', title: '試堂已確認', message: '你的兒童芭蕾試堂已確認，請按時上課。', date: new Date().toISOString() },
+  { id: 'n2', title: '代幣即將到期', message: '部分代幣將於 30 日內到期，請盡快使用。', date: new Date().toISOString() },
+];
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -305,6 +384,24 @@ export default function DashboardPage() {
           </div>
         )}
 
+        {/* In-app 通知 */}
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-3 flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary" />
+            {t('dashboard.notificationsTitle')}
+          </h2>
+          <ul className="space-y-3">
+            {FALLBACK_NOTIFICATIONS.map((n) => (
+              <li key={n.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-gray-900">{n.title}</div>
+                  <div className="text-sm text-gray-600 mt-0.5">{n.message}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {totalTokens === 0 && (
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -364,6 +461,21 @@ export default function DashboardPage() {
             {totalTokens > 0 && (
               <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">{t('dashboard.newPackageExpiryNote')}</p>
             )}
+            {/* 代幣使用紀錄 */}
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <TrendingDown className="h-4 w-4" />
+                {t('dashboard.tokenUsageTitle')}
+              </h3>
+              <ul className="space-y-2 max-h-32 overflow-y-auto">
+                {FALLBACK_TOKEN_USAGE.map((u) => (
+                  <li key={u.id} className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600 truncate">{formatDate(u.date, getLocale())} · {u.class_name}</span>
+                    <span className="text-red-600 font-medium flex-shrink-0 ml-2">{u.change}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
 
           <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
@@ -374,6 +486,24 @@ export default function DashboardPage() {
             <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{upcomingClasses.length}</div>
             <p className="text-gray-600 text-sm">{t('dashboard.classesScheduled')}</p>
           </div>
+        </div>
+
+        {/* 我的試堂申請 */}
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-primary" />
+            {t('dashboard.myTrialApplications')}
+          </h2>
+          <ul className="space-y-2">
+            {FALLBACK_TRIAL_APPLICATIONS.map((trial) => (
+              <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                <span className="font-medium text-gray-900">{trial.class_name}</span>
+                <span className={`text-sm font-medium px-2 py-0.5 rounded ${trial.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                  {trial.status === 'confirmed' ? t('dashboard.trialStatusConfirmed') : t('dashboard.trialStatusPending')}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
@@ -432,6 +562,33 @@ export default function DashboardPage() {
                             return `${dateStr} ${startTime} - ${endTime}`;
                           })()}
                         </div>
+                        {/* 課程進度 */}
+                        {(enrollment.attended_lessons != null && enrollment.total_lessons != null) && (
+                          <div className="text-sm text-primary font-medium mt-1">
+                            {t('dashboard.courseProgress', { current: enrollment.attended_lessons, total: enrollment.total_lessons })}
+                          </div>
+                        )}
+                        {/* 請假／改期結果 */}
+                        {enrollment.extension_application && (
+                          <div className="mt-2">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${enrollment.extension_application.status === 'approved' ? 'bg-green-100 text-green-800' : enrollment.extension_application.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                              {t('schedule.applyExtension')}: {enrollment.extension_application.status === 'approved' ? t('schedule.status.approved') : enrollment.extension_application.status === 'rejected' ? t('schedule.status.rejected') : t('schedule.status.pending')}
+                            </span>
+                            {enrollment.extension_application.status === 'rejected' && enrollment.extension_application.rejection_reason && (
+                              <p className="text-xs text-red-600 mt-1">{enrollment.extension_application.rejection_reason}</p>
+                            )}
+                          </div>
+                        )}
+                        {enrollment.sick_leave_application && (
+                          <div className="mt-2">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${enrollment.sick_leave_application.status === 'approved' ? 'bg-green-100 text-green-800' : enrollment.sick_leave_application.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                              {t('schedule.applySickLeave')}: {enrollment.sick_leave_application.status === 'approved' ? t('schedule.status.approved') : enrollment.sick_leave_application.status === 'rejected' ? t('schedule.status.rejected') : t('schedule.status.pending')}
+                            </span>
+                            {enrollment.sick_leave_application.status === 'rejected' && enrollment.sick_leave_application.rejection_reason && (
+                              <p className="text-xs text-red-600 mt-1">{enrollment.sick_leave_application.rejection_reason}</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {showActions && (
                         <div className="relative">

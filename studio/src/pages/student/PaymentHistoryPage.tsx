@@ -3,7 +3,8 @@ import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { Receipt, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { buildReceiptHtml, downloadReceiptHtml } from '../../lib/receiptHtml';
+import { Receipt, CheckCircle, Clock, XCircle, Download, Mail } from 'lucide-react';
 
 interface Payment {
   id: string;
@@ -59,6 +60,36 @@ export default function PaymentHistoryPage() {
   };
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
+
+  const handleReceiptDownload = (payment: Payment) => {
+    const html = buildReceiptHtml({
+      orderId: payment.order_id ?? payment.id,
+      date: formatDateTime(payment.date, getLocale()),
+      description: getPackageDescription(payment),
+      paymentMethod: getPaymentMethodLabel(payment.payment_method),
+      amount: formatCurrency(payment.amount),
+      status: getStatusLabel(payment.status),
+      receiptTitle: t('paymentHistory.receiptTitle'),
+      labels: {
+        orderId: t('paymentHistory.orderId'),
+        date: t('paymentHistory.date'),
+        description: t('paymentHistory.description'),
+        paymentMethod: t('paymentHistory.paymentMethod'),
+        amount: t('paymentHistory.amount'),
+        status: t('paymentHistory.status'),
+      },
+      printHint: t('paymentHistory.receiptPrintHint'),
+      brandName: 'The Yard',
+    });
+    const filename = `receipt-${payment.order_id ?? payment.id}.html`;
+    downloadReceiptHtml(html, filename);
+  };
+
+  const handleReceiptEmail = () => {
+    setReceiptMessage(t('paymentHistory.receiptSent'));
+    setTimeout(() => setReceiptMessage(null), 3000);
+  };
 
   useEffect(() => {
     if (!profile) return;
@@ -133,6 +164,12 @@ export default function PaymentHistoryPage() {
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('paymentHistory.title')}</h1>
         </div>
 
+        {receiptMessage && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+            {receiptMessage}
+          </div>
+        )}
+
         {payments.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <Receipt className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -185,6 +222,24 @@ export default function PaymentHistoryPage() {
                         {getStatusLabel(payment.status)}
                       </span>
                     </div>
+                    <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleReceiptDownload(payment)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+                      >
+                        <Download className="h-4 w-4" />
+                        {t('paymentHistory.downloadReceipt')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleReceiptEmail()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+                      >
+                        <Mail className="h-4 w-4" />
+                        {t('paymentHistory.emailReceipt')}
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -210,6 +265,9 @@ export default function PaymentHistoryPage() {
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t('paymentHistory.status')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('paymentHistory.actions')}
                       </th>
                     </tr>
                   </thead>
@@ -239,6 +297,26 @@ export default function PaymentHistoryPage() {
                           <div className="flex items-center gap-2">
                             {getStatusIcon(payment.status)}
                             <span className="text-sm text-gray-900">{getStatusLabel(payment.status)}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleReceiptDownload(payment)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
+                            >
+                              <Download className="h-4 w-4" />
+                              {t('paymentHistory.downloadReceipt')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleReceiptEmail()}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
+                            >
+                              <Mail className="h-4 w-4" />
+                              {t('paymentHistory.emailReceipt')}
+                            </button>
                           </div>
                         </td>
                       </tr>

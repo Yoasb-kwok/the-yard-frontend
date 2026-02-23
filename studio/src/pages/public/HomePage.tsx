@@ -27,7 +27,7 @@ interface TodayClass {
 /** Upcoming class for booking (same shape, used for next 14 days) */
 type UpcomingClass = TodayClass;
 
-/** Fallback 新生課程 when API has no data */
+/** Fallback 新生課程 when API has no data — 6 堂，3 個一排共 2 行 */
 function getFallbackNewStudentCourses(): UpcomingClass[] {
   const now = new Date();
   const courses: UpcomingClass[] = [];
@@ -36,11 +36,13 @@ function getFallbackNewStudentCourses(): UpcomingClass[] {
     { name: '青少年街舞試堂', program_code: 'TRIAL-HH', instructor: '陳老師', location: 'causewaybay' as const },
     { name: '幼兒律動試堂', program_code: 'TRIAL-KIDS', instructor: '王老師', location: 'sanpokong' as const },
     { name: '爵士舞試堂', program_code: 'TRIAL-JAZZ', instructor: '張老師', location: 'fotan' as const },
+    { name: '兒童中國舞試堂', program_code: 'TRIAL-CCD', instructor: '黃老師', location: 'sheungshui' as const },
+    { name: 'K-Pop 流行舞試堂', program_code: 'TRIAL-KPOP', instructor: '林老師', location: 'causewaybay' as const },
   ];
   list.forEach((d, i) => {
     const base = new Date(now);
     base.setDate(base.getDate() + 1 + Math.floor(i / 2));
-    base.setHours(14 + (i % 2) * 3, 0, 0, 0);
+    base.setHours(14 + (i % 3) * 2, 0, 0, 0);
     const start = new Date(base);
     const end = new Date(base);
     end.setHours(end.getHours() + 1, 0, 0, 0);
@@ -209,7 +211,7 @@ export default function HomePage() {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {upcomingClasses.map((classItem) => (
+            {upcomingClasses.slice(0, 6).map((classItem) => (
               <div key={classItem.id} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 hover:shadow-2xl hover:border-primary transition-all duration-300 flex flex-col transform hover:-translate-y-1">
                 {/* Top accent border */}
                 <div className="h-1 bg-gradient-to-r from-primary to-primary-light rounded-t-xl -mx-8 -mt-8 mb-6"></div>

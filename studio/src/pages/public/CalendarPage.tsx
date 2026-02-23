@@ -231,7 +231,11 @@ export default function CalendarPage() {
       console.error('Error loading calendar classes:', error);
       setLessons(getFallbackCalendarLessons());
       const msg = error instanceof Error ? error.message : 'Failed to load classes';
-      setLessonsError(msg.includes('Network') || msg.includes('fetch') ? (t('admin.classes.apiConnectionError') || 'Cannot connect to API. Ensure the backend is running (e.g. http://localhost:3001).') : msg);
+      if (!msg.includes('Network') && !msg.includes('fetch')) {
+        setLessonsError(msg);
+      } else {
+        setLessonsError(null);
+      }
     } finally {
       setLessonsLoading(false);
     }
