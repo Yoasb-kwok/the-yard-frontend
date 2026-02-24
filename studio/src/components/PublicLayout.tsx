@@ -110,8 +110,19 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                   </button>
                   {userMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border">
+                      {/* Dashboard: student -> /dashboard, admin -> /admin */}
+                      {user && (isStudent || isAdmin) && (
+                        <Link
+                          to={isAdmin ? '/admin' : '/dashboard'}
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                          <LayoutDashboard className="h-4 w-4" />
+                          {t('nav.dashboard')}
+                        </Link>
+                      )}
                       {isStudent && hasMultipleProfiles && (
-                        <div className="border-b border-gray-100 px-3 py-2">
+                        <div className="border-t border-gray-100 px-3 py-2">
                           <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>
                           {profiles.map((p) => (
                             <button
@@ -129,16 +140,6 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                             </button>
                           ))}
                         </div>
-                      )}
-                      {isAdmin && (
-                        <Link
-                          to="/admin"
-                          onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
-                        >
-                          <LayoutDashboard className="h-4 w-4" />
-                          {t('nav.dashboard')}
-                        </Link>
                       )}
                       {user && (
                         <>
@@ -202,9 +203,19 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                   })}
                 </div>
 
-                {/* User Menu Items */}
+                {/* User Menu Items: Dashboard first for students, then family members */}
                 {user && isStudent && (
                   <>
+                    <div className="pt-2 border-t border-gray-200">
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200 ring-1 ring-gray-300"
+                      >
+                        <LayoutDashboard className="h-5 w-5 text-gray-500" />
+                        {t('nav.dashboard')}
+                      </Link>
+                    </div>
                     {hasMultipleProfiles && (
                       <div className="pt-2 border-t border-gray-200">
                         <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">{t('profile.familyMembers')}</p>

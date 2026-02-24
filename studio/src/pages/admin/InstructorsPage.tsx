@@ -5,7 +5,7 @@ import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Plus, Edit, Trash2, User, Upload, X } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
-import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile } from '../../lib/instructorProfiles';
+import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile, saveInstructorProfile, type InstructorProfile } from '../../lib/instructorProfiles';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 
 interface Instructor {
@@ -57,6 +57,11 @@ export default function InstructorsPage() {
   const [form, setForm] = useState({
     name: '',
     profile_image_url: '',
+    intro: '',
+    awards: '', // newline-separated for input
+    years_dancing: 0,
+    teaching_experience: 0,
+    dance_school: '',
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [useImageUrl, setUseImageUrl] = useState(false);
@@ -148,9 +153,33 @@ export default function InstructorsPage() {
     ).length;
   }
 
+  function formToProfile(): InstructorProfile {
+    const name = form.name.trim() || '';
+    const awards = form.awards
+      .split(/[\n,，]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return {
+      name,
+      intro: form.intro.trim(),
+      awards,
+      years_dancing: Number(form.years_dancing) || 0,
+      teaching_experience: Number(form.teaching_experience) || 0,
+      dance_school: form.dance_school.trim(),
+    };
+  }
+
   function openCreateModal() {
     setEditingInstructor(null);
-    setForm({ name: '', profile_image_url: '' });
+    setForm({
+      name: '',
+      profile_image_url: '',
+      intro: '',
+      awards: '',
+      years_dancing: 0,
+      teaching_experience: 0,
+      dance_school: '',
+    });
     setImagePreview(null);
     setUseImageUrl(false);
     setImageUrlInput('');
@@ -160,9 +189,15 @@ export default function InstructorsPage() {
   function openEditModal(instructor: Instructor) {
     setEditingInstructor(instructor);
     const hasImageUrl = instructor.profile_image_url && !instructor.profile_image_url.startsWith('data:');
+    const profile = getInstructorProfile(instructor.name);
     setForm({
       name: instructor.name,
       profile_image_url: instructor.profile_image_url || '',
+      intro: profile?.intro ?? '',
+      awards: Array.isArray(profile?.awards) ? profile.awards.join('\n') : '',
+      years_dancing: profile?.years_dancing ?? 0,
+      teaching_experience: profile?.teaching_experience ?? 0,
+      dance_school: profile?.dance_school ?? '',
     });
     setImagePreview(instructor.profile_image_url || null);
     setUseImageUrl(hasImageUrl);
@@ -281,22 +316,21 @@ export default function InstructorsPage() {
         });
 
         if (response.success && response.data) {
-          // Reload instructors to get updated data
           await loadInstructors();
+          saveInstructorProfile(form.name.trim(), formToProfile());
           alert(t('admin.instructors.instructorUpdated'));
         } else {
           throw new Error(response.msg || 'Failed to update instructor');
         }
       } else {
-        // Create new instructor
         const response = await api.post('/admin/instructors', {
           name: form.name,
           profile_image_url: form.profile_image_url || null,
         });
 
         if (response.success && response.data) {
-          // Reload instructors to get updated data
           await loadInstructors();
+          saveInstructorProfile(form.name.trim(), formToProfile());
           alert(t('admin.instructors.instructorCreated'));
         } else {
           throw new Error(response.msg || 'Failed to create instructor');
@@ -304,7 +338,15 @@ export default function InstructorsPage() {
       }
 
       setShowModal(false);
-      setForm({ name: '', profile_image_url: '' });
+      setForm({
+        name: '',
+        profile_image_url: '',
+        intro: '',
+        awards: '',
+        years_dancing: 0,
+        teaching_experience: 0,
+        dance_school: '',
+      });
       setImagePreview(null);
     } catch (error) {
       console.error('Error saving instructor:', error);
@@ -577,11 +619,69 @@ export default function InstructorsPage() {
                 />
               </div>
 
-              {/* Teacher intro preview (example profiles only) */}
-              {getInstructorProfile(form.name) && (
+              {/* 老師簡介 */}
+              <div className="space-y-3 pt-2 border-t border-gray-200">
+                <p className="text-sm font-medium text-gray-700">{t('admin.instructors.introSection')}</p>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.intro')}</label>
+                  <textarea
+                    value={form.intro}
+                    onChange={(e) => setForm({ ...form, intro: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    placeholder={t('admin.instructors.introPlaceholder')}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.awards')}</label>
+                  <textarea
+                    value={form.awards}
+                    onChange={(e) => setForm({ ...form, awards: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    placeholder={t('admin.instructors.awardsPlaceholder')}
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">{t('admin.instructors.awardsHint')}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.yearsDancing')}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.years_dancing || ''}
+                      onChange={(e) => setForm({ ...form, years_dancing: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.teachingExperience')}</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={form.teaching_experience || ''}
+                      onChange={(e) => setForm({ ...form, teaching_experience: parseInt(e.target.value, 10) || 0 })}
+                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.danceSchool')}</label>
+                  <input
+                    type="text"
+                    value={form.dance_school}
+                    onChange={(e) => setForm({ ...form, dance_school: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    placeholder={t('admin.instructors.danceSchoolPlaceholder')}
+                  />
+                </div>
+              </div>
+
+              {/* Teacher intro preview */}
+              {form.name.trim() && (
                 <div className="pt-4 border-t border-gray-200">
                   <p className="text-xs font-medium text-gray-500 mb-2">{t('admin.instructors.introPreviewHint')}</p>
-                  <InstructorIntroCard instructorName={form.name} imageUrl={imagePreview} compact />
+                  <InstructorIntroCard instructorName={form.name.trim()} imageUrl={imagePreview} compact profile={formToProfile()} />
                 </div>
               )}
 
@@ -590,7 +690,15 @@ export default function InstructorsPage() {
                   type="button"
                   onClick={() => {
                     setShowModal(false);
-                    setForm({ name: '', profile_image_url: '' });
+                    setForm({
+                      name: '',
+                      profile_image_url: '',
+                      intro: '',
+                      awards: '',
+                      years_dancing: 0,
+                      teaching_experience: 0,
+                      dance_school: '',
+                    });
                     setImagePreview(null);
                   }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800"

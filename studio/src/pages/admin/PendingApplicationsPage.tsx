@@ -196,6 +196,7 @@ export default function PendingApplicationsPage() {
                 </div>
               ) : (
                 <div className="border-t border-gray-200 pt-4 mt-4 space-y-4">
+                  <p className="text-xs text-gray-500">{t('admin.dashboard.emailNotifyOnApproveReject')}</p>
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
                       type="checkbox"

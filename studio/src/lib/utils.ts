@@ -38,6 +38,38 @@ export function formatDateTime(date: string | Date, locale: string = 'en-US'): s
   });
 }
 
+/** Course usually has 4, 8 or 16 lessons. Returns dates for lesson 1 to N (weekly from first lesson). */
+export function getLessonDates(firstLessonStart: string | Date, totalLessons: number): Date[] {
+  const start = new Date(firstLessonStart);
+  if (isNaN(start.getTime()) || totalLessons < 1) return [];
+  const dates: Date[] = [];
+  for (let i = 0; i < totalLessons; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + i * 7);
+    dates.push(d);
+  }
+  return dates;
+}
+
+/** Same as getLessonDates but skips dates that fall on a holiday (lesson moves to next week). */
+export function getLessonDatesSkipHolidays(
+  firstLessonStart: string | Date,
+  totalLessons: number,
+  holidayDatesSet: Set<string>
+): Date[] {
+  const start = new Date(firstLessonStart);
+  if (isNaN(start.getTime()) || totalLessons < 1) return [];
+  const dates: Date[] = [];
+  let d = new Date(start);
+  while (dates.length < totalLessons) {
+    const use = isDateHoliday(d, holidayDatesSet) ? getNextNonHolidayDateWithSet(d, holidayDatesSet) : new Date(d);
+    dates.push(new Date(use));
+    use.setDate(use.getDate() + 7);
+    d = use;
+  }
+  return dates;
+}
+
 export function formatCurrency(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }

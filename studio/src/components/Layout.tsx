@@ -2,8 +2,9 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
+import StudentSidebarSchedule from './StudentSidebarSchedule';
 const logoUrl = '/images/the-yard-logo.png';
 
 // WhatsApp Icon Component
@@ -64,8 +65,15 @@ export default function Layout({ children }: LayoutProps) {
   const studentNavItems = isOnDashboardSection ? studentNavItemsDashboard : studentNavItemsScheduleProfile;
 
   const adminNavItems = [
-    { path: '/admin', icon: LayoutDashboard, label: t('nav.dashboard') },
-    { path: '/admin/pending-applications', icon: ClipboardList, label: t('admin.dashboard.pendingApplications') },
+    { path: '/admin', icon: LayoutDashboard, label: t('admin.dashboard.sectionOverview') },
+    { path: '/admin/financial', icon: DollarSign, label: t('admin.dashboard.sectionFinancial') },
+    { path: '/admin/funnel', icon: Target, label: t('admin.dashboard.sectionConversionFunnel') },
+    { path: '/admin/renewal-churn', icon: UserMinus, label: t('admin.dashboard.sectionRenewalChurn') },
+    { path: '/admin/class-health', icon: BookOpen, label: t('admin.dashboard.sectionClassHealth') },
+    { path: '/admin/instructor-performance', icon: GraduationCap, label: t('admin.dashboard.sectionInstructorPerformance') },
+    { path: '/admin/attendance-anomaly', icon: ClipboardList, label: t('admin.dashboard.sectionAttendanceAnomaly') },
+    { path: '/admin/pending-applications', icon: ListChecks, label: t('admin.dashboard.pendingApplications') },
+    { path: '/admin/trial-applications', icon: BookOpen, label: t('admin.trialApplications.title') },
     { path: '/admin/users', icon: Users, label: t('nav.users') },
     { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
     { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },
@@ -73,6 +81,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
     { path: '/admin/purchase-history', icon: Receipt, label: t('nav.purchaseHistory') },
     { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
+    { path: '/admin/audit-log', icon: FileText, label: t('admin.auditLog.title') },
   ];
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;
@@ -94,7 +103,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="xl:hidden mr-3 p-2 text-gray-600 hover:text-gray-900"
+                className="mr-3 p-2 text-gray-600 hover:text-gray-900 lg:hidden"
               >
                 <PanelLeft className="h-6 w-6" />
               </button>
@@ -125,37 +134,16 @@ export default function Layout({ children }: LayoutProps) {
                   className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2"
                 >
                   <User className="h-4 w-4" />
-                  {profile?.full_name || t('nav.dashboard')}
-                  {isAdmin && <span className="text-xs opacity-90">(Admin)</span>}
+                  {isAdmin
+                    ? (profile?.full_name ? `${profile.full_name} (Admin)` : t('nav.dashboard'))
+                    : isOnDashboardSection
+                      ? t('nav.dashboard')
+                      : (profile?.full_name || t('nav.dashboard'))}
                   <ChevronDown className={`h-4 w-4 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {userMenuOpen && (
                   <div className="absolute right-0 mt-2 w-52 bg-white rounded-md shadow-lg py-1 z-50 border">
-                    {/* Student: show name(s) – single name or family members – click goes to schedule + profile view */}
-                    {user && !isAdmin && profiles.length > 0 && (
-                      <div className="border-b border-gray-100 px-3 py-2">
-                        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
-                          {hasMultipleProfiles ? t('profile.familyMembers') : t('nav.profile')}
-                        </p>
-                        {profiles.map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() => {
-                              if (hasMultipleProfiles) switchProfile(p.id);
-                              setUserMenuOpen(false);
-                              navigate('/schedule');
-                            }}
-                            className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
-                              p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            <span>{p.full_name}</span>
-                            {p.id === activeProfileId && <Check className="h-4 w-4 shrink-0" />}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {/* Dashboard: for admin -> /admin, for student -> /dashboard */}
+                    {/* Dashboard first: for admin -> /admin, for student -> /dashboard */}
                     {user && (
                       <Link
                         to={isAdmin ? '/admin' : '/dashboard'}
@@ -165,6 +153,33 @@ export default function Layout({ children }: LayoutProps) {
                         <LayoutDashboard className="h-4 w-4" />
                         {t('nav.dashboard')}
                       </Link>
+                    )}
+                    {/* Student: family members – click goes to schedule + profile view */}
+                    {user && !isAdmin && profiles.length > 0 && (
+                      <div className="border-t border-gray-100 px-3 py-2">
+                        <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
+                          {hasMultipleProfiles ? t('profile.familyMembers') : t('nav.profile')}
+                        </p>
+                        {profiles.map((p) => {
+                          const showAsSelected = !isOnDashboardSection && p.id === activeProfileId;
+                          return (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                if (hasMultipleProfiles) switchProfile(p.id);
+                                setUserMenuOpen(false);
+                                navigate('/schedule');
+                              }}
+                              className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
+                                showAsSelected ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              <span>{p.full_name}</span>
+                              {showAsSelected && <Check className="h-4 w-4 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
                     )}
                     {/* Logout */}
                     {user && (
@@ -225,33 +240,9 @@ export default function Layout({ children }: LayoutProps) {
                   })}
                 </div>
 
-                {/* User Menu Items */}
+                {/* User Menu Items: Dashboard first, then family members */}
                 {!isAdmin && (
                   <>
-                    {profiles.length > 0 && (
-                      <div className="border-t border-gray-200 pt-3">
-                        <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
-                          {hasMultipleProfiles ? t('profile.familyMembers') : t('nav.profile')}
-                        </p>
-                        <div className="flex flex-wrap gap-2 px-4">
-                          {profiles.map((p) => (
-                            <button
-                              key={p.id}
-                              onClick={() => {
-                                if (hasMultipleProfiles) switchProfile(p.id);
-                                setMobileMenuOpen(false);
-                                navigate('/schedule');
-                              }}
-                              className={`rounded-lg px-3 py-2 text-sm font-medium ${
-                                p.id === activeProfileId ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
-                              }`}
-                            >
-                              {p.full_name}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
                     <div className="pt-2 space-y-2">
                       <Link
                         to="/dashboard"
@@ -261,6 +252,35 @@ export default function Layout({ children }: LayoutProps) {
                         <LayoutDashboard className="h-5 w-5 text-gray-500" />
                         {t('nav.dashboard')}
                       </Link>
+                    </div>
+                    {profiles.length > 0 && (
+                      <div className="border-t border-gray-200 pt-3">
+                        <p className="px-4 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
+                          {hasMultipleProfiles ? t('profile.familyMembers') : t('nav.profile')}
+                        </p>
+                        <div className="flex flex-wrap gap-2 px-4">
+                          {profiles.map((p) => {
+                            const showAsSelected = !isOnDashboardSection && p.id === activeProfileId;
+                            return (
+                              <button
+                                key={p.id}
+                                onClick={() => {
+                                  if (hasMultipleProfiles) switchProfile(p.id);
+                                  setMobileMenuOpen(false);
+                                  navigate('/schedule');
+                                }}
+                                className={`rounded-lg px-3 py-2 text-sm font-medium ${
+                                  showAsSelected ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
+                                }`}
+                              >
+                                {p.full_name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    <div className="pt-2 space-y-2">
                       <button
                         onClick={() => {
                           signOut();
@@ -307,8 +327,8 @@ export default function Layout({ children }: LayoutProps) {
       </nav>
 
       <div className="flex pt-16 min-h-screen">
-        {/* Desktop Sidebar */}
-        <aside className="hidden xl:block w-64 flex-shrink-0 bg-white/80 backdrop-blur shadow-sm min-h-[calc(100vh-4rem)] border-r border-primary/10">
+        {/* Desktop Sidebar - admin and student both show from lg; student has 課程表 below nav */}
+        <aside className={`hidden w-64 flex-shrink-0 bg-white/80 backdrop-blur shadow-sm min-h-[calc(100vh-4rem)] border-r border-primary/10 lg:block`}>
           <nav className="mt-5 px-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -332,16 +352,18 @@ export default function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
+          {/* Only show child's course schedule when on Schedule/Profile section, not on Dashboard */}
+          {!isAdmin && !isOnDashboardSection && <StudentSidebarSchedule />}
         </aside>
 
         {/* Mobile Sidebar Overlay */}
         {sidebarOpen && (
           <>
             <div
-              className="fixed inset-0 bg-black bg-opacity-50 z-40 xl:hidden"
+              className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
               onClick={() => setSidebarOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out xl:hidden">
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:hidden">
               <div className="flex items-center justify-between h-16 px-4 border-b">
                 <span className="text-xl font-semibold text-gray-900">{t('nav.menu')}</span>
                 <button

@@ -1476,6 +1476,7 @@ export default function ClassesPage() {
             {t('admin.classes.createClass')}
           </button>
         </div>
+        <p className="text-sm text-gray-500">{t('admin.classes.recurringAvoidsHolidaysNote')}</p>
 
         {/* Location Filter */}
         <div className="bg-white rounded-lg shadow-md p-4">

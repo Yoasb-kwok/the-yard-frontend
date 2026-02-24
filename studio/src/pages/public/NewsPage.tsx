@@ -5,6 +5,10 @@ import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
 import scheduleImage from '../../assets/images/schedule.jpg';
 
+/** Dance-related banner for news page (horizontal) – distinct from first post image */
+const NEWS_BANNER_IMAGE =
+  'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=1200&h=600&fit=crop&q=80';
+
 interface NewsPost {
   id: string;
   title: string;
@@ -76,11 +80,11 @@ export default function NewsPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Banner: first post image or gradient */}
-            {posts.length > 0 && posts[0].image_url && (
+            {/* Banner: dedicated dance image (no longer reusing first post image) */}
+            {posts.length > 0 && (
               <div className="rounded-xl overflow-hidden shadow-lg h-48 sm:h-56 md:h-64 bg-gray-200">
                 <img
-                  src={posts[0].image_url}
+                  src={NEWS_BANNER_IMAGE}
                   alt=""
                   className="w-full h-full object-cover"
                 />

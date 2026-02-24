@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { Search, Edit, Mail, Calendar, Package, Receipt, Clock } from 'lucide-react';
+import { Search, Edit, Mail, Calendar, Package, Receipt, Clock, Download, Send } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
 
 interface UserToken {
@@ -82,6 +82,8 @@ export default function UsersPage() {
   const [tokenExpiryForm, setTokenExpiryForm] = useState<{ [key: number]: string }>({});
   const [sortKey, setSortKey] = useState<string | null>('full_name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -224,6 +226,47 @@ export default function UsersPage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === sortedUsers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedUsers.map((u) => u.id)));
+    }
+  }
+
+  function exportCsv() {
+    const headers = ['ID', 'Name', 'Mobile', 'Tokens', 'Earliest Expiry', 'Joined'];
+    const rows = sortedUsers.map((u) => {
+      const tokens = u.user_tokens.reduce((s, t) => s + t.remaining_tokens, 0);
+      const expiry = getEarliestExpiryDate(u.user_tokens);
+      return [u.id, u.full_name, u.mobile || '', tokens, expiry || '', u.created_at.slice(0, 10)].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+    });
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function bulkSendReminder() {
+    const n = selectedIds.size;
+    if (n === 0) return;
+    setBulkMessage(t('admin.users.reminderSent', { count: n }));
+    setTimeout(() => setBulkMessage(null), 4000);
+  }
+
   if (loading) {
     return (
       <Layout>
@@ -242,8 +285,13 @@ export default function UsersPage() {
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="mb-4">
-            <div className="relative">
+          {bulkMessage && (
+            <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800 text-sm">
+              {bulkMessage}
+            </div>
+          )}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
               <input
                 type="text"
@@ -253,12 +301,38 @@ export default function UsersPage() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download className="h-4 w-4" />
+              {t('admin.users.exportCsv')}
+            </button>
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={bulkSendReminder}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary-dark"
+              >
+                <Send className="h-4 w-4" />
+                {t('admin.users.bulkSendReminder', { count: selectedIds.size })}
+              </button>
+            )}
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-4 py-3 text-left w-10">
+                    <input
+                      type="checkbox"
+                      checked={sortedUsers.length > 0 && selectedIds.size === sortedUsers.length}
+                      onChange={toggleSelectAll}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                  </th>
                   <TableSortButton label={t('admin.users.name')} sortKey="full_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
                   <TableSortButton label={t('admin.users.mobile')} sortKey="mobile" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.tokens')}</th>
@@ -273,6 +347,14 @@ export default function UsersPage() {
                   const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
                   return (
                     <tr key={user.id}>
+                      <td className="px-4 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(user.id)}
+                          onChange={() => toggleSelect(user.id)}
+                          className="rounded border-gray-300 text-primary focus:ring-primary"
+                        />
+                      </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{user.full_name}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{user.mobile || '-'}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">{totalTokens}</td>

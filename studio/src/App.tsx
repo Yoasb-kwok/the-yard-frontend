@@ -25,6 +25,12 @@ import PaymentHistoryPage from './pages/student/PaymentHistoryPage';
 import ProfilePage from './pages/student/ProfilePage';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
+import AdminFinancialPage from './pages/admin/AdminFinancialPage';
+import AdminFunnelPage from './pages/admin/AdminFunnelPage';
+import AdminRenewalChurnPage from './pages/admin/AdminRenewalChurnPage';
+import AdminClassHealthPage from './pages/admin/AdminClassHealthPage';
+import AdminInstructorPerformancePage from './pages/admin/AdminInstructorPerformancePage';
+import AdminAttendanceAnomalyPage from './pages/admin/AdminAttendanceAnomalyPage';
 import PendingApplicationsPage from './pages/admin/PendingApplicationsPage';
 import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
@@ -39,6 +45,8 @@ import TokenAssignmentPage from './pages/admin/TokenAssignmentPage';
 import ReassignStudentsPage from './pages/admin/ReassignStudentsPage';
 import HolidaysPage from './pages/admin/HolidaysPage';
 import RefundRecordsPage from './pages/admin/RefundRecordsPage';
+import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
+import AuditLogPage from './pages/admin/AuditLogPage';
 
 function App() {
   return (
@@ -104,10 +112,66 @@ function App() {
             }
           />
           <Route
+            path="/admin/financial"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminFinancialPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/funnel"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminFunnelPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/renewal-churn"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminRenewalChurnPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/class-health"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminClassHealthPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/instructor-performance"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminInstructorPerformancePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/attendance-anomaly"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminAttendanceAnomalyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/admin/pending-applications"
             element={
               <ProtectedRoute requireAdmin>
                 <PendingApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/trial-applications"
+            element={
+              <ProtectedRoute requireAdmin>
+                <TrialApplicationsPage />
               </ProtectedRoute>
             }
           />
@@ -212,6 +276,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <RefundRecordsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/audit-log"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AuditLogPage />
               </ProtectedRoute>
             }
           />

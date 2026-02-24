@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { Save } from 'lucide-react';
+import { Save, Bell } from 'lucide-react';
+
+const TOKEN_REMINDER_KEY = 'the_yard_token_expiry_reminder';
 
 interface SiteContent {
   page_key: string;
@@ -33,11 +36,13 @@ const MOCK_PAGES: SiteContent[] = [
 ];
 
 export default function SettingsPage() {
+  const { t } = useTranslation();
   const [pages, setPages] = useState<SiteContent[]>([]);
   const [selectedPage, setSelectedPage] = useState<string>('about');
   const [form, setForm] = useState({ title: '', content: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [tokenExpiryReminder, setTokenExpiryReminder] = useState(() => localStorage.getItem(TOKEN_REMINDER_KEY) === 'true');
 
   useEffect(() => {
     loadContent();
@@ -131,9 +136,30 @@ export default function SettingsPage() {
               className="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary-dark flex items-center disabled:opacity-50"
             >
               <Save className="h-5 w-5 mr-2" />
-              {saving ? 'Saving...' : 'Save Changes'}
+              {saving ? t('admin.settings.saving') : t('admin.settings.saveChanges')}
             </button>
           </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary" />
+            {t('admin.settings.reminderSection')}
+          </h2>
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={tokenExpiryReminder}
+              onChange={(e) => {
+                const v = e.target.checked;
+                setTokenExpiryReminder(v);
+                localStorage.setItem(TOKEN_REMINDER_KEY, v ? 'true' : 'false');
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+            />
+            <span className="text-sm text-gray-700">{t('admin.settings.tokenExpiryReminder')}</span>
+          </label>
+          <p className="text-xs text-gray-500 mt-2">{t('admin.settings.tokenExpiryReminderHint')}</p>
         </div>
       </div>
     </Layout>

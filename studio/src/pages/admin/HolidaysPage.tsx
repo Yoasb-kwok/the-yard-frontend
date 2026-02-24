@@ -113,7 +113,7 @@ export default function HolidaysPage() {
           description: form.description.trim() || undefined,
         });
         await loadHolidays();
-        alert(t('admin.holidays.holidayUpdated'));
+        alert(t('admin.holidays.holidayUpdated') + '\n\n' + t('admin.holidays.affectedClassesNote'));
       } else {
         await api.post('admin/holidays', {
           name: form.name.trim(),
@@ -121,7 +121,7 @@ export default function HolidaysPage() {
           description: form.description.trim() || undefined,
         });
         await loadHolidays();
-        alert(t('admin.holidays.holidayCreated'));
+        alert(t('admin.holidays.holidayCreated') + '\n\n' + t('admin.holidays.affectedClassesNote'));
       }
       closeModal();
     } catch (err) {

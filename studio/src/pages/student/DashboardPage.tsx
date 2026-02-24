@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth, type AddProfileData, type CourseLevel } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { formatDate, formatDateTime, isExpiringSoon } from '../../lib/utils';
+import { formatDate, isExpiringSoon } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { Calendar, Coins, AlertCircle, MoreVertical, Clock, FileText, X, Home, ShoppingBag, Bell, BookOpen, TrendingDown } from 'lucide-react';
+import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
+import { DEMO_PROFILE_IDS, getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
+import { Calendar, Coins, AlertCircle, Home, ShoppingBag, Bell, BookOpen, TrendingDown, User, ChevronRight, Plus } from 'lucide-react';
 
 interface UserToken {
   id: string;
@@ -14,86 +16,15 @@ interface UserToken {
   expiry_date: string;
 }
 
-interface UpcomingClass {
-  id: string;
-  status: string;
-  user_id?: string;
-  user_name?: string;
-  class: {
-    name: string;
-    instructor: string;
-    start_time: string;
-    end_time: string;
-    program_code?: string;
-  };
-  extension_application?: {
-    status: 'pending' | 'approved' | 'rejected';
-    applied_date?: string;
-    rejection_reason?: string;
-  };
-  sick_leave_application?: {
-    status: 'pending' | 'approved' | 'rejected';
-    applied_date?: string;
-    rejection_reason?: string;
-  };
-  /** Optional: for "已上 X / 共 Y 堂" display */
-  attended_lessons?: number;
-  total_lessons?: number;
-}
-
-/** Profile IDs for 陳小明、陳小美、陳大明 – always show demo data for them */
-const DEMO_PROFILE_IDS = ['student-001', 'student-001-sub-2', 'student-001-sub-3'];
+/** Same shape as EnrolledClass so dashboard and schedule use same data */
+type UpcomingClass = EnrolledClass;
 
 /** Fallback demo data when API is unavailable or for demo profiles */
 const FALLBACK_TOKENS: UserToken[] = [
   { id: 'tok_demo_1', remaining_tokens: 5, total_tokens: 10, expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10) },
 ];
-function getFallbackUpcomingClasses(profileId?: string, profileName?: string): UpcomingClass[] {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(14, 0, 0, 0);
-  const start = d.toISOString();
-  const end = new Date(d.getTime() + 3600000).toISOString();
-  const d2 = new Date();
-  d2.setDate(d2.getDate() + 3);
-  d2.setHours(16, 0, 0, 0);
-  const start2 = d2.toISOString();
-  const end2 = new Date(d2.getTime() + 3600000).toISOString();
-  const base: UpcomingClass = {
-    id: 'enr_demo_1',
-    status: 'enrolled',
-    user_id: profileId ?? '',
-    user_name: profileName ?? '',
-    class: { name: '兒童芭蕾 A', instructor: '李老師', start_time: start, end_time: end, program_code: 'KB-A' },
-    attended_lessons: 3,
-    total_lessons: 8,
-  };
-  const withExtensionApproved: UpcomingClass = {
-    id: 'enr_demo_2',
-    status: 'enrolled',
-    user_id: profileId ?? '',
-    user_name: profileName ?? '',
-    class: { name: '兒童爵士 B', instructor: '王老師', start_time: start2, end_time: end2, program_code: 'KJ-B' },
-    extension_application: { status: 'approved', applied_date: new Date().toISOString() },
-    attended_lessons: 5,
-    total_lessons: 16,
-  };
-  const withSickLeaveRejected: UpcomingClass = {
-    id: 'enr_demo_3',
-    status: 'enrolled',
-    user_id: profileId ?? '',
-    user_name: profileName ?? '',
-    class: { name: '兒童芭蕾 B', instructor: '李老師', start_time: start2, end_time: end2, program_code: 'KB-B' },
-    sick_leave_application: {
-      status: 'rejected',
-      applied_date: new Date().toISOString(),
-      rejection_reason: '請提供醫生證明以申請病假。',
-    },
-    attended_lessons: 2,
-    total_lessons: 8,
-  };
-  return [base, withExtensionApproved, withSickLeaveRejected];
-}
+
+/** One source of truth: same enrollments as SchedulePage & sidebar so counts match */
 const FALLBACK_UPCOMING_CLASSES: UpcomingClass[] = getFallbackUpcomingClasses();
 
 /** Demo: 試堂／報名記錄 */
@@ -133,142 +64,51 @@ const FALLBACK_NOTIFICATIONS: NotificationItem[] = [
   { id: 'n2', title: '代幣即將到期', message: '部分代幣將於 30 日內到期，請盡快使用。', date: new Date().toISOString() },
 ];
 
-interface ApplicationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  type: 'extension' | 'sickLeave';
-  enrollment: UpcomingClass;
-  onSubmit: (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string, documentFile?: File | null) => void;
-}
-
-function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: ApplicationModalProps) {
-  const { t, i18n } = useTranslation();
-  const [reason, setReason] = useState('');
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-
-  // Map i18n language codes to locale strings for date formatting
-  const getLocale = (): string => {
-    const langMap: { [key: string]: string } = {
-      'en': 'en-US',
-      'zh-CN': 'zh-CN',
-      'zh-TW': 'zh-TW',
-    };
-    return langMap[i18n.language] || i18n.language || 'en-US';
-  };
-
-  if (!isOpen) return null;
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reason.trim()) return;
-
-    setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API call
-    onSubmit(enrollment.id, type, reason, type === 'sickLeave' ? documentFile : undefined);
-    setReason('');
-    setDocumentFile(null);
-    setSubmitting(false);
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-        <div className="flex items-center justify-between p-6 border-b">
-          <div>
-            <h3 className="text-xl font-semibold text-gray-900">
-              {type === 'extension' ? t('schedule.applyExtension') : t('schedule.applySickLeave')}
-            </h3>
-            <p className="text-sm text-gray-500 mt-1">
-              {type === 'extension' ? t('schedule.extensionHint') : t('schedule.sickLeaveHint')}
-            </p>
-            <p className="text-sm text-primary/90 mt-2 font-medium">
-              {t('schedule.noMakeupRefundNote')}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6">
-          <div className="mb-4">
-            <p className="text-sm text-gray-600 mb-2">
-              {t('schedule.class')}: <span className="font-medium">{enrollment.class.name}</span>
-            </p>
-            <p className="text-sm text-gray-600">
-              {t('schedule.date')}: <span className="font-medium">{formatDateTime(enrollment.class.start_time, getLocale())}</span>
-            </p>
-          </div>
-
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('schedule.reason')}
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              rows={4}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              placeholder={t('schedule.reasonPlaceholder')}
-              required
-            />
-          </div>
-
-          {type === 'sickLeave' && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('schedule.uploadSickLeaveDoc')}
-              </label>
-              <p className="text-xs text-gray-500 mb-2">{t('schedule.uploadSickLeaveDocHint')}</p>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setDocumentFile(e.target.files?.[0] ?? null)}
-                className="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary-dark"
-              />
-              {documentFile && <p className="text-xs text-green-600 mt-1">{documentFile.name}</p>}
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={submitting || !reason.trim()}
-              className="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitting ? t('trial.submitting') : t('common.submit')}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+function emptyAddForm(): AddProfileData & { has_joined_courses: boolean } {
+  return { full_name: '', nick_name: '', date_of_birth: '', sex: null, parents_name: '', contact_number: '', residential_district: '', has_joined_courses: false, level: null };
 }
 
 export default function DashboardPage() {
-  const { profile } = useAuth();
+  const { profile, profiles, switchProfile, addProfile } = useAuth();
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
   const [loading, setLoading] = useState(true);
-  const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [applicationModal, setApplicationModal] = useState<{
-    isOpen: boolean;
-    type: 'extension' | 'sickLeave' | null;
-    enrollment: UpcomingClass | null;
-  }>({ isOpen: false, type: null, enrollment: null });
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [addForm, setAddForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyAddForm());
+
+  /** Per-profile class count for child cards (each kid can have different classes) */
+  const classesByProfileId = useMemo(() => {
+    const map: Record<string, { count: number; name: string }> = {};
+    (profiles ?? []).forEach((p) => {
+      map[p.id] = { count: 0, name: p.full_name ?? t('dashboard.child') };
+    });
+    upcomingClasses.forEach((e) => {
+      const id = (e.user_id || '').trim() || (profile?.id ?? '');
+      if (!id && profile) {
+        map[profile.id] = map[profile.id] ?? { count: 0, name: profile.full_name ?? t('dashboard.child') };
+        map[profile.id].count += 1;
+        return;
+      }
+      if (map[id]) {
+        map[id].count += 1;
+        if (e.user_name) map[id].name = e.user_name;
+      } else {
+        map[id] = { count: 1, name: e.user_name ?? t('dashboard.child') };
+      }
+    });
+    return map;
+  }, [upcomingClasses, profiles, profile]);
+
+  /** Next few upcoming classes across all kids (recent activity) */
+  const recentUpcoming = useMemo(() => {
+    const now = Date.now();
+    return [...upcomingClasses]
+      .filter((e) => new Date(e.class.start_time).getTime() >= now)
+      .sort((a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime())
+      .slice(0, 5);
+  }, [upcomingClasses]);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Map i18n language codes to locale strings for date formatting
@@ -281,23 +121,23 @@ export default function DashboardPage() {
     return langMap[i18n.language] || i18n.language || 'en-US';
   };
 
-  // Generate tutor profile image URL from UI Avatars
-  const getTutorImageUrl = (name: string): string => {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
-  };
-
   useEffect(() => {
-    if (profile) {
+    if (profile || (profiles && profiles.length > 0)) {
       loadData();
     }
-  }, [profile?.id]);
+  }, [profile?.id, profiles?.length]);
 
   async function loadData() {
     setLoading(true);
-    const isDemoProfile = profile?.id && DEMO_PROFILE_IDS.includes(profile.id);
-    if (isDemoProfile) {
+    const isDemoAccount = profiles?.some((p) => p.id && DEMO_PROFILE_IDS.includes(p.id));
+    const hasMultipleProfiles = profiles && profiles.length > 1;
+    if (isDemoAccount) {
       setTokens(FALLBACK_TOKENS);
-      setUpcomingClasses(getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined));
+      if (hasMultipleProfiles && profiles) {
+        setUpcomingClasses(profiles.flatMap((p) => getFallbackUpcomingClasses(p.id, p.full_name ?? undefined)));
+      } else {
+        setUpcomingClasses(getFallbackUpcomingClasses(profile?.id, profile?.full_name ?? undefined));
+      }
       setLoading(false);
       return;
     }
@@ -328,36 +168,6 @@ export default function DashboardPage() {
       }, tokens[0].expiry_date)
     : null;
 
-  const handleApplicationSubmit = (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string, _documentFile?: File | null) => {
-    setUpcomingClasses(prev => prev.map(enrollment => {
-      if (enrollment.id === enrollmentId) {
-        const applicationKey = type === 'sickLeave' ? 'sick_leave_application' : 'extension_application';
-        return {
-          ...enrollment,
-          [applicationKey]: {
-            status: 'pending' as const,
-            applied_date: new Date().toISOString(),
-          },
-        };
-      }
-      return enrollment;
-    }));
-
-    const message = type === 'extension' 
-      ? t('schedule.extensionApplied')
-      : t('schedule.sickLeaveApplied');
-    setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(null), 5000);
-  };
-
-  const openApplicationModal = (enrollment: UpcomingClass, type: 'extension' | 'sickLeave') => {
-    setApplicationModal({ isOpen: true, type, enrollment });
-  };
-
-  const closeApplicationModal = () => {
-    setApplicationModal({ isOpen: false, type: null, enrollment: null });
-  };
-
   if (loading) {
     return (
       <Layout>
@@ -384,7 +194,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* In-app 通知 */}
+        {/* 最新消息 */}
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
           <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-3 flex items-center gap-2">
             <Bell className="h-5 w-5 text-primary" />
@@ -401,6 +211,97 @@ export default function DashboardPage() {
             ))}
           </ul>
         </div>
+
+        {/* 小朋友主頁入口：每個小朋友可上不同課堂 */}
+        {profiles && profiles.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <h2 className="text-lg md:text-xl font-semibold text-gray-900 flex items-center gap-2">
+                <User className="h-5 w-5 text-primary" />
+                {t('profile.familyMembers')}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  const first = profiles[0];
+                  setAddForm({
+                    ...emptyAddForm(),
+                    parents_name: first?.parents_name ?? '',
+                    contact_number: first?.contact_number ?? (first as any)?.mobile ?? '',
+                    residential_district: first?.residential_district ?? '',
+                  });
+                  setAddMemberOpen(true);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-dark"
+              >
+                <Plus className="h-4 w-4" />
+                {t('profile.addFamilyMember')}
+              </button>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {profiles.map((p) => {
+                const info = classesByProfileId[p.id] ?? { count: 0, name: p.full_name ?? t('dashboard.child') };
+                return (
+                  <div
+                    key={p.id}
+                    className="border border-gray-200 rounded-lg p-4 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">{info.name}</p>
+                        <p className="text-sm text-gray-600 mt-0.5">{t('dashboard.upcomingCount', { count: info.count })}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          switchProfile(p.id);
+                          navigate('/schedule');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary-dark transition-colors"
+                      >
+                        {t('dashboard.enterChildPage')}
+                        <ChevronRight className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 最近即將上課 */}
+        {recentUpcoming.length > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-3 flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-primary" />
+              {t('dashboard.recentActivity')}
+            </h2>
+            <ul className="space-y-2">
+              {recentUpcoming.map((e) => {
+                const start = new Date(e.class.start_time);
+                const dateStr = start.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', weekday: 'short' });
+                const timeStr = start.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+                return (
+                  <li key={e.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                    <div>
+                      <span className="font-medium text-gray-900">{e.class.name}</span>
+                      {e.user_name && <span className="text-xs text-primary ml-2">({e.user_name})</span>}
+                    </div>
+                    <span className="text-sm text-gray-500">{dateStr} {timeStr}</span>
+                  </li>
+                );
+              })}
+            </ul>
+            <Link
+              to="/schedule"
+              className="inline-flex items-center gap-2 mt-3 text-sm font-medium text-primary hover:underline"
+            >
+              {t('dashboard.viewFullSchedule')}
+              <ChevronRight className="h-4 w-4" />
+            </Link>
+          </div>
+        )}
 
         {totalTokens === 0 && (
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 flex items-start gap-3">
@@ -435,56 +336,42 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <div className="grid md:grid-cols-2 gap-6">
-          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg md:text-xl font-semibold text-gray-900">{t('dashboard.tokenBalance')}</h2>
-              <Coins className="h-6 w-6 md:h-8 md:w-8 text-yellow-500" />
-            </div>
-            <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{totalTokens}</div>
-            <p className="text-gray-600 text-sm mb-3">{t('dashboard.availableTokens')}</p>
-            
-            {earliestExpiryDate && (
-              <div className="text-sm text-gray-600 mb-3">
-                {t('dashboard.expires')}: {formatDate(earliestExpiryDate, getLocale())}
-              </div>
-            )}
-
-            {expiringTokens.length > 0 && (
-              <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-md p-3 flex items-start">
-                <AlertCircle className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
-                <div className="text-sm text-yellow-800">
-                  {expiringTokens.length} {t('dashboard.tokensExpiring')}
-                </div>
-              </div>
-            )}
-            {totalTokens > 0 && (
-              <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">{t('dashboard.newPackageExpiryNote')}</p>
-            )}
-            {/* 代幣使用紀錄 */}
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <TrendingDown className="h-4 w-4" />
-                {t('dashboard.tokenUsageTitle')}
-              </h3>
-              <ul className="space-y-2 max-h-32 overflow-y-auto">
-                {FALLBACK_TOKEN_USAGE.map((u) => (
-                  <li key={u.id} className="flex justify-between items-center text-sm">
-                    <span className="text-gray-600 truncate">{formatDate(u.date, getLocale())} · {u.class_name}</span>
-                    <span className="text-red-600 font-medium flex-shrink-0 ml-2">{u.change}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900">{t('dashboard.tokenBalance')}</h2>
+            <Coins className="h-6 w-6 md:h-8 md:w-8 text-yellow-500" />
           </div>
-
-          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg md:text-xl font-semibold text-gray-900">{t('dashboard.allUpcomingLessons')}</h2>
-              <Calendar className="h-6 w-6 md:h-8 md:w-8 text-primary" />
+          <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{totalTokens}</div>
+          <p className="text-gray-600 text-sm mb-3">{t('dashboard.availableTokens')}</p>
+          {earliestExpiryDate && (
+            <div className="text-sm text-gray-600 mb-3">
+              {t('dashboard.expires')}: {formatDate(earliestExpiryDate, getLocale())}
             </div>
-            <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{upcomingClasses.length}</div>
-            <p className="text-gray-600 text-sm">{t('dashboard.classesScheduled')}</p>
+          )}
+          {expiringTokens.length > 0 && (
+            <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-md p-3 flex items-start">
+              <AlertCircle className="h-5 w-5 text-yellow-600 mr-2 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-yellow-800">
+                {expiringTokens.length} {t('dashboard.tokensExpiring')}
+              </div>
+            </div>
+          )}
+          {totalTokens > 0 && (
+            <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">{t('dashboard.newPackageExpiryNote')}</p>
+          )}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+              <TrendingDown className="h-4 w-4" />
+              {t('dashboard.tokenUsageTitle')}
+            </h3>
+            <ul className="space-y-2 max-h-32 overflow-y-auto">
+              {FALLBACK_TOKEN_USAGE.map((u) => (
+                <li key={u.id} className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600 truncate">{formatDate(u.date, getLocale())} · {u.class_name}</span>
+                  <span className="text-red-600 font-medium flex-shrink-0 ml-2">{u.change}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
@@ -506,155 +393,93 @@ export default function DashboardPage() {
           </ul>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-4">{t('dashboard.upcomingClasses')}</h2>
-          {upcomingClasses.length === 0 ? (
-            <p className="text-gray-600">{t('dashboard.noUpcomingClasses')}</p>
-          ) : (
-            <div className="space-y-0">
-              {upcomingClasses.map((enrollment, index) => {
-                const showActions = enrollment.status === 'enrolled' && 
-                  (!enrollment.extension_application || !enrollment.sick_leave_application);
-                const isDropdownOpen = openDropdown === enrollment.id;
-
-                return (
-                  <div key={enrollment.id}>
-                    <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
-                      <img
-                        src={getTutorImageUrl(enrollment.class.instructor)}
-                        alt={enrollment.class.instructor}
-                        className="w-12 h-12 md:w-16 md:h-16 rounded-full object-cover flex-shrink-0 border-2 border-primary-lighter"
-                      />
-                      <div className="flex-1 min-w-0">
-                        {enrollment.user_name && (
-                          <div className="text-xs font-medium text-primary mb-1">
-                            {t('dashboard.childName', { name: enrollment.user_name })}
-                          </div>
-                        )}
-                        <div className="flex items-center gap-2 mb-1">
-                          <div className="font-medium text-gray-900">{enrollment.class.name}</div>
-                          {enrollment.class.program_code && (
-                            <span className="text-xs font-medium text-primary bg-primary-lighter px-2 py-0.5 rounded">
-                              {enrollment.class.program_code}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-600 mb-1">
-                          {enrollment.class.instructor}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {(() => {
-                            const startDate = new Date(enrollment.class.start_time);
-                            const endDate = new Date(enrollment.class.end_time);
-                            const dateStr = startDate.toLocaleDateString(getLocale(), {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                            });
-                            const startTime = startDate.toLocaleTimeString(getLocale(), {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-                            const endTime = endDate.toLocaleTimeString(getLocale(), {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            });
-                            return `${dateStr} ${startTime} - ${endTime}`;
-                          })()}
-                        </div>
-                        {/* 課程進度 */}
-                        {(enrollment.attended_lessons != null && enrollment.total_lessons != null) && (
-                          <div className="text-sm text-primary font-medium mt-1">
-                            {t('dashboard.courseProgress', { current: enrollment.attended_lessons, total: enrollment.total_lessons })}
-                          </div>
-                        )}
-                        {/* 請假／改期結果 */}
-                        {enrollment.extension_application && (
-                          <div className="mt-2">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${enrollment.extension_application.status === 'approved' ? 'bg-green-100 text-green-800' : enrollment.extension_application.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-                              {t('schedule.applyExtension')}: {enrollment.extension_application.status === 'approved' ? t('schedule.status.approved') : enrollment.extension_application.status === 'rejected' ? t('schedule.status.rejected') : t('schedule.status.pending')}
-                            </span>
-                            {enrollment.extension_application.status === 'rejected' && enrollment.extension_application.rejection_reason && (
-                              <p className="text-xs text-red-600 mt-1">{enrollment.extension_application.rejection_reason}</p>
-                            )}
-                          </div>
-                        )}
-                        {enrollment.sick_leave_application && (
-                          <div className="mt-2">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${enrollment.sick_leave_application.status === 'approved' ? 'bg-green-100 text-green-800' : enrollment.sick_leave_application.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-                              {t('schedule.applySickLeave')}: {enrollment.sick_leave_application.status === 'approved' ? t('schedule.status.approved') : enrollment.sick_leave_application.status === 'rejected' ? t('schedule.status.rejected') : t('schedule.status.pending')}
-                            </span>
-                            {enrollment.sick_leave_application.status === 'rejected' && enrollment.sick_leave_application.rejection_reason && (
-                              <p className="text-xs text-red-600 mt-1">{enrollment.sick_leave_application.rejection_reason}</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {showActions && (
-                        <div className="relative">
-                          <button
-                            onClick={() => setOpenDropdown(isDropdownOpen ? null : enrollment.id)}
-                            className="p-1 text-gray-400 hover:text-gray-600 transition-colors"
-                          >
-                            <MoreVertical className="h-5 w-5" />
-                          </button>
-                          {isDropdownOpen && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => setOpenDropdown(null)}
-                              />
-                              <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-20 border">
-                                {!enrollment.extension_application && (
-                                  <button
-                                    onClick={() => {
-                                      openApplicationModal(enrollment, 'extension');
-                                      setOpenDropdown(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2"
-                                  >
-                                    <Clock className="h-4 w-4" />
-                                    {t('schedule.applyExtension')}
-                                  </button>
-                                )}
-                                {!enrollment.sick_leave_application && (
-                                  <button
-                                    onClick={() => {
-                                      openApplicationModal(enrollment, 'sickLeave');
-                                      setOpenDropdown(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2"
-                                  >
-                                    <FileText className="h-4 w-4" />
-                                    {t('schedule.applySickLeave')}
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {index < upcomingClasses.length - 1 && (
-                      <div className="h-px bg-gray-200 my-3"></div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {applicationModal.isOpen && applicationModal.enrollment && applicationModal.type && (
-          <ApplicationModal
-            isOpen={applicationModal.isOpen}
-            onClose={closeApplicationModal}
-            type={applicationModal.type}
-            enrollment={applicationModal.enrollment}
-            onSubmit={handleApplicationSubmit}
-          />
-        )}
+        <p className="text-sm text-gray-600">{t('dashboard.scheduleHint')}</p>
       </div>
+
+      {addMemberOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-4 shadow-xl sm:p-6">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">{t('profile.addFamilyMember')}</h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!addForm.full_name.trim()) return;
+                addProfile({
+                  full_name: addForm.full_name.trim(),
+                  nick_name: addForm.nick_name || null,
+                  date_of_birth: addForm.date_of_birth || null,
+                  sex: addForm.sex,
+                  parents_name: addForm.parents_name || null,
+                  contact_number: addForm.contact_number || null,
+                  residential_district: addForm.residential_district || null,
+                  has_joined_courses: addForm.has_joined_courses,
+                  level: addForm.level,
+                });
+                setAddMemberOpen(false);
+                setAddForm(emptyAddForm());
+                setSuccessMessage(t('profile.memberAdded'));
+                setTimeout(() => setSuccessMessage(null), 3000);
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.fullName')} *</label>
+                <input type="text" required value={addForm.full_name} onChange={(e) => setAddForm((f) => ({ ...f, full_name: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.nickName')}</label>
+                <input type="text" value={addForm.nick_name || ''} onChange={(e) => setAddForm((f) => ({ ...f, nick_name: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.dateOfBirth')}</label>
+                <input type="date" value={addForm.date_of_birth || ''} onChange={(e) => setAddForm((f) => ({ ...f, date_of_birth: e.target.value || null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.sex')}</label>
+                <select value={addForm.sex === true ? 'male' : addForm.sex === false ? 'female' : ''} onChange={(e) => setAddForm((f) => ({ ...f, sex: e.target.value === 'male' ? true : e.target.value === 'female' ? false : null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary">
+                  <option value="">{t('profile.notProvided')}</option>
+                  <option value="male">{t('profile.male')}</option>
+                  <option value="female">{t('profile.female')}</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.parentsName')}</label>
+                <input type="text" value={addForm.parents_name || ''} onChange={(e) => setAddForm((f) => ({ ...f, parents_name: e.target.value || null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.contactNumber')}</label>
+                <input type="text" value={addForm.contact_number || ''} onChange={(e) => setAddForm((f) => ({ ...f, contact_number: e.target.value || null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.residentialDistrict')}</label>
+                <select value={addForm.residential_district || ''} onChange={(e) => setAddForm((f) => ({ ...f, residential_district: e.target.value || null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary">
+                  <option value="">{t('profile.notProvided')}</option>
+                  {HK_DISTRICT_KEYS.map((key) => (<option key={key} value={key}>{t(`districts.${key}`)}</option>))}
+                </select>
+              </div>
+              <div>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input type="checkbox" checked={addForm.has_joined_courses} onChange={(e) => setAddForm((f) => ({ ...f, has_joined_courses: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                  <span className="text-sm text-gray-700">{t('profile.hasJoinedCourses')}</span>
+                </label>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.level')}</label>
+                <select value={addForm.level || ''} onChange={(e) => setAddForm((f) => ({ ...f, level: (e.target.value || null) as CourseLevel | null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary">
+                  <option value="">{t('profile.notProvided')}</option>
+                  <option value="entry">{t('calendar.level.entry')}</option>
+                  <option value="intermediate">{t('calendar.level.intermediate')}</option>
+                  <option value="advanced">{t('calendar.level.advanced')}</option>
+                </select>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => { setAddMemberOpen(false); setAddForm(emptyAddForm()); }} className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">{t('common.cancel')}</button>
+                <button type="submit" className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark">{t('common.create')}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

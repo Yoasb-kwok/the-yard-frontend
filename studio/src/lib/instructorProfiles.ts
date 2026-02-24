@@ -104,8 +104,41 @@ const profileByName = new Map<string, InstructorProfile>(
   EXAMPLE_INSTRUCTOR_PROFILES.map((p) => [p.name, p])
 );
 
-/** Get instructor profile by name (e.g. class.instructor). Returns undefined if not in example set. */
+const STORAGE_KEY = 'the_yard_instructor_profiles';
+
+function getStoredProfiles(): Record<string, InstructorProfile> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, InstructorProfile>;
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function setStoredProfile(name: string, profile: InstructorProfile): void {
+  const trimmed = (name || '').trim();
+  if (!trimmed) return;
+  const all = getStoredProfiles();
+  all[trimmed] = { ...profile, name: trimmed };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  } catch (e) {
+    console.warn('Failed to save instructor profile to localStorage', e);
+  }
+}
+
+/** Get instructor profile by name. Prefers admin-saved profile (localStorage), then example set. */
 export function getInstructorProfile(instructorName: string): InstructorProfile | undefined {
   const trimmed = (instructorName || '').trim();
-  return trimmed ? profileByName.get(trimmed) : undefined;
+  if (!trimmed) return undefined;
+  const stored = getStoredProfiles()[trimmed];
+  if (stored) return stored;
+  return profileByName.get(trimmed) ?? undefined;
+}
+
+/** Save instructor profile (e.g. from Admin 導師 edit). Used for demo; backend can persist later. */
+export function saveInstructorProfile(name: string, profile: InstructorProfile): void {
+  setStoredProfile(name, profile);
 }

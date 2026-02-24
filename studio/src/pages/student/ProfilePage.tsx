@@ -5,7 +5,7 @@ import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext
 import { getAgeTagFromDateOfBirth } from '../../lib/utils';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { useTranslation } from 'react-i18next';
-import { User, Copy, Check, Plus, Pencil, Trash2, KeyRound } from 'lucide-react';
+import { User, Copy, Check, Pencil, Trash2, KeyRound } from 'lucide-react';
 
 const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
   full_name: '',
@@ -165,16 +165,6 @@ export default function ProfilePage() {
             <User className="h-6 w-6 md:h-8 md:w-8 text-primary" />
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('profile.title')}</h1>
           </div>
-          {isStudent && (
-            <button
-              type="button"
-              onClick={openAddModal}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary-dark"
-            >
-              <Plus className="h-4 w-4" />
-              {t('profile.addFamilyMember')}
-            </button>
-          )}
         </div>
 
         {message && (
