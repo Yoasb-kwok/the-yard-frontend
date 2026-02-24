@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
+import { useAdminPendingCounts } from '../lib/useAdminPendingCounts';
 const logoUrl = '/images/the-yard-logo.png';
 
 // WhatsApp Icon Component
@@ -85,6 +86,13 @@ export default function Layout({ children }: LayoutProps) {
   ];
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;
+  const pendingCounts = useAdminPendingCounts(!!isAdmin);
+  const getPendingBadge = (path: string): number => {
+    if (!isAdmin) return 0;
+    if (path === '/admin/pending-applications') return pendingCounts.pendingApplications;
+    if (path === '/admin/trial-applications') return pendingCounts.pendingTrials;
+    return 0;
+  };
 
   // Public navigation items for top menu bar with icons
   const publicNavItems = [
@@ -332,6 +340,7 @@ export default function Layout({ children }: LayoutProps) {
           <nav className="mt-5 px-2 space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
+              const badge = getPendingBadge(item.path);
               return (
                 <Link
                   key={item.path}
@@ -343,11 +352,16 @@ export default function Layout({ children }: LayoutProps) {
                   }`}
                 >
                   <Icon
-                    className={`mr-3 h-5 w-5 ${
+                    className={`mr-3 h-5 w-5 flex-shrink-0 ${
                       isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
                     }`}
                   />
-                  {item.label}
+                  <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                  {badge > 0 && (
+                    <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
+                      {badge > 99 ? '99+' : badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -376,6 +390,7 @@ export default function Layout({ children }: LayoutProps) {
               <nav className="mt-5 px-2 space-y-1">
                 {navItems.map((item) => {
                   const Icon = item.icon;
+                  const badge = getPendingBadge(item.path);
                   return (
                     <Link
                       key={item.path}
@@ -388,11 +403,16 @@ export default function Layout({ children }: LayoutProps) {
                       }`}
                     >
                       <Icon
-                        className={`mr-3 h-5 w-5 ${
+                        className={`mr-3 h-5 w-5 flex-shrink-0 ${
                           isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
                         }`}
                       />
-                      {item.label}
+                      <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                      {badge > 0 && (
+                        <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
+                          {badge > 99 ? '99+' : badge}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
