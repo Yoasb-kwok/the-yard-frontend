@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
@@ -12,6 +12,7 @@ import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { getFallbackCalendarLessons } from '../../lib/demoCourses';
+import { useModalA11y } from '../../lib/useModalA11y';
 
 interface Lesson {
   id: string;
@@ -59,7 +60,9 @@ export default function CalendarPage() {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
-  
+  const lessonModalRef = useRef<HTMLDivElement>(null);
+  useModalA11y(showLessonModal && !!selectedLesson, () => { setShowLessonModal(false); setSelectedLesson(null); }, lessonModalRef);
+
   const isStudent = user && profile?.role === 'student';
   const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
   const displayLessons = !isStudent
@@ -1255,7 +1258,7 @@ export default function CalendarPage() {
             ></div>
 
             {/* Modal panel */}
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+            <div ref={lessonModalRef} className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full" role="dialog" aria-modal="true" aria-label={t('calendar.lessonDetails', 'Lesson details')}>
               {(() => {
                 const locationColors = getLocationColors(selectedLesson.location);
                 

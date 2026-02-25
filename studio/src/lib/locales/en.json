@@ -63,7 +63,9 @@
     "all": "All",
     "year": "Year",
     "month": "Month",
-    "day": "Day"
+    "day": "Day",
+    "retry": "Retry",
+    "skipToContent": "Skip to main content"
   },
   "districts": {
     "pleaseSelect": "Please select district",
@@ -1227,6 +1229,7 @@
     "everyWeekday": "Every {{day}}",
     "lessonsInTotal": "{{count}} lessons in total",
     "lessonXOfY": "Lesson {{current}} of {{total}}",
+    "lessonDetails": "Lesson details",
     "weekdays": {
       "sunday": "Sunday",
       "monday": "Monday",

@@ -108,13 +108,21 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-cream">
+      <a
+        href="#main-content"
+        className="absolute left-4 top-4 -translate-y-[200%] focus:translate-y-0 focus:z-[100] px-4 py-2 bg-primary text-white rounded-md outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-transform"
+      >
+        {t('common.skipToContent', 'Skip to main content')}
+      </a>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-cream shadow-sm border-b border-primary/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <button
                 onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="mr-3 p-2 text-gray-600 hover:text-gray-900 lg:hidden"
+                className="mr-3 p-2 text-gray-600 hover:text-gray-900 min-h-[44px] min-w-[44px] flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded lg:hidden"
+                aria-expanded={sidebarOpen}
+                aria-label={t('nav.menu')}
               >
                 <PanelLeft className="h-6 w-6" />
               </button>
@@ -129,7 +137,7 @@ export default function Layout({ children }: LayoutProps) {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`text-sm font-medium transition-colors ${
+                  className={`text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded ${
                     isActive(item.path)
                       ? 'text-primary'
                       : 'text-gray-600 hover:text-gray-900'
@@ -142,7 +150,7 @@ export default function Layout({ children }: LayoutProps) {
               <div className="relative" ref={userMenuRef}>
                 <button
                   onClick={() => setUserMenuOpen(!userMenuOpen)}
-                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2"
+                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   <User className="h-4 w-4" />
                   {isAdmin
@@ -218,7 +226,9 @@ export default function Layout({ children }: LayoutProps) {
               <LanguageSwitcher />
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 text-gray-600 hover:text-gray-900"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-gray-600 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded"
+                aria-expanded={mobileMenuOpen}
+                aria-label={mobileMenuOpen ? t('common.close') : t('nav.menu')}
               >
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </button>
@@ -424,7 +434,7 @@ export default function Layout({ children }: LayoutProps) {
           </>
         )}
 
-        <main className="flex-1 min-w-0 p-4 sm:p-6 xl:p-8">
+        <main id="main-content" className="flex-1 min-w-0 p-4 sm:p-6 xl:p-8" tabIndex={-1}>
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
@@ -437,22 +447,22 @@ export default function Layout({ children }: LayoutProps) {
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.company')}</h3>
               <ul className="space-y-2">
-                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-white/90 hover:text-accent transition-colors">{t('nav.about')}</a></li>
-                <li><Link to="/contact" className="text-sm text-white/90 hover:text-accent transition-colors">{t('nav.contact')}</Link></li>
+                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.about')}</a></li>
+                <li><Link to="/contact" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.contact')}</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.resources')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/news" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.latestNews')}</Link></li>
-                <li><Link to="/faq" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.faq')}</Link></li>
+                <li><Link to="/news" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.latestNews')}</Link></li>
+                <li><Link to="/faq" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.faq')}</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.legal')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/terms" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.termsConditions')}</Link></li>
-                <li><Link to="/privacy" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.privacyPolicy')}</Link></li>
+                <li><Link to="/terms" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.termsConditions')}</Link></li>
+                <li><Link to="/privacy" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.privacyPolicy')}</Link></li>
               </ul>
             </div>
             <div className="sm:col-span-2 lg:col-span-1">
@@ -469,14 +479,14 @@ export default function Layout({ children }: LayoutProps) {
                     href="http://wa.me/+85292299875"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="WhatsApp"
                   >
                     <WhatsAppIcon className="h-5 w-5" />
                   </a>
                   <a
                     href="mailto:info@theyard.com.hk"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="Email"
                   >
                     <Mail className="h-5 w-5" />
@@ -485,7 +495,7 @@ export default function Layout({ children }: LayoutProps) {
                     href="https://facebook.com/theyardltd"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="Facebook"
                   >
                     <Facebook className="h-5 w-5" />
@@ -494,7 +504,7 @@ export default function Layout({ children }: LayoutProps) {
                     href="https://instagram.com/theyardhk"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="Instagram"
                   >
                     <Instagram className="h-5 w-5" />

@@ -63,7 +63,9 @@
     "all": "全部",
     "year": "年",
     "month": "月",
-    "day": "日"
+    "day": "日",
+    "retry": "重试",
+    "skipToContent": "跳到主内容"
   },
   "districts": {
     "pleaseSelect": "请选择居住地区",
@@ -1186,6 +1188,7 @@
     "everyWeekday": "每{{day}}",
     "lessonsInTotal": "共{{count}}堂课",
     "lessonXOfY": "第{{current}}/{{total}}堂",
+    "lessonDetails": "课堂详情",
     "weekdays": {
       "sunday": "星期日",
       "monday": "星期一",

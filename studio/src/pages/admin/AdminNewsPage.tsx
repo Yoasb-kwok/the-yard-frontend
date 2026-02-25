@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
@@ -11,6 +11,7 @@ import {
   type StoredNewsPost,
 } from '../../lib/newsStorage';
 import { Plus, Edit, Trash2, Newspaper, Image as ImageIcon } from 'lucide-react';
+import { useModalA11y } from '../../lib/useModalA11y';
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -35,6 +36,8 @@ export default function AdminNewsPage() {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const modalContentRef = useRef<HTMLDivElement>(null);
+  useModalA11y(showModal, closeModal, modalContentRef);
 
   useEffect(() => {
     loadPosts();
@@ -227,9 +230,9 @@ export default function AdminNewsPage() {
               onClick={closeModal}
               aria-hidden
             />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div ref={modalContentRef} className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-news-modal-title">
               <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                <h2 id="admin-news-modal-title" className="text-xl font-bold text-gray-900 mb-4">
                   {editingPost ? t('admin.news.edit', '編輯消息') : t('admin.news.add', '新增消息')}
                 </h2>
                 <form onSubmit={handleSubmit} className="space-y-4">

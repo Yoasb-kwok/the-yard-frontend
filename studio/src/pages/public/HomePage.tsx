@@ -278,34 +278,6 @@ export default function HomePage() {
           </Link>
         </div>
       </div>
-
-      {/* <div className="bg-gray-100 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="bg-primary text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('home.expertInstructors')}</h3>
-              <p className="text-gray-600">{t('home.expertInstructorsDesc')}</p>
-            </div>
-            <div>
-              <div className="bg-primary text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Calendar className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('home.flexibleSchedule')}</h3>
-              <p className="text-gray-600">{t('home.flexibleScheduleDesc')}</p>
-            </div>
-            <div>
-              <div className="bg-primary text-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Clock className="h-8 w-8" />
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('home.smallClassSizes')}</h3>
-              <p className="text-gray-600">{t('home.smallClassSizesDesc')}</p>
-            </div>
-          </div>
-        </div>
-      </div> */}
     </PublicLayout>
   );
 }

@@ -372,11 +372,8 @@ export default function InstructorsPage() {
     }
 
     try {
-      console.log(`Attempting to delete instructor with id: ${id}`);
       const response = await api.delete(`/admin/instructors/${id}`);
-      
-      console.log('Delete response:', response);
-      
+
       if (response.success) {
         // Reload instructors to get updated data
         await loadInstructors();

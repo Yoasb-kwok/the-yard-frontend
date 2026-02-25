@@ -14,7 +14,11 @@ interface EmptyStateProps {
  */
 export default function EmptyState({ message, description, icon }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+    <div
+      className="flex flex-col items-center justify-center py-12 px-4 text-center"
+      role="status"
+      aria-live="polite"
+    >
       {icon && <div className="mb-3 text-gray-400">{icon}</div>}
       <p className="text-gray-700 font-medium">{message}</p>
       {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}

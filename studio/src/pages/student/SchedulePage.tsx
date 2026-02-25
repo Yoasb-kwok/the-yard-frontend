@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import PageLoading from '../../components/PageLoading';
@@ -12,6 +12,7 @@ import { api } from '../../lib/api';
 import { DEMO_PROFILE_IDS, getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
 import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
 import { getLocationInfo } from '../../lib/locationInfo';
+import { useModalA11y } from '../../lib/useModalA11y';
 
 const FALLBACK_UPCOMING_CLASSES: EnrolledClass[] = getFallbackUpcomingClasses();
 
@@ -32,11 +33,13 @@ interface LessonLeaveModalProps {
 
 function LessonLeaveModal({ isOpen, onClose, enrollment, lessonIndex, lessonDate, onSubmit }: LessonLeaveModalProps) {
   const { t, i18n } = useTranslation();
+  const contentRef = useRef<HTMLDivElement>(null);
   const [type, setType] = useState<'personal' | 'sick'>('personal');
   const [reason, setReason] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const locale = ({ 'en': 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' }[i18n.language] || 'en-US');
+  useModalA11y(isOpen, onClose, contentRef);
   if (!isOpen) return null;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,10 +55,10 @@ function LessonLeaveModal({ isOpen, onClose, enrollment, lessonIndex, lessonDate
   };
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+      <div ref={contentRef} className="bg-white rounded-xl shadow-xl max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="lesson-leave-title">
         <div className="flex justify-between p-6 border-b">
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">{t('schedule.leaveForLesson')}</h3>
+            <h3 id="lesson-leave-title" className="text-xl font-semibold text-gray-900">{t('schedule.leaveForLesson')}</h3>
             <p className="text-sm text-gray-500 mt-1">{enrollment.class.name} · {t('schedule.lessonN', { n: lessonIndex + 1 })}</p>
             <p className="text-sm text-gray-600 mt-0.5">{lessonDate.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' })} {lessonDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</p>
           </div>
@@ -107,10 +110,12 @@ interface ApplicationModalProps {
 
 function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: ApplicationModalProps) {
   const { t, i18n } = useTranslation();
+  const contentRef = useRef<HTMLDivElement>(null);
   const [reason, setReason] = useState('');
   const [documentFile, setDocumentFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const getLocale = () => ({ 'en': 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' }[i18n.language] || 'en-US');
+  useModalA11y(isOpen, onClose, contentRef);
   if (!isOpen) return null;
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,10 +130,10 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
   };
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+      <div ref={contentRef} className="bg-white rounded-xl shadow-xl max-w-md w-full" role="dialog" aria-modal="true" aria-labelledby="application-modal-title">
         <div className="flex justify-between p-6 border-b">
           <div>
-            <h3 className="text-xl font-semibold text-gray-900">{type === 'extension' ? t('schedule.applyExtension') : t('schedule.applySickLeave')}</h3>
+            <h3 id="application-modal-title" className="text-xl font-semibold text-gray-900">{type === 'extension' ? t('schedule.applyExtension') : t('schedule.applySickLeave')}</h3>
             <p className="text-sm text-gray-500 mt-1">{type === 'extension' ? t('schedule.extensionHint') : t('schedule.sickLeaveHint')}</p>
             <p className="text-sm text-primary/90 mt-2 font-medium">{t('schedule.noMakeupRefundNote')}</p>
           </div>

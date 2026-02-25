@@ -75,6 +75,12 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
 
   return (
     <div className="min-h-screen bg-cream">
+      <a
+        href="#main-content"
+        className="absolute left-4 top-4 -translate-y-[200%] focus:translate-y-0 focus:z-[100] px-4 py-2 bg-primary text-white rounded-md outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-transform"
+      >
+        {t('common.skipToContent', 'Skip to main content')}
+      </a>
       <nav className="fixed top-0 left-0 right-0 z-50 bg-cream shadow-sm border-b border-primary/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
@@ -90,7 +96,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`text-sm font-medium transition-colors ${
+                  className={`text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded ${
                     isActive(item.path)
                       ? 'text-primary'
                       : 'text-gray-600 hover:text-gray-900'
@@ -104,7 +110,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2"
+                    className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                   >
                     <User className="h-4 w-4" />
                     {profile?.full_name || t('nav.dashboard')}
@@ -132,6 +138,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                               onClick={() => {
                                 switchProfile(p.id);
                                 setUserMenuOpen(false);
+                                navigate('/dashboard');
                               }}
                               className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
                                 p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
@@ -160,7 +167,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
               ) : (
                 <Link
                   to="/login"
-                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors"
+                  className="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-dark transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   {t('nav.login')}
                 </Link>
@@ -172,7 +179,9 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
               <LanguageSwitcher />
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 text-gray-600 hover:text-gray-900"
+                className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 text-gray-600 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded"
+                aria-expanded={mobileMenuOpen}
+                aria-label={mobileMenuOpen ? t('common.close') : t('nav.menu')}
               >
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </button>
@@ -228,6 +237,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                               onClick={() => {
                                 switchProfile(p.id);
                                 setMobileMenuOpen(false);
+                                navigate('/dashboard');
                               }}
                               className={`rounded-lg px-3 py-2 text-sm font-medium ${
                                 p.id === activeProfileId ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
@@ -296,7 +306,9 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
         </div>
       </nav>
 
-      <main className="pt-16">{children}</main>
+      <main id="main-content" className="pt-16" tabIndex={-1}>
+        {children}
+      </main>
 
       <footer className="bg-primary-dark text-white border-t border-primary mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -304,22 +316,22 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.company')}</h3>
               <ul className="space-y-2">
-                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-white/90 hover:text-accent transition-colors">{t('nav.about')}</a></li>
-                <li><Link to="/contact" className="text-sm text-white/90 hover:text-accent transition-colors">{t('nav.contact')}</Link></li>
+                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.about')}</a></li>
+                <li><Link to="/contact" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.contact')}</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.resources')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/news" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.latestNews')}</Link></li>
-                <li><Link to="/faq" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.faq')}</Link></li>
+                <li><Link to="/news" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.latestNews')}</Link></li>
+                <li><Link to="/faq" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.faq')}</Link></li>
               </ul>
             </div>
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.legal')}</h3>
               <ul className="space-y-2">
-                <li><Link to="/terms" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.termsConditions')}</Link></li>
-                <li><Link to="/privacy" className="text-sm text-white/90 hover:text-accent transition-colors">{t('footer.privacyPolicy')}</Link></li>
+                <li><Link to="/terms" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.termsConditions')}</Link></li>
+                <li><Link to="/privacy" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('footer.privacyPolicy')}</Link></li>
               </ul>
             </div>
             <div className="sm:col-span-2 lg:col-span-1">
@@ -336,14 +348,14 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                     href="http://wa.me/+85292299875"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="WhatsApp"
                   >
                     <WhatsAppIcon className="h-5 w-5" />
                   </a>
                   <a
                     href="mailto:info@theyard.com.hk"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="Email"
                   >
                     <Mail className="h-5 w-5" />
@@ -352,7 +364,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                     href="https://facebook.com/theyardltd"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="Facebook"
                   >
                     <Facebook className="h-5 w-5" />
@@ -361,7 +373,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                     href="https://instagram.com/theyardhk"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-white/90 hover:text-accent transition-colors"
+                    className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"
                     aria-label="Instagram"
                   >
                     <Instagram className="h-5 w-5" />

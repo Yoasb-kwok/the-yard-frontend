@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
-import React from 'react';
+import { Fragment } from 'react';
 import { BookOpen, Calendar, MessageSquare, ChevronDown, Filter } from 'lucide-react';
 
 export interface TrialApplication {
@@ -249,7 +249,7 @@ export default function TrialApplicationsPage() {
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filtered.map((app) => (
-                    <React.Fragment key={app.id}>
+                    <Fragment key={app.id}>
                       <tr className="hover:bg-gray-50">
                         <td className="px-4 py-3">
                           <div className="font-medium text-gray-900">{app.applicant_name}</div>
@@ -344,7 +344,7 @@ export default function TrialApplicationsPage() {
                           </td>
                         </tr>
                       )}
-                    </React.Fragment>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
