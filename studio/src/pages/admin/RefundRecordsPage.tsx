@@ -4,6 +4,7 @@ import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Search, RefreshCw, RotateCcw } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
 
 export interface RefundRecord {
@@ -149,19 +150,25 @@ export default function RefundRecordsPage() {
                   className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
                 />
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-                <input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                />
+              <div className="flex gap-2 flex-wrap items-end">
+                <div>
+                  <span className="block text-xs text-gray-500 mb-1">{t('admin.refundRecords.dateFrom')}</span>
+                  <DateSelect
+                    value={dateFrom}
+                    onChange={setDateFrom}
+                    className="px-3 py-2 text-sm"
+                    ariaLabel={t('admin.refundRecords.dateFrom')}
+                  />
+                </div>
+                <div>
+                  <span className="block text-xs text-gray-500 mb-1">{t('admin.refundRecords.dateTo')}</span>
+                  <DateSelect
+                    value={dateTo}
+                    onChange={setDateTo}
+                    className="px-3 py-2 text-sm"
+                    ariaLabel={t('admin.refundRecords.dateTo')}
+                  />
+                </div>
               </div>
             </div>
           </div>

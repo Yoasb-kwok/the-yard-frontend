@@ -472,7 +472,7 @@ export default function ClassAttendancePage() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 mb-1">
-                  <span className="font-medium">{t('admin.attendance.enrolled')}:</span> {selectedClass.enrolled_count} / {selectedClass.capacity}
+                  <span className="font-medium">{t('admin.attendance.expectedCount', '應到')}:</span> {selectedClass.enrolled_count} / {selectedClass.capacity}
                 </p>
                 <p className="text-sm text-gray-600 mb-1">
                   <span className="font-medium">{t('admin.attendance.attended')}:</span>{' '}
@@ -482,6 +482,20 @@ export default function ClassAttendancePage() {
                   <span className="font-medium">{t('admin.attendance.absent')}:</span>{' '}
                   {enrollments.filter(e => e.status === 'absent').length}
                 </p>
+                <p className="text-sm text-gray-600 mb-1">
+                  <span className="font-medium">{t('admin.attendance.leaveCount', '請假')}:</span>{' '}
+                  {enrollments.filter(e => e.status === 'sick_leave').length}
+                </p>
+                {enrollments.filter(e => e.status === 'sick_leave').length > 0 && (
+                  <div className="mt-2 p-2 bg-amber-50 rounded border border-amber-100">
+                    <p className="text-xs font-medium text-amber-800 mb-1">{t('admin.attendance.leaveListTitle', '請假學生名單')}</p>
+                    <ul className="text-sm text-amber-900 space-y-0.5">
+                      {enrollments.filter(e => e.status === 'sick_leave').map((e) => (
+                        <li key={e.id}>{e.user_name}（{t('admin.attendance.statuses.sick_leave', '病假')}）</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </div>

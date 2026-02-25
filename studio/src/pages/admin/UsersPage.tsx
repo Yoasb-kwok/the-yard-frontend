@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
+import PageLoading from '../../components/PageLoading';
+import LoadErrorBanner from '../../components/LoadErrorBanner';
+import EmptyState from '../../components/EmptyState';
 import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Search, Edit, Mail, Calendar, Package, Receipt, Clock, Download, Send } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
 
 interface UserToken {
@@ -84,6 +88,7 @@ export default function UsersPage() {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -92,6 +97,7 @@ export default function UsersPage() {
   async function loadUsers() {
     try {
       setLoading(true);
+      setLoadError(null);
       const response = await api.get<User[]>('/admin/users?demo=1').catch(() => ({ success: true, data: MOCK_USERS }));
       if (response.success && response.data) {
         setUsers(response.data);
@@ -100,6 +106,7 @@ export default function UsersPage() {
       }
     } catch (error) {
       console.error('Error loading users:', error);
+      setLoadError(error instanceof Error ? error.message : '無法載入用戶列表');
       setUsers(MOCK_USERS);
     } finally {
       setLoading(false);
@@ -270,9 +277,7 @@ export default function UsersPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
+        <PageLoading message={t('admin.users.loading', '載入用戶列表中…')} />
       </Layout>
     );
   }
@@ -280,6 +285,9 @@ export default function UsersPage() {
   return (
     <Layout>
       <div className="space-y-6">
+        {loadError && (
+          <LoadErrorBanner message={loadError} onRetry={() => { setLoadError(null); loadUsers(); }} />
+        )}
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">{t('admin.users.title')}</h1>
         </div>
@@ -342,7 +350,14 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {sortedUsers.map((user) => {
+                {sortedUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-12">
+                      <EmptyState message={t('admin.users.noUsers', '暫無用戶')} />
+                    </td>
+                  </tr>
+                ) : (
+                sortedUsers.map((user) => {
                   const totalTokens = user.user_tokens.reduce((sum, t) => sum + t.remaining_tokens, 0);
                   const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
                   return (
@@ -416,7 +431,8 @@ export default function UsersPage() {
                       </td>
                     </tr>
                   );
-                })}
+                })
+                )}
               </tbody>
             </table>
           </div>
@@ -506,11 +522,11 @@ export default function UsersPage() {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {t('admin.users.newExpiryDate')}
                       </label>
-                      <input
-                        type="date"
+                      <DateSelect
                         value={tokenExpiryForm[index] || ''}
-                        onChange={(e) => setTokenExpiryForm({ ...tokenExpiryForm, [index]: e.target.value })}
-                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                        onChange={(v) => setTokenExpiryForm({ ...tokenExpiryForm, [index]: v })}
+                        className="w-full"
+                        ariaLabel={t('admin.users.newExpiryDate')}
                       />
                     </div>
                   </div>

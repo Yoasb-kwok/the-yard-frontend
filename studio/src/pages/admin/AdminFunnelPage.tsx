@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, downloadCsv } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { Target, Calendar } from 'lucide-react';
+import { Target, Calendar, Download } from 'lucide-react';
 import { FALLBACK_FUNNEL, reportMonthOptions, type ConversionFunnelData } from '../../lib/adminReportData';
 
 export default function AdminFunnelPage() {
@@ -36,6 +36,21 @@ export default function AdminFunnelPage() {
     );
   }
 
+  const exportCsv = () => {
+    const rows: (string | number)[][] = [
+      [t('admin.dashboard.reportMonth'), reportMonth],
+      [t('admin.dashboard.totalTrials'), funnel.totalTrialCount],
+      [t('admin.dashboard.trialToEnrollmentRate'), `${funnel.trialToEnrollmentRate.toFixed(1)}%`],
+      [t('admin.dashboard.newEnrollments'), funnel.newEnrollmentCount],
+      [t('admin.dashboard.relatedRevenue'), funnel.relatedRevenue],
+      [],
+      [t('admin.dashboard.trialsByChannel')],
+      [t('admin.dashboard.channel'), t('admin.dashboard.trialCount'), t('admin.dashboard.enrollmentCount'), t('admin.dashboard.conversionRate'), t('admin.dashboard.revenue')],
+      ...funnel.byChannel.map((r) => [r.channel, r.trialCount, r.enrollmentCount, `${r.conversionRate.toFixed(1)}%`, r.revenue]),
+    ];
+    downloadCsv(rows, `conversion-funnel-${reportMonth}.csv`);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -56,6 +71,14 @@ export default function AdminFunnelPage() {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+            >
+              <Download className="h-4 w-4" />
+              {t('admin.dashboard.exportCsv')}
+            </button>
           </div>
         </div>
 

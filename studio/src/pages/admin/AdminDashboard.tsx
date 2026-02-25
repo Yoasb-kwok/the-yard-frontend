@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus, Calendar, BookOpen, ClipboardList } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { useAdminPendingCounts } from '../../lib/useAdminPendingCounts';
+import { DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus, Calendar, BookOpen, ClipboardList, ListChecks, ChevronRight } from 'lucide-react';
 
 interface UpcomingClass {
   id: string;
@@ -25,17 +28,20 @@ interface Stats {
 
 const FALLBACK_STATS: Stats = { totalRevenue: 12500, totalUsers: 3, expiringStudents: 1, lowTokenStudents: 1 };
 const FALLBACK_UPCOMING: UpcomingClass[] = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(14, 0, 0, 0);
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0, 0);
+  const tomorrowStart = new Date(todayStart);
+  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
   return [
-    { id: 'c1', name: 'Kids Ballet A', program_code: 'KB-A', instructor: '李老師', start_time: d.toISOString(), enrolled_count: 8, capacity: 12, location: 'sanpokong' },
-    { id: 'c2', name: 'Teen Hip Hop', program_code: 'THH', instructor: '陳老師', start_time: new Date(d.getTime() + 86400000).toISOString(), enrolled_count: 10, capacity: 15, location: 'causewaybay' },
+    { id: 'c1', name: 'Kids Ballet A', program_code: 'KB-A', instructor: '李老師', start_time: todayStart.toISOString(), enrolled_count: 8, capacity: 12, location: 'sanpokong' },
+    { id: 'c2', name: 'Teen Hip Hop', program_code: 'THH', instructor: '陳老師', start_time: tomorrowStart.toISOString(), enrolled_count: 10, capacity: 15, location: 'causewaybay' },
   ];
 })();
 
 export default function AdminDashboard() {
   const { t, i18n } = useTranslation();
+  const { isAdmin } = useAuth();
+  const pendingCounts = useAdminPendingCounts(!!isAdmin);
   const [stats, setStats] = useState<Stats>(FALLBACK_STATS);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>(FALLBACK_UPCOMING);
   const [locationFilter, setLocationFilter] = useState<string>('all');
@@ -45,6 +51,15 @@ export default function AdminDashboard() {
   const getLocationLabel = (loc?: string) => (loc ? t(`home.locations.${loc}`) : '-');
   const filteredClasses = upcomingClasses.filter((c) => locationFilter === 'all' || c.location === locationFilter);
   const locations = Array.from(new Set(upcomingClasses.map((c) => c.location).filter(Boolean))) as string[];
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+  const todayClasses = upcomingClasses.filter((c) => {
+    const t = new Date(c.start_time).getTime();
+    return t >= todayStart.getTime() && t < todayEnd.getTime();
+  });
 
   useEffect(() => {
     (async () => {
@@ -86,6 +101,84 @@ export default function AdminDashboard() {
           <LayoutDashboard className="h-7 w-7 text-primary" />
           {t('admin.dashboard.sectionOverview')}
         </h1>
+
+        {/* 今日待辦：一鍵跳轉 */}
+        <div className="bg-white rounded-lg shadow-md p-5 border-l-4 border-primary">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('admin.dashboard.todayTodo', '今日待辦')}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Link
+              to="/admin/pending-applications"
+              className="flex items-center justify-between p-4 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <ListChecks className="h-8 w-8 text-amber-600" />
+                <div>
+                  <p className="text-sm font-medium text-amber-900">{t('admin.dashboard.todayTodoPendingApps', '待批改期／病假')}</p>
+                  <p className="text-2xl font-bold text-amber-800">{pendingCounts.pendingApplications}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-amber-600" />
+            </Link>
+            <Link
+              to="/admin/trial-applications"
+              className="flex items-center justify-between p-4 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <BookOpen className="h-8 w-8 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-blue-900">{t('admin.dashboard.todayTodoTrials', '待確認試堂')}</p>
+                  <p className="text-2xl font-bold text-blue-800">{pendingCounts.pendingTrials}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-blue-600" />
+            </Link>
+            <Link
+              to="/admin/users"
+              className="flex items-center justify-between p-4 rounded-lg bg-yellow-50 border border-yellow-200 hover:bg-yellow-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <AlertCircle className="h-8 w-8 text-yellow-600" />
+                <div>
+                  <p className="text-sm font-medium text-yellow-900">{t('admin.dashboard.todayTodoExpiring', '代幣即將到期')}</p>
+                  <p className="text-2xl font-bold text-yellow-800">{stats.expiringStudents}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-yellow-600" />
+            </Link>
+            <Link
+              to="/admin/classes"
+              className="flex items-center justify-between p-4 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Calendar className="h-8 w-8 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium text-green-900">{t('admin.dashboard.todayTodoClasses', '今日課堂')}</p>
+                  <p className="text-2xl font-bold text-green-800">{todayClasses.length}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-green-600" />
+            </Link>
+          </div>
+          {todayClasses.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <p className="text-xs font-medium text-gray-500 uppercase mb-2">{t('admin.dashboard.todayClassesList', '今日課堂一覽')}</p>
+              <ul className="space-y-2">
+                {todayClasses.map((c) => (
+                  <li key={c.id}>
+                    <Link
+                      to={`/admin/classes/${c.id}/attendance`}
+                      className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-gray-100 text-gray-900"
+                    >
+                      <span className="font-medium">{c.name}</span>
+                      <span className="text-sm text-gray-500">{formatDateTime(c.start_time, getLocale())}</span>
+                      <ChevronRight className="h-4 w-4 text-gray-400" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-md p-5">

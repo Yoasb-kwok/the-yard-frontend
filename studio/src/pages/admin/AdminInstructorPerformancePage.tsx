@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
-import { GraduationCap, Calendar, ArrowUpDown } from 'lucide-react';
+import { downloadCsv } from '../../lib/utils';
+import { GraduationCap, Calendar, ArrowUpDown, Download } from 'lucide-react';
 import { FALLBACK_INSTRUCTOR_PERFORMANCE, reportMonthOptions, type InstructorPerformanceData, type InstructorPerformanceRow } from '../../lib/adminReportData';
 
 type SortKey = 'totalHours' | 'totalSessions' | 'totalStudents' | 'avgClassSize' | 'avgRenewalRate' | 'attendanceRate';
@@ -72,6 +73,15 @@ export default function AdminInstructorPerformancePage() {
     </th>
   );
 
+  const exportCsv = () => {
+    const headers = [t('admin.dashboard.instructor'), t('admin.dashboard.totalTeachingHours'), t('admin.dashboard.totalSessions'), t('admin.dashboard.totalStudentsInstructor'), t('admin.dashboard.avgClassSize'), t('admin.dashboard.avgRenewalRate'), t('admin.dashboard.attendanceRate')];
+    const rows: (string | number)[][] = [
+      headers,
+      ...sortedRows.map((r) => [r.instructor, r.totalHours, r.totalSessions, r.totalStudents, r.avgClassSize.toFixed(1), `${r.avgRenewalRate.toFixed(1)}%`, `${r.attendanceRate.toFixed(1)}%`]),
+    ];
+    downloadCsv(rows, `instructor-performance-${reportMonth}.csv`);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -91,6 +101,14 @@ export default function AdminInstructorPerformancePage() {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+            >
+              <Download className="h-4 w-4" />
+              {t('admin.dashboard.exportCsv')}
+            </button>
           </div>
         </div>
         <p className="text-sm text-gray-600">{t('admin.dashboard.instructorPerformanceDesc')}</p>

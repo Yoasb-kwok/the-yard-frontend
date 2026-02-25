@@ -6,6 +6,7 @@ import { getAgeTagFromDateOfBirth } from '../../lib/utils';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { useTranslation } from 'react-i18next';
 import { User, Copy, Check, Pencil, Trash2, KeyRound } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 
 const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
   full_name: '',
@@ -412,7 +413,7 @@ export default function ProfilePage() {
             </h3>
             <form onSubmit={handleSubmitMember} className="space-y-4">
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.fullName')} *</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.fullName')} <span className="text-red-600">*</span></label>
                 <input
                   type="text"
                   required
@@ -432,11 +433,12 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.dateOfBirth')}</label>
-                <input
-                  type="date"
+                <DateSelect
+                  birthDateMode
                   value={form.date_of_birth || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, date_of_birth: e.target.value || null }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                  onChange={(v) => setForm((f) => ({ ...f, date_of_birth: v || null }))}
+                  className="w-full"
+                  ariaLabel={t('profile.dateOfBirth')}
                 />
               </div>
               <div>

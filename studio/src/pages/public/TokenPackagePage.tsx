@@ -225,6 +225,24 @@ export default function TokenPackagePage() {
         <h1 className="text-4xl font-bold text-gray-900 mb-8">{t('tokenPackage.title')}</h1>
         <p className="text-lg text-gray-600 mb-12">{t('tokenPackage.subtitle')}</p>
 
+        {/* 當前適用優惠 */}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 mb-10">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <Check className="h-6 w-6 text-amber-600" />
+            {t('promotions.currentOffers', '當前適用優惠')}
+          </h2>
+          <ul className="space-y-3">
+            <li className="flex items-start gap-3">
+              <span className="text-amber-600 font-medium shrink-0">•</span>
+              <span className="text-gray-800">{t('promotions.newTermDiscount', '新學期折扣：首次購買代幣套票享 9 折優惠（適用優惠碼 WELCOME10）')}</span>
+            </li>
+            <li className="flex items-start gap-3">
+              <span className="text-amber-600 font-medium shrink-0">•</span>
+              <span className="text-gray-800">{t('promotions.referralReward', '介紹獎賞：使用推薦碼購票，推薦人與新學員均可獲額外優惠')}</span>
+            </li>
+          </ul>
+        </div>
+
         {/* Class Information Section */}
         {classData && (
           <div className="bg-white rounded-lg shadow-md p-6 mb-8">

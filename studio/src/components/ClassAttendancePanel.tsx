@@ -124,8 +124,11 @@ export default function ClassAttendancePanel({
   );
 
   const canMarkAttended = filteredEnrollments.some((e) => e.status !== 'attended');
+  const selectableEnrollments = filteredEnrollments.filter((e) => e.status !== 'attended');
   const selectedCount = filteredEnrollments.filter((e) => selectedIds.has(e.id)).length;
-  const allSelected = filteredEnrollments.length > 0 && selectedCount === filteredEnrollments.length;
+  const allSelectableSelected =
+    selectableEnrollments.length > 0 &&
+    selectableEnrollments.every((e) => selectedIds.has(e.id));
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -137,7 +140,7 @@ export default function ClassAttendancePanel({
   }
 
   function toggleSelectAll() {
-    if (allSelected) {
+    if (allSelectableSelected) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
         filteredEnrollments.forEach((e) => next.delete(e.id));
@@ -146,7 +149,7 @@ export default function ClassAttendancePanel({
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        filteredEnrollments.forEach((e) => next.add(e.id));
+        selectableEnrollments.forEach((e) => next.add(e.id));
         return next;
       });
     }
@@ -264,7 +267,7 @@ export default function ClassAttendancePanel({
               onClick={toggleSelectAll}
               className="text-sm text-primary hover:underline"
             >
-              {allSelected ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
+              {allSelectableSelected ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
             </button>
             {selectedCount > 0 && (
               <button
@@ -294,7 +297,7 @@ export default function ClassAttendancePanel({
                     <th className="px-2 py-2 text-left w-10">
                       <input
                         type="checkbox"
-                        checked={allSelected}
+                        checked={allSelectableSelected}
                         onChange={toggleSelectAll}
                         className="rounded border-gray-300 text-primary focus:ring-primary"
                         aria-label={t('admin.attendance.selectAll')}
@@ -320,15 +323,14 @@ export default function ClassAttendancePanel({
                   <tr key={enrollment.id}>
                     {onMarkMultipleAttended && (
                       <td className="px-2 py-2 w-10">
-                        {enrollment.status !== 'attended' && (
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(enrollment.id)}
-                            onChange={() => toggleSelect(enrollment.id)}
-                            className="rounded border-gray-300 text-primary focus:ring-primary"
-                            aria-label={enrollment.user_name}
-                          />
-                        )}
+                        <input
+                          type="checkbox"
+                          checked={enrollment.status === 'attended' ? true : selectedIds.has(enrollment.id)}
+                          onChange={() => enrollment.status !== 'attended' && toggleSelect(enrollment.id)}
+                          disabled={enrollment.status === 'attended'}
+                          className="rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-60 disabled:cursor-default"
+                          aria-label={enrollment.user_name}
+                        />
                       </td>
                     )}
                     <td className="px-4 py-2 text-sm font-medium text-gray-900">{enrollment.user_name}</td>
@@ -421,12 +423,13 @@ export default function ClassAttendancePanel({
               <div key={enrollment.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1 min-w-0 flex items-start gap-2">
-                    {onMarkMultipleAttended && enrollment.status !== 'attended' && (
+                    {onMarkMultipleAttended && (
                       <input
                         type="checkbox"
-                        checked={selectedIds.has(enrollment.id)}
-                        onChange={() => toggleSelect(enrollment.id)}
-                        className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary"
+                        checked={enrollment.status === 'attended' ? true : selectedIds.has(enrollment.id)}
+                        onChange={() => enrollment.status !== 'attended' && toggleSelect(enrollment.id)}
+                        disabled={enrollment.status === 'attended'}
+                        className="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary disabled:opacity-60 disabled:cursor-default"
                         aria-label={enrollment.user_name}
                       />
                     )}

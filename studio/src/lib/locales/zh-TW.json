@@ -2,6 +2,7 @@
   "nav": {
     "home": "首頁",
     "about": "關於我們",
+    "courses": "課程介紹",
     "calendar": "課程表",
     "news": "最新消息",
     "tokenPackage": "代幣套票",
@@ -22,7 +23,8 @@
     "purchaseHistory": "購買記錄",
     "refundRecords": "退款記錄",
     "signOut": "登出",
-    "menu": "選單"
+    "menu": "選單",
+    "notifications": "訊息中心"
   },
   "audit": {
     "refundTokens": "退代幣",
@@ -52,12 +54,16 @@
     "success": "成功",
     "error": "錯誤",
     "warning": "警告",
+    "sending": "發送中...",
     "info": "資訊",
     "yes": "是",
     "no": "否",
     "optional": "選填",
     "moreOptions": "更多選項",
-    "all": "全部"
+    "all": "全部",
+    "year": "年",
+    "month": "月",
+    "day": "日"
   },
   "districts": {
     "pleaseSelect": "請選擇居住地區",
@@ -152,6 +158,12 @@
       }
     }
   },
+  "notifications": {
+    "title": "訊息中心",
+    "subtitle": "個人化通知：病假、下堂提醒、全班通知等。",
+    "latestNews": "最新消息",
+    "latestNewsDesc": "查看中心最新公告、優惠與活動。"
+  },
   "tokenPackage": {
     "title": "代幣套票",
     "subtitle": "選擇適合您需求的代幣套票。登入後即可購買，開始您的旅程。",
@@ -196,6 +208,11 @@
     "title": "條款與條件",
     "content": "A. 租場說明 :\n\n1. 手續：租用者可致電或whatsapp THE YARD了解場地使用及租金情况。\n\n2. 租金 : 最少租用 1 小時，其後可以半小時租用，逾時使用本公司會按時收費。(不設15分鐘租用時段)\n\n3. 本公司只會確認三個月內的預約。\n\n4. 包場 : 價錢另議。\n\n5. 商業拍攝(包括電影,微電影,MV,廣告等將會以商業形式向公眾播放) : 如租用場地用作商業拍攝，任何時段均以黃金時段之時租1.5倍起計算, 最少收費兩小時, 包場另議。\n\n6. 由於地板材質限制，本場地不接受穿著高跟鞋跳舞。如有損壞，需要徵收清潔費$500。\n\nB. 基本原則：\n\n1. 租金包括場地準備及收拾時間。\n\n2. 長枱和圓櫈可免費提供指定數量，但須在租用前說明。因供應有限，未必能提供所需數目。\n\n3. 如需要在場地舉辦涉及飲食之活動或其他特別用途，需要另加Party附加費HKD200.00起。詳情請與職員查詢。\n\n4. 場地收費如有調整 ，本公司不作另行通知。\n\nC. 有關繳費 :\n\n1. 租用者須在使用場地前繳付有關費用。如有需要可向本公司職員領取正式收據。\n\n2. 若租用者欲更改租場時間或日期， 其須在使用場地前最少24小時前通知本中心。如因場地已被其他人士租用等原因以致不能改動租用時間 ，申請人可將已繳的費用作日後租場之用。\n\n3. 一般活動室或少於4小時培訓用途(seminar)租用，租用者請於４８小時前繳交租場費用。租用者如取消租用場地，必須在使用場地前最少48小時前通知本公司，如租用者在48小時內通知本公司取消使用場地 ，租用者亦需繳付總場租之50%。如租用者在使用場地前24小時才通知本公司取消使用場地，租用者亦需繳付全部租場費用 。\n\n4. 如果培訓用途租用超過4小時，需於7日前繳交半數留位費。如是大型活動(event)，則需於14日前繳交半數留位費，並可能需要於用場前先付指定可退還押金。已繳留位費在任何情況下不可退還，因此客人需於繳交留位費時確認場地租用。如需要改期，留位費可於半年內使用。\n\n5. 如因懸掛 8 號或以上風球或黑色暴雨警告訊號，以致租用 / 使用者不能使用場地，可選擇更改租用日期及時間，或要求退款。\n\n6. 如租用 / 使用者於使用房間時，突然懸掛八號風球或以上或發出黑色暴雨警告，本公司則須照常收取房租。\n\n7. 如八號風球或以上或黑色暴雨警告在本公司開放前發出，本公司將暫停開放。一般情況下，當天文台除下八號風球或以上或黑色暴雨警告兩小時內，本公司會恢復開放，當日運作會儘快回復正常。若下午八時後除下八號風球或黑色暴雨警告，當天晚上本公司則仍停止開放。如八號風球或以上或黑色暴雨警告在本公司開放後發出，本公司將讓會員留於單位內，確保安全情況下離開。以上安排視乎各區實際天氣而定，如遇以上情況，請致電舉辦單位查詢。本會保留修改以上條款的權利。\n\nD. 租用/使用場地守則 :\n\n1. 租用/使用者須遵守本公司定的「租用/使用場地守則」。\n\n2. 租場/使用者若違反本規則，本中心有權停止其租用場地之權利。\n\n3. 租用/使用者須準時交還場地， 租用時間包括場地準備及收拾 ， 逾時者將按時收取額外費用。\n\n4. 租用/使用者必須保持場地清潔，及確保使用場地後室內物品按原位擺設。廢物須用膠袋裝好，放於指定位置。\n\n5. 租用/使用者如攜來道具物品，必須獲本中心批准及按指示自行放置妥當。在交還場地時，需立即及完全拆除及搬走所攜來之道具物品。\n\n6. 未經本公司許可，租用/使用者不得在本中心範圍內擺放任何物品或張貼指示、 通告或任何宣傳物品 。 所有有關活動之海報，當租用完畢後，須立即拆除及搬走。\n\n7. 租用/使用者不得擅自移動或拆除場地內的固定設施，使用房間後所有檯椅 、 設備及用品須安放回原位及維持原狀 。\n\n8. 租用/使用者須自行申請及領取各項/舉行活動所需之有效牌照。\n\n9. 本場地範圍內，一律禁止吸煙。\n\n10. 本場地範圍內嚴禁任何形式的賭博行為 。\n\n11. 嚴禁攜帶違禁品、危險物品或不雅物品進入本公司範圍。\n\n12. 租用期間，所有設施如有損毀、破壞或遺失，租用/使用者須賠償本公司損失 。\n\n13. 租用/使用者於本公司場地內進行活動時引致的人身傷亡或財物遺失、損壞 ，本公司概不負責 。租用/使用者需就有關之活動購買適當的保險及負責活動參加者之安全。\n\n14. 辦公室、接待處及非租借之地方均為本公司私人範圍，未經許可不得擅進。\n\n15. 租用/ 使用者的一切活動與本公司無關，本公司不會承擔任何責任。租場/使用者明白及同意其一切活動均須符合香港特別行政區的法例 。\n\n16. 本公司保留場地租用/使用規則的修改及最終解釋權 。"
   },
+  "promotions": {
+    "currentOffers": "當前適用優惠",
+    "newTermDiscount": "新學期折扣：首次購買代幣套票享 9 折優惠（適用優惠碼 WELCOME10）",
+    "referralReward": "介紹獎賞：使用推薦碼購票，推薦人與新學員均可獲額外優惠"
+  },
   "privacy": {
     "title": "隱私政策",
     "content": "我們尊重您的隱私，並致力於保護您的個人資料。本隱私政策解釋了我們在使用我們的服務時如何收集、使用和保護您的資訊。\n\n## 我們收集的資訊\n我們收集您直接提供給我們的資訊，包括：\n- 姓名和聯絡資訊\n- 付款資訊\n- 課程偏好和報名歷史\n\n## 我們如何使用您的資訊\n我們使用收集的資訊來：\n- 處理您的註冊和付款\n- 與您溝通課程和服務\n- 改善我們的服務和用戶體驗\n\n## 資料安全\n我們實施適當的安全措施，以保護您的個人資訊免受未經授權的訪問、更改、披露或破壞。\n\n## 聯絡我們\n如果您對本隱私政策有任何疑問，請與我們聯繫。"
@@ -238,6 +255,8 @@
       "theYardPromo": "The Yard Promo",
       "friendReferral": "朋友介紹"
     },
+    "usedPromoCode": "使用了推廣碼",
+    "promoCodePlaceholder": "選填，方便統計推廣來源",
     "password": "密碼",
     "passwordMin": "至少6個字符",
     "submitApplication": "提交申請",
@@ -250,6 +269,9 @@
     "applicationSubmittedDescLoggedIn": "您的試堂申請已成功提交！我們將審核您的申請並盡快與您聯繫。",
     "redirecting": "正在重定向到登入頁面...",
     "redirectingToDashboard": "正在重定向到儀表板...",
+    "successContactYou": "我們會盡快聯絡你確認時間。",
+    "viewTrialStatus": "查看我的試堂申請狀態",
+    "trialBookedFor": "已為 {{name}} 預約試堂：{{className}}、{{datetime}}、{{location}}",
     "free": "免費",
     "sameAccountNote": "試堂生與新生使用同一帳戶，無需重複註冊。"
   },
@@ -341,7 +363,10 @@
     "insufficientTokensDesc": "請購買代幣套票以預約課程。",
     "insufficientTokensCta": "前往商店",
     "lowTokensWarning": "您的代幣少於 2 個，建議續購。",
+    "tokensRunningOut": "即將用完，可購買新套票",
     "lowTokensCta": "續購代幣",
+    "lessonsLeftTitle": "各課程剩餘堂數",
+    "lessonsLeft": "剩餘 {{count}} 堂",
     "noUpcomingClasses": "本週沒有安排的課程",
     "with": "導師",
     "tokens": "代幣",
@@ -364,7 +389,17 @@
     "childMainPage": "小朋友主頁",
     "calendarTitle": "日曆",
     "calendarHint": "有課日以色塊顯示；假期已自動順延，不安排課堂。",
-    "calendarLegend": "日曆與下表僅顯示此小朋友已報讀的課程，多於一科以唔同顏色區分。",
+    "calendarLegend": "日曆與下表僅顯示此小朋友已報讀的課程，多於一科以不同顏色區分。",
+    "loading": "載入課程表中…",
+    "loadError": "無法載入課程，請稍後再試。",
+    "nextLesson": "下一堂",
+    "comingWithin24h": "即將上課（24 小時內）",
+    "openMap": "打開地圖",
+    "makeupRemaining": "剩餘補堂次數",
+    "makeupRemainingCount": "剩餘 {{count}} 次補堂",
+    "makeupRecord": "已補堂記錄",
+    "makeupRecordEmpty": "暫無補堂記錄",
+    "makeupRecordItem": "{{course}} 第{{lesson}}堂（{{leaveDate}} 請假）→ 已安排補堂 {{makeupDate}}",
     "attendanceRate": "出席率",
     "thisMonthAttendance": "本月出席率",
     "allUpcomingCourses": "接下來所有課程",
@@ -454,6 +489,7 @@
       "failed": "失敗"
     },
     "downloadReceipt": "下載收據",
+    "viewReceipt": "查看收據",
     "emailReceipt": "電郵收據",
     "receiptSent": "收據已發送至你的電郵",
     "actions": "操作",
@@ -546,6 +582,20 @@
       "with": "與",
       "enrolled": "已報名",
       "sectionOverview": "總覽",
+      "todayTodo": "今日待辦",
+      "todayTodoPendingApps": "待批改期／病假",
+      "todayTodoTrials": "待確認試堂",
+      "todayTodoExpiring": "代幣即將到期",
+      "todayTodoClasses": "今日課堂",
+      "todayClassesList": "今日課堂一覽",
+      "filterAllTypes": "全部類型",
+      "filterAllCourses": "全部課程",
+      "selectAll": "全選",
+      "bulkApprove": "批量批准",
+      "bulkReject": "批量拒絕",
+      "bulkRejectReason": "統一拒絕原因",
+      "bulkApproved": "已批准 {{count}} 件申請",
+      "bulkRejected": "已拒絕 {{count}} 件申請",
       "sectionFinancial": "財務",
       "financialDashboard": "財務儀表板",
       "financialDashboardDesc": "老闆每日一看的「健康檢查表」，一眼掌握現金流和收入結構。",
@@ -632,7 +682,8 @@
       "consecutiveAbsenceThreshold": "連續缺課次數",
       "consecutiveAbsences": "連續缺課",
       "lastClassDate": "最後上課日",
-      "enrolledCount": "報名人數"
+      "enrolledCount": "報名人數",
+      "exportCsv": "導出 CSV"
     },
     "users": {
       "title": "用戶管理",
@@ -665,7 +716,7 @@
       "userNotFound": "未找到用戶",
       "upcomingClasses": "即將到來的課程",
       "noUpcomingClasses": "沒有即將到來的課程",
-      "exportCsv": "匯出 CSV",
+      "exportCsv": "導出 CSV",
       "bulkSendReminder": "批量發送提醒（{{count}} 人）",
       "reminderSent": "已向 {{count}} 位用戶發送提醒（Demo）。"
     },
@@ -720,6 +771,11 @@
       "month": "月",
       "week": "週",
       "today": "今天",
+      "filterToday": "今日",
+      "filterThisWeek": "本週",
+      "postponedFrom": "原 {{date}} → 順延至本堂",
+      "filterToday": "今日",
+      "filterThisWeek": "本週",
       "classesFor": "課程",
       "allClasses": "所有課程",
       "at": "在",
@@ -750,6 +806,9 @@
       "time": "時間",
       "enrolled": "已報名",
       "attended": "已出席",
+      "expectedCount": "應到",
+      "leaveCount": "請假",
+      "leaveListTitle": "請假學生名單",
       "absent": "缺席",
       "attendanceList": "出席名單",
       "searchPlaceholder": "按姓名或手機號搜尋...",
@@ -857,13 +916,20 @@
     "trialApplications": {
       "title": "試堂申請",
       "description": "新生試堂申請一覽，可查看狀態、分配班別、備註。",
+      "statusLabel": "狀態",
       "status": {
         "pending": "待確認",
         "confirmed": "已確認",
         "assigned": "已分配班別",
+        "contacted": "已聯絡",
+        "attended_trial": "已到堂",
+        "converted": "已轉正價",
         "cancelled": "已取消"
       },
-      "filterAll": "全部狀態",
+      "filterAll": "全部",
+      "filterAllStatus": "全部狀態",
+      "filterNotContacted": "未聯絡",
+      "filterThisWeek": "本週試堂",
       "applicant": "申請人",
       "trialClass": "試堂課程",
       "assignedClass": "分配班別",
@@ -877,7 +943,7 @@
     },
     "auditLog": {
       "title": "審計紀錄",
-      "description": "敏感操作紀錄（誰、幾時、做咩），方便對數或糾紛處理。",
+      "description": "敏感操作紀錄（操作者、時間、操作內容），方便核對或糾紛處理。",
       "time": "時間",
       "actor": "操作者",
       "action": "操作",
@@ -885,6 +951,16 @@
       "searchPlaceholder": "搜尋操作者或詳情",
       "filterAll": "全部操作",
       "noEntries": "暫無紀錄"
+    },
+    "classNotice": {
+      "title": "全班通知",
+      "description": "發送通知給該班已報讀學生（如惡劣天氣停課）。只發給該班學生。",
+      "selectClass": "選擇班別",
+      "chooseClass": "請選擇",
+      "message": "通知內容",
+      "messagePlaceholder": "例如：因惡劣天氣，本週六 10:00 課堂停課，補課日期另行通知。",
+      "send": "發送全班通知",
+      "sent": "已發送給該班學生"
     },
     "reports": {
       "title": "報表",
@@ -975,6 +1051,10 @@
       "nameRequired": "請輸入假期名稱",
       "dateRequired": "請選擇日期",
       "noHolidays": "尚未添加假期。新增第一個假期以管理課程順延。",
+      "thisMonthHolidays": "本月假期與停課",
+      "nextMonthHolidays": "下月假期與停課",
+      "noneThisMonth": "本月無",
+      "noneNextMonth": "下月無",
       "holidayCreated": "假期新增成功",
       "holidayUpdated": "假期更新成功",
       "affectedClassesNote": "改動假期後，受影響的課堂將於下次載入時重算。",
@@ -1041,6 +1121,8 @@
       "noRecords": "暫無退款記錄",
       "noRecordsHint": "在課程 → 出席名單中執行的退款會顯示於此。",
       "date": "日期",
+      "dateFrom": "由",
+      "dateTo": "至",
       "student": "學生",
       "class": "課程",
       "tokens": "代幣",
@@ -1104,6 +1186,8 @@
   "calendar": {
     "title": "課程表",
     "day": "日",
+    "trialSlotsHint": "以下時段均可試堂，點擊課程可預約試堂。",
+    "trialAvailable": "可試堂",
     "threeDay": "3天",
     "week": "週",
     "month": "月",
@@ -1143,6 +1227,24 @@
     "suggested": "建議",
     "all": "全部",
     "notSuggested": "非建議（級別/年齡不符）"
+  },
+  "courses": {
+    "title": "課程介紹",
+    "subtitle": "按年齡組別瀏覽課程，歡迎預約試堂。",
+    "bookTrial": "預約試堂",
+    "viewCalendar": "查看月曆可報名時段"
+  },
+  "instructors": {
+    "title": "導師介紹",
+    "subtitle": "認識我們的導師團隊，每位均具豐富教學與演出經驗。"
+  },
+  "promotions": {
+    "currentOffers": "當前適用優惠",
+    "newTermDiscount": "新學期折扣",
+    "newTermDiscountDesc": "即日起購買代幣套票可享 9 折，適用於新報讀學員。",
+    "referralReward": "介紹獎賞",
+    "referralRewardDesc": "使用現有學員推薦碼結帳可享額外折扣，推薦人亦可獲獎賞。",
+    "applyAtCheckout": "結帳時輸入優惠碼或推薦碼即可使用。"
   },
   "faq": {
     "title": "常見問題",

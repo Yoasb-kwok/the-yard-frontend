@@ -86,6 +86,33 @@ export default function PaymentHistoryPage() {
     downloadReceiptHtml(html, filename);
   };
 
+  /** Open receipt in new tab (view / print / save as PDF) */
+  const handleViewReceipt = (payment: Payment) => {
+    const html = buildReceiptHtml({
+      orderId: payment.order_id ?? payment.id,
+      date: formatDateTime(payment.date, getLocale()),
+      description: getPackageDescription(payment),
+      paymentMethod: getPaymentMethodLabel(payment.payment_method),
+      amount: formatCurrency(payment.amount),
+      status: getStatusLabel(payment.status),
+      receiptTitle: t('paymentHistory.receiptTitle'),
+      labels: {
+        orderId: t('paymentHistory.orderId'),
+        date: t('paymentHistory.date'),
+        description: t('paymentHistory.description'),
+        paymentMethod: t('paymentHistory.paymentMethod'),
+        amount: t('paymentHistory.amount'),
+        status: t('paymentHistory.status'),
+      },
+      printHint: t('paymentHistory.receiptPrintHint'),
+      brandName: 'The Yard',
+    });
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  };
+
   const handleReceiptEmail = () => {
     setReceiptMessage(t('paymentHistory.receiptSent'));
     setTimeout(() => setReceiptMessage(null), 3000);
@@ -225,6 +252,14 @@ export default function PaymentHistoryPage() {
                     <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
                       <button
                         type="button"
+                        onClick={() => handleViewReceipt(payment)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+                      >
+                        <Receipt className="h-4 w-4" />
+                        {t('paymentHistory.viewReceipt')}
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => handleReceiptDownload(payment)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
                       >
@@ -301,6 +336,14 @@ export default function PaymentHistoryPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleViewReceipt(payment)}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
+                            >
+                              <Receipt className="h-4 w-4" />
+                              {t('paymentHistory.viewReceipt')}
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleReceiptDownload(payment)}

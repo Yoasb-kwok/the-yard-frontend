@@ -5,6 +5,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import HomePage from './pages/public/HomePage';
 import AboutPage from './pages/public/AboutPage';
 import CalendarPage from './pages/public/CalendarPage';
+import CoursesPage from './pages/public/CoursesPage';
+import InstructorsPublicPage from './pages/public/InstructorsPublicPage';
 import NewsPage from './pages/public/NewsPage';
 import NewsDetailPage from './pages/public/NewsDetailPage';
 import ContactPage from './pages/public/ContactPage';
@@ -21,6 +23,7 @@ import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 
 import DashboardPage from './pages/student/DashboardPage';
 import SchedulePage from './pages/student/SchedulePage';
+import NotificationsPage from './pages/student/NotificationsPage';
 import PaymentHistoryPage from './pages/student/PaymentHistoryPage';
 import ProfilePage from './pages/student/ProfilePage';
 
@@ -47,6 +50,7 @@ import HolidaysPage from './pages/admin/HolidaysPage';
 import RefundRecordsPage from './pages/admin/RefundRecordsPage';
 import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
+import AdminClassNoticePage from './pages/admin/AdminClassNoticePage';
 
 function App() {
   return (
@@ -56,6 +60,8 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/courses" element={<CoursesPage />} />
+          <Route path="/instructors" element={<InstructorsPublicPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/news/:id" element={<NewsDetailPage />} />
           <Route path="/token-package" element={<TokenPackagePage />} />
@@ -99,6 +105,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notifications"
+            element={
+              <ProtectedRoute>
+                <NotificationsPage />
               </ProtectedRoute>
             }
           />
@@ -284,6 +298,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <AuditLogPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/class-notice"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminClassNoticePage />
               </ProtectedRoute>
             }
           />

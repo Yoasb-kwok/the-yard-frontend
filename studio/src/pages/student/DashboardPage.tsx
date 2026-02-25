@@ -1,13 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
+import PageLoading from '../../components/PageLoading';
 import { useAuth, type AddProfileData, type CourseLevel } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatDate, isExpiringSoon } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { DEMO_PROFILE_IDS, getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
-import { Calendar, Coins, AlertCircle, Home, ShoppingBag, Bell, BookOpen, TrendingDown, User, ChevronRight, Plus } from 'lucide-react';
+import { getLocationInfo } from '../../lib/locationInfo';
+import { Calendar, Coins, AlertCircle, Home, ShoppingBag, Bell, BookOpen, TrendingDown, User, ChevronRight, Plus, MapPin } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 
 interface UserToken {
   id: string;
@@ -52,16 +55,20 @@ const FALLBACK_TOKEN_USAGE: TokenUsageItem[] = [
   { id: 'u3', date: new Date(Date.now() - 7 * 86400000).toISOString(), class_name: '兒童芭蕾 A', change: -1 },
 ];
 
-/** Demo: In-app 通知 */
+/** Demo: In-app 通知（個人化：病假已批准、下堂提醒等） */
 interface NotificationItem {
   id: string;
   title: string;
   message: string;
   date: string;
+  type?: 'personal' | 'class' | 'system';
 }
 const FALLBACK_NOTIFICATIONS: NotificationItem[] = [
-  { id: 'n1', title: '試堂已確認', message: '你的兒童芭蕾試堂已確認，請按時上課。', date: new Date().toISOString() },
-  { id: 'n2', title: '代幣即將到期', message: '部分代幣將於 30 日內到期，請盡快使用。', date: new Date().toISOString() },
+  { id: 'n1', title: '試堂已確認', message: '你的兒童芭蕾試堂已確認，請按時上課。', date: new Date().toISOString(), type: 'personal' },
+  { id: 'n2', title: '代幣即將到期', message: '部分代幣將於 30 日內到期，請盡快使用。', date: new Date().toISOString(), type: 'system' },
+  { id: 'n3', title: '病假已批准', message: '你的病假申請已批准，已安排補堂日期。', date: new Date(Date.now() - 86400000).toISOString(), type: 'personal' },
+  { id: 'n4', title: '下堂提醒', message: '下堂 2 月 25 日 14:00 兒童芭蕾 A，請準時到新蒲崗分店。', date: new Date().toISOString(), type: 'personal' },
+  { id: 'n5', title: '全班通知', message: '因惡劣天氣，本週六 10:00 兒童芭蕾 A 停課，補課日期另行通知。', date: new Date(Date.now() - 2 * 86400000).toISOString(), type: 'class' },
 ];
 
 function emptyAddForm(): AddProfileData & { has_joined_courses: boolean } {
@@ -100,6 +107,15 @@ export default function DashboardPage() {
     });
     return map;
   }, [upcomingClasses, profiles, profile]);
+
+  /** Next single lesson (soonest by start_time) for 下一堂 card */
+  const nextLesson = useMemo(() => {
+    const now = Date.now();
+    const future = upcomingClasses
+      .filter((e) => new Date(e.class.start_time).getTime() >= now)
+      .sort((a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime());
+    return future[0] ?? null;
+  }, [upcomingClasses]);
 
   /** Next few upcoming classes across all kids (recent activity) */
   const recentUpcoming = useMemo(() => {
@@ -171,9 +187,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
+        <PageLoading message={t('dashboard.loading', '載入中…')} />
       </Layout>
     );
   }
@@ -193,6 +207,34 @@ export default function DashboardPage() {
             {successMessage}
           </div>
         )}
+
+        {/* 下一堂：課堂提醒（與 Schedule 一致） */}
+        {nextLesson && (() => {
+          const start = new Date(nextLesson.class.start_time);
+          const within24h = start.getTime() - Date.now() <= 24 * 60 * 60 * 1000;
+          const locInfo = nextLesson.class.location ? getLocationInfo(nextLesson.class.location) : null;
+          return (
+            <div className={`rounded-lg border-2 p-4 md:p-5 ${within24h ? 'border-amber-400 bg-amber-50' : 'border-primary/30 bg-primary-lighter/30'}`}>
+              <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">
+                {within24h ? t('schedule.comingWithin24h', '即將上課（24 小時內）') : t('schedule.nextLesson', '下一堂')}
+              </p>
+              <p className="text-lg font-bold text-gray-900">
+                {start.toLocaleDateString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric' })} {start.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })} · {nextLesson.class.name}
+              </p>
+              {nextLesson.user_name && <p className="text-sm text-primary mt-0.5">{nextLesson.user_name}</p>}
+              {locInfo && (
+                <div className="mt-2 text-sm text-gray-600">
+                  <p className="font-medium text-gray-700">{locInfo.name}</p>
+                  <p className="text-gray-600">{locInfo.address}</p>
+                  <a href={locInfo.mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-primary font-medium hover:underline">
+                    <MapPin className="h-4 w-4" />
+                    {t('schedule.openMap', '打開地圖')}
+                  </a>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* 最新消息 */}
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
@@ -320,14 +362,14 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {totalTokens > 0 && totalTokens < 2 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="h-6 w-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+        {totalTokens > 0 && totalTokens <= 2 && (
+          <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4 flex items-start gap-3">
+            <AlertCircle className="h-6 w-6 text-amber-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-medium text-yellow-900">{t('dashboard.lowTokensWarning')}</p>
+              <p className="font-semibold text-amber-900">{t('dashboard.tokensRunningOut', '即將用完，可購買新套票')}</p>
               <Link
                 to="/student/shop"
-                className="inline-flex items-center gap-2 mt-2 text-sm font-medium text-yellow-800 hover:text-yellow-900 underline"
+                className="inline-flex items-center gap-2 mt-2 px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
               >
                 <ShoppingBag className="h-4 w-4" />
                 {t('dashboard.lowTokensCta')}
@@ -372,6 +414,27 @@ export default function DashboardPage() {
                 </li>
               ))}
             </ul>
+            {upcomingClasses.some((e) => e.total_lessons != null && e.attended_lessons != null) && (
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">{t('dashboard.lessonsLeftTitle')}</h3>
+                <ul className="space-y-1.5 text-sm">
+                  {upcomingClasses
+                    .filter((e) => e.total_lessons != null && e.attended_lessons != null)
+                    .map((e) => {
+                      const left = (e.total_lessons ?? 0) - (e.attended_lessons ?? 0);
+                      const studentName = e.user_name ?? profile?.full_name ?? t('dashboard.child');
+                      return (
+                        <li key={e.id} className="flex justify-between items-center gap-2">
+                          <span className="text-gray-700 truncate" title={`${studentName} · ${e.class.name}`}>
+                            {studentName} · {e.class.name}
+                          </span>
+                          <span className={left <= 2 ? 'text-amber-600 font-medium flex-shrink-0' : 'text-gray-600 flex-shrink-0'}>{t('dashboard.lessonsLeft', { count: left })}</span>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
 
@@ -423,7 +486,7 @@ export default function DashboardPage() {
               className="space-y-4"
             >
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.fullName')} *</label>
+                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.fullName')} <span className="text-red-600">*</span></label>
                 <input type="text" required value={addForm.full_name} onChange={(e) => setAddForm((f) => ({ ...f, full_name: e.target.value }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
               </div>
               <div>
@@ -432,7 +495,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.dateOfBirth')}</label>
-                <input type="date" value={addForm.date_of_birth || ''} onChange={(e) => setAddForm((f) => ({ ...f, date_of_birth: e.target.value || null }))} className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:ring-2 focus:ring-primary" />
+                <DateSelect birthDateMode value={addForm.date_of_birth || ''} onChange={(v) => setAddForm((f) => ({ ...f, date_of_birth: v || null }))} className="w-full" ariaLabel={t('profile.dateOfBirth')} />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.sex')}</label>

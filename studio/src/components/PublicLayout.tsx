@@ -1,7 +1,7 @@
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info, Check } from 'lucide-react';
+import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info, Check, BookOpen, GraduationCap } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
 const logoUrl = '/images/the-yard-logo.png';
@@ -47,6 +47,8 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
   const navItems = [
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/about', label: t('nav.about'), icon: Info },
+    { path: '/courses', label: t('nav.courses', '課程介紹'), icon: BookOpen },
+    { path: '/instructors', label: t('nav.instructors', '導師介紹'), icon: GraduationCap },
     { path: '/calendar', label: t('nav.calendar'), icon: Calendar },
     { path: '/news', label: t('nav.news'), icon: Newspaper },
     { path: '/token-package', label: t('nav.tokenPackage'), icon: Package },

@@ -4,6 +4,7 @@ import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Plus, Edit, Trash2, Search, CalendarOff, RefreshCw, CalendarClock } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
 
 export interface Holiday {
@@ -249,6 +250,55 @@ export default function HolidaysPage() {
           {t('admin.holidays.description')}
         </p>
 
+        {/* 本月／下月假期與停課一覽 */}
+        {holidays.length > 0 && (() => {
+          const now = new Date();
+          const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+          const thisMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+          const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+          const nextMonthEnd = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+          const inMonth = (h: Holiday, start: Date, end: Date) => {
+            const t = new Date(h.date).getTime();
+            return t >= start.getTime() && t <= end.getTime();
+          };
+          const thisMonth = holidays.filter((h) => inMonth(h, thisMonthStart, thisMonthEnd));
+          const nextMonth = holidays.filter((h) => inMonth(h, nextMonthStart, nextMonthEnd));
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">{t('admin.holidays.thisMonthHolidays', '本月假期與停課')}</h2>
+                {thisMonth.length === 0 ? (
+                  <p className="text-sm text-gray-500">{t('admin.holidays.noneThisMonth', '本月無')}</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {thisMonth.map((h) => (
+                      <li key={h.id} className="flex justify-between">
+                        <span className="font-medium text-gray-900">{h.name}</span>
+                        <span className="text-gray-600">{formatDate(h.date, getLocale())}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <h2 className="text-lg font-semibold text-gray-900 mb-2">{t('admin.holidays.nextMonthHolidays', '下月假期與停課')}</h2>
+                {nextMonth.length === 0 ? (
+                  <p className="text-sm text-gray-500">{t('admin.holidays.noneNextMonth', '下月無')}</p>
+                ) : (
+                  <ul className="space-y-1 text-sm">
+                    {nextMonth.map((h) => (
+                      <li key={h.id} className="flex justify-between">
+                        <span className="font-medium text-gray-900">{h.name}</span>
+                        <span className="text-gray-600">{formatDate(h.date, getLocale())}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="rounded-lg bg-white p-4 shadow-md sm:p-6">
           <div className="mb-4">
             <div className="relative">
@@ -415,7 +465,7 @@ export default function HolidaysPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  {t('admin.holidays.name')} *
+                  {t('admin.holidays.name')} <span className="text-red-600">*</span>
                 </label>
                 <input
                   type="text"
@@ -429,14 +479,14 @@ export default function HolidaysPage() {
 
               <div>
                 <label className="mb-1 block text-sm font-medium text-gray-700">
-                  {t('admin.holidays.date')} *
+                  {t('admin.holidays.date')} <span className="text-red-600">*</span>
                 </label>
-                <input
-                  type="date"
+                <DateSelect
                   required
                   value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
+                  onChange={(v) => setForm({ ...form, date: v })}
+                  className="w-full"
+                  ariaLabel={t('admin.holidays.date')}
                 />
               </div>
 

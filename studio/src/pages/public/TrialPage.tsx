@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { useAuth, CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
+import { getLocationInfo } from '../../lib/locationInfo';
 import { api } from '../../lib/api';
 import { TRIAL_APPLY_ENDPOINT } from '../../lib/trialApplyFlow';
 
@@ -65,6 +67,7 @@ export default function TrialPage() {
   const [hasJoinedCourses, setHasJoinedCourses] = useState<boolean | null>(null);
   const [hasDanceExperience, setHasDanceExperience] = useState<boolean | null>(null);
   const [howDidYouHear, setHowDidYouHear] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -190,6 +193,7 @@ export default function TrialPage() {
         hasJoinedCourses,
         hasDanceExperience,
         howDidYouHear: howDidYouHear || null,
+        promoCode: promoCode.trim() || undefined,
         classId: effectiveClassData.id,
         className: effectiveClassData.name,
         classStartTime: effectiveClassData.start_time,
@@ -236,6 +240,12 @@ export default function TrialPage() {
   }
 
   if (success) {
+    const childName = profile?.full_name ?? '';
+    const locInfo = effectiveClassData ? getLocationInfo(effectiveClassData.location) : null;
+    const locationName = locInfo?.name ?? (effectiveClassData ? t(`home.locations.${effectiveClassData.location}`) : '');
+    const datetimeStr = effectiveClassData
+      ? `${formatDate(effectiveClassData.start_time)} ${formatTime(effectiveClassData.start_time)}`
+      : '';
     return (
       <PublicLayout>
         <div className="min-h-[calc(100vh-16rem)] flex items-center justify-center py-12 px-4">
@@ -246,15 +256,33 @@ export default function TrialPage() {
             </h2>
             {wasLoggedIn ? (
               <>
-                <p className="text-gray-600 mb-4">{t('trial.applicationSubmittedDescLoggedIn')}</p>
-                <p className="text-sm text-gray-500">{t('trial.redirectingToDashboard')}</p>
+                {childName && effectiveClassData && (
+                  <p className="text-gray-800 font-medium mb-2">
+                    {t('trial.trialBookedFor', {
+                      name: childName,
+                      className: effectiveClassData.name,
+                      datetime: datetimeStr,
+                      location: locationName,
+                    }, `已為 ${childName} 預約試堂：${effectiveClassData.name}、${datetimeStr}、${locationName}`)}
+                  </p>
+                )}
+                <p className="text-gray-600 mb-2">{t('trial.applicationSubmittedDescLoggedIn')}</p>
+                <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
+                <Link to="/dashboard" className="inline-block mt-2 text-primary font-medium hover:underline">
+                  {t('trial.viewTrialStatus', '查看我的試堂申請狀態')}
+                </Link>
+                <p className="text-sm text-gray-500 mt-4">{t('trial.redirectingToDashboard')}</p>
               </>
             ) : (
               <>
                 <p className="text-gray-600 mb-2">{t('trial.accountCreated')}</p>
                 <p className="text-gray-600 mb-4">{t('trial.emailSentWithTempPassword', { email })}</p>
-                <p className="text-sm text-gray-600 mb-4">{t('trial.checkEmailAndChangePassword')}</p>
-                <p className="text-sm text-gray-500">{t('trial.redirecting')}</p>
+                <p className="text-sm text-gray-600 mb-2">{t('trial.checkEmailAndChangePassword')}</p>
+                <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
+                <Link to="/login" className="inline-block mt-2 text-primary font-medium hover:underline">
+                  {t('trial.viewTrialStatus', '查看我的試堂申請狀態')}
+                </Link>
+                <p className="text-sm text-gray-500 mt-4">{t('trial.redirecting')}</p>
               </>
             )}
           </div>
@@ -462,7 +490,7 @@ export default function TrialPage() {
                   <div className="rounded-md shadow-sm space-y-4">
                     <div>
                       <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.fullName')} *
+                        {t('trial.fullName')} <span className="text-red-600">*</span>
                       </label>
                       <input
                         id="fullName"
@@ -494,22 +522,22 @@ export default function TrialPage() {
 
                     <div>
                       <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.dateOfBirth')} *
+                        {t('trial.dateOfBirth')} <span className="text-red-600">*</span>
                       </label>
-                      <input
+                      <DateSelect
                         id="dateOfBirth"
-                        name="dateOfBirth"
-                        type="date"
+                        birthDateMode
                         required
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
                         value={dateOfBirth}
-                        onChange={(e) => setDateOfBirth(e.target.value)}
+                        onChange={setDateOfBirth}
+                        className="w-full appearance-none relative block border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        ariaLabel={t('trial.dateOfBirth')}
                       />
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.sex')} *
+                        {t('trial.sex')} <span className="text-red-600">*</span>
                       </label>
                       <div className="flex gap-4">
                         <label className="flex items-center">
@@ -556,7 +584,7 @@ export default function TrialPage() {
 
                     <div>
                       <label htmlFor="contactNumber" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.contactNumber')} *
+                        {t('trial.contactNumber')} <span className="text-red-600">*</span>
                       </label>
                       <div className="flex rounded-md shadow-sm">
                         <select
@@ -586,7 +614,7 @@ export default function TrialPage() {
 
                     <div>
                       <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.email')} *
+                        {t('trial.email')} <span className="text-red-600">*</span>
                       </label>
                       <input
                         id="email"
@@ -697,6 +725,60 @@ export default function TrialPage() {
                         <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
                         <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
                       </select>
+                    </div>
+
+                    <div>
+                      <label htmlFor="promoCode" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.usedPromoCode', '使用了推廣碼')} <span className="text-gray-400">({t('common.optional')})</span>
+                      </label>
+                      <input
+                        id="promoCode"
+                        name="promoCode"
+                        type="text"
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 已登入用戶也可填寫來源／推廣碼 */}
+                {isLoggedIn && (
+                  <div className="rounded-md shadow-sm space-y-4">
+                    <div>
+                      <label htmlFor="howDidYouHearLoggedIn" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.howDidYouHear')}
+                      </label>
+                      <select
+                        id="howDidYouHearLoggedIn"
+                        name="howDidYouHear"
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        value={howDidYouHear}
+                        onChange={(e) => setHowDidYouHear(e.target.value)}
+                      >
+                        <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
+                        <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
+                        <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
+                        <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
+                        <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
+                        <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="promoCodeLoggedIn" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.usedPromoCode', '使用了推廣碼')} <span className="text-gray-400">({t('common.optional')})</span>
+                      </label>
+                      <input
+                        id="promoCodeLoggedIn"
+                        name="promoCode"
+                        type="text"
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value)}
+                      />
                     </div>
                   </div>
                 )}

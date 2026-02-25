@@ -17,6 +17,8 @@ export interface EnrolledClass {
     start_time: string;
     end_time: string;
     program_code?: string;
+    /** 上課地點，用於顯示分店名、地址、打開地圖 */
+    location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   };
   attended_lessons?: number;
   total_lessons?: number;
@@ -42,8 +44,8 @@ export function getFallbackUpcomingClasses(profileId?: string, profileName?: str
   const start3 = d3.toISOString();
   const end3 = new Date(d3.getTime() + 3600000).toISOString();
   return [
-    { id: 'enr_demo_1', status: 'enrolled', user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童芭蕾 A', instructor: '李老師', start_time: start, end_time: end, program_code: 'KB-A' }, attended_lessons: 2, total_lessons: 8 },
-    { id: 'enr_demo_2', status: 'enrolled', user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童爵士 B', instructor: '王老師', start_time: start2, end_time: end2, program_code: 'KJ-B' }, attended_lessons: 3, total_lessons: 16 },
-    { id: 'enr_demo_3', status: 'enrolled', user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童芭蕾 B', instructor: '李老師', start_time: start3, end_time: end3, program_code: 'KB-B' }, attended_lessons: 1, total_lessons: 4 },
+    { id: 'enr_demo_1', status: 'enrolled', user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童芭蕾 A', instructor: '李老師', start_time: start, end_time: end, program_code: 'KB-A', location: 'sanpokong' }, attended_lessons: 2, total_lessons: 8 },
+    { id: 'enr_demo_2', status: 'enrolled', user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童爵士 B', instructor: '王老師', start_time: start2, end_time: end2, program_code: 'KJ-B', location: 'causewaybay' }, attended_lessons: 3, total_lessons: 16 },
+    { id: 'enr_demo_3', status: 'enrolled', user_id: profileId ?? '', user_name: profileName ?? '', class: { name: '兒童芭蕾 B', instructor: '李老師', start_time: start3, end_time: end3, program_code: 'KB-B', location: 'sanpokong' }, attended_lessons: 1, total_lessons: 4 },
   ];
 }

@@ -508,11 +508,16 @@ export default function CalendarPage() {
                       background: `linear-gradient(to right, ${locationColors.primary}, ${locationColors.light})`,
                     }}
                   ></div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className="text-xs font-semibold text-white bg-green-600 px-2.5 py-1 rounded">
+                      {t('calendar.trialAvailable', '可試堂')}
+                    </span>
                   {_postponedFrom && (
-                    <p className="text-xs text-amber-600 font-medium mb-2">
+                    <p className="text-xs text-amber-600 font-medium">
                       {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
                     </p>
                   )}
+                  </div>
                   <div className="flex items-start justify-between mb-6">
                     <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">{lesson.name}</h3>
                     <div className="flex flex-col gap-2 items-end">
@@ -764,6 +769,7 @@ export default function CalendarPage() {
                           </div>
                         )}
                         <div className="font-medium truncate">{lesson.name}</div>
+                        <span className="text-[10px] text-white/90 font-medium block">{t('calendar.trialAvailable', '可試堂')}</span>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
                           <div className="text-white/90 text-xs mt-0.5 font-medium">
                             {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
@@ -922,6 +928,7 @@ export default function CalendarPage() {
                           </div>
                         )}
                         <div className="font-medium truncate">{lesson.name}</div>
+                        <span className="text-[10px] text-white/90 font-medium block">{t('calendar.trialAvailable', '可試堂')}</span>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
                           <div className="text-white/90 text-xs mt-0.5 font-medium">
                             {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
@@ -1082,6 +1089,7 @@ export default function CalendarPage() {
                         <div className="truncate">
                           {formatTime(new Date(lesson.start_time))} {lesson.name}
                         </div>
+                        <span className="text-[10px] text-white/90">{t('calendar.trialAvailable', '可試堂')}</span>
                         {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
                           <div className="truncate text-white/90 text-[10px] font-medium">
                             {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
@@ -1135,7 +1143,8 @@ export default function CalendarPage() {
     <PublicLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">{t('calendar.title')}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('calendar.title')}</h1>
+          <p className="text-gray-600 mb-4">{t('calendar.trialSlotsHint', '以下時段均可試堂，點擊課程可預約試堂。')}</p>
           
           {/* View Switcher and Navigation */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">

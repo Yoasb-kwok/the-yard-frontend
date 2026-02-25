@@ -13,12 +13,13 @@ export interface TrialApplication {
   applicant_phone?: string;
   trial_class: string;
   preferred_datetime?: string;
-  status: 'pending' | 'confirmed' | 'assigned' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'assigned' | 'cancelled' | 'contacted' | 'attended_trial' | 'converted';
   assigned_class_id?: string | null;
   assigned_class_name?: string | null;
   notes?: string;
   applied_at: string;
   updated_at?: string;
+  trial_date?: string; // for "本週試堂" filter
 }
 
 const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
@@ -58,9 +59,21 @@ const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
     assigned_class_name: '幼兒律動（週六 10:00）',
     applied_at: new Date(Date.now() - 1 * 86400000).toISOString(),
   },
+  {
+    id: 'trial_4',
+    applicant_name: '張小美',
+    applicant_email: 'mei@example.com',
+    trial_class: '兒童芭蕾試堂',
+    status: 'contacted',
+    applied_at: new Date(Date.now() - 3 * 86400000).toISOString(),
+    trial_date: new Date(Date.now() + 2 * 86400000).toISOString(),
+  },
 ];
 
-const STATUS_OPTIONS: TrialApplication['status'][] = ['pending', 'confirmed', 'assigned', 'cancelled'];
+const STATUS_OPTIONS: TrialApplication['status'][] = ['pending', 'confirmed', 'assigned', 'contacted', 'attended_trial', 'converted', 'cancelled'];
+
+const QUICK_FILTERS = ['all', 'not_contacted', 'this_week'] as const;
+type QuickFilter = typeof QUICK_FILTERS[number];
 
 export default function TrialApplicationsPage() {
   const { t, i18n } = useTranslation();
@@ -70,8 +83,38 @@ export default function TrialApplicationsPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
   const [editAssignedClass, setEditAssignedClass] = useState<Record<string, string>>({});
+  const [editStatus, setEditStatus] = useState<Record<string, TrialApplication['status']>>({});
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
+
+  const startOfWeek = (d: Date) => {
+    const x = new Date(d);
+    const day = x.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    x.setDate(x.getDate() + diff);
+    x.setHours(0, 0, 0, 0);
+    return x.getTime();
+  };
+  const endOfWeek = (d: Date) => {
+    const x = new Date(startOfWeek(d));
+    x.setDate(x.getDate() + 6);
+    x.setHours(23, 59, 59, 999);
+    return x.getTime();
+  };
+  const thisWeekStart = startOfWeek(new Date());
+  const thisWeekEnd = endOfWeek(new Date());
+
+  const filtered = applications.filter((a) => {
+    if (quickFilter === 'not_contacted') {
+      if (!['pending'].includes(a.status)) return false;
+    } else if (quickFilter === 'this_week') {
+      const trialTime = a.trial_date ? new Date(a.trial_date).getTime() : a.preferred_datetime ? new Date(a.preferred_datetime).getTime() : new Date(a.applied_at).getTime();
+      if (trialTime < thisWeekStart || trialTime > thisWeekEnd) return false;
+    }
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false;
+    return true;
+  });
 
   useEffect(() => {
     loadApplications();
@@ -85,24 +128,26 @@ export default function TrialApplicationsPage() {
       setApplications(Array.isArray(data) ? data : FALLBACK_TRIAL_APPLICATIONS);
       const initialNotes: Record<string, string> = {};
       const initialAssigned: Record<string, string> = {};
+      const initialStatus: Record<string, TrialApplication['status']> = {};
       (Array.isArray(data) ? data : FALLBACK_TRIAL_APPLICATIONS).forEach((a) => {
         initialNotes[a.id] = a.notes ?? '';
         initialAssigned[a.id] = a.assigned_class_name ?? '';
+        initialStatus[a.id] = a.status;
       });
       setEditNotes(initialNotes);
-      setEditAssigned(initialAssigned);
+      setEditAssignedClass(initialAssigned);
+      setEditStatus(initialStatus);
     } catch {
       setApplications(FALLBACK_TRIAL_APPLICATIONS);
       FALLBACK_TRIAL_APPLICATIONS.forEach((a) => {
         setEditNotes((prev) => ({ ...prev, [a.id]: a.notes ?? '' }));
-        setEditAssigned((prev) => ({ ...prev, [a.id]: a.assigned_class_name ?? '' }));
+        setEditAssignedClass((prev) => ({ ...prev, [a.id]: a.assigned_class_name ?? '' }));
+        setEditStatus((prev) => ({ ...prev, [a.id]: a.status }));
       });
     } finally {
       setLoading(false);
     }
   }
-
-  const filtered = applications.filter((a) => statusFilter === 'all' || a.status === statusFilter);
 
   function getStatusLabel(s: TrialApplication['status']) {
     return t(`admin.trialApplications.status.${s}`);
@@ -113,6 +158,9 @@ export default function TrialApplicationsPage() {
       case 'pending': return 'bg-amber-100 text-amber-800';
       case 'confirmed': return 'bg-blue-100 text-blue-800';
       case 'assigned': return 'bg-green-100 text-green-800';
+      case 'contacted': return 'bg-cyan-100 text-cyan-800';
+      case 'attended_trial': return 'bg-emerald-100 text-emerald-800';
+      case 'converted': return 'bg-primary-lighter text-primary';
       case 'cancelled': return 'bg-gray-100 text-gray-600';
       default: return 'bg-gray-100 text-gray-800';
     }
@@ -125,6 +173,13 @@ export default function TrialApplicationsPage() {
 
   function saveAssignedClass(id: string) {
     setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, assigned_class_name: editAssignedClass[id] || undefined } : a)));
+  }
+
+  function saveStatus(id: string) {
+    const newStatus = editStatus[id];
+    if (newStatus == null) return;
+    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a)));
+    setExpandedId(null);
   }
 
   if (loading) {
@@ -145,14 +200,23 @@ export default function TrialApplicationsPage() {
             <BookOpen className="h-8 w-8 text-primary" />
             {t('admin.trialApplications.title')}
           </h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Filter className="h-5 w-5 text-gray-500" />
+            <select
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value as QuickFilter)}
+              className="border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+            >
+              <option value="all">{t('admin.trialApplications.filterAll')}</option>
+              <option value="not_contacted">{t('admin.trialApplications.filterNotContacted', '未聯絡')}</option>
+              <option value="this_week">{t('admin.trialApplications.filterThisWeek', '本週試堂')}</option>
+            </select>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as TrialApplication['status'] | 'all')}
               className="border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
             >
-              <option value="all">{t('admin.trialApplications.filterAll')}</option>
+              <option value="all">{t('admin.trialApplications.filterAllStatus', '全部狀態')}</option>
               {STATUS_OPTIONS.map((s) => (
                 <option key={s} value={s}>{getStatusLabel(s)}</option>
               ))}
@@ -177,7 +241,7 @@ export default function TrialApplicationsPage() {
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.trialApplications.applicant')}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.trialApplications.trialClass')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.trialApplications.status')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.trialApplications.statusLabel')}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.trialApplications.assignedClass')}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.trialApplications.appliedAt')}</th>
                     <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{t('common.actions', { defaultValue: '操作' })}</th>
@@ -214,29 +278,50 @@ export default function TrialApplicationsPage() {
                       {expandedId === app.id && (
                         <tr key={`${app.id}-expand`} className="bg-gray-50">
                           <td colSpan={6} className="px-4 py-4">
-                            <div className="grid sm:grid-cols-2 gap-4">
-                              <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                <label className="shrink-0 text-sm font-medium text-gray-600 w-14">
+                                  {t('admin.trialApplications.statusLabel')}
+                                </label>
+                                <select
+                                  value={editStatus[app.id] ?? app.status}
+                                  onChange={(e) => setEditStatus((prev) => ({ ...prev, [app.id]: e.target.value as TrialApplication['status'] }))}
+                                  className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                >
+                                  {STATUS_OPTIONS.map((s) => (
+                                    <option key={s} value={s}>{getStatusLabel(s)}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => saveStatus(app.id)}
+                                  className="shrink-0 px-3 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark"
+                                >
+                                  {t('common.save')}
+                                </button>
+                              </div>
+                              <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                <label className="shrink-0 text-sm font-medium text-gray-600 flex items-center gap-1 w-14">
                                   <MessageSquare className="h-4 w-4" />
                                   {t('admin.trialApplications.notes')}
                                 </label>
-                                <textarea
+                                <input
+                                  type="text"
                                   value={editNotes[app.id] ?? ''}
                                   onChange={(e) => setEditNotes((prev) => ({ ...prev, [app.id]: e.target.value }))}
-                                  rows={2}
-                                  className="w-full border rounded px-3 py-2 text-sm"
+                                  className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                   placeholder={t('admin.trialApplications.notesPlaceholder')}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => saveNotes(app.id)}
-                                  className="mt-2 px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark"
+                                  className="shrink-0 px-3 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark"
                                 >
                                   {t('common.save')}
                                 </button>
                               </div>
-                              <div>
-                                <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+                              <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                <label className="shrink-0 text-sm font-medium text-gray-600 flex items-center gap-1 w-14">
                                   <Calendar className="h-4 w-4" />
                                   {t('admin.trialApplications.assignClass')}
                                 </label>
@@ -244,13 +329,13 @@ export default function TrialApplicationsPage() {
                                   type="text"
                                   value={editAssignedClass[app.id] ?? ''}
                                   onChange={(e) => setEditAssignedClass((prev) => ({ ...prev, [app.id]: e.target.value }))}
-                                  className="w-full border rounded px-3 py-2 text-sm"
+                                  className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                   placeholder={t('admin.trialApplications.assignClassPlaceholder')}
                                 />
                                 <button
                                   type="button"
                                   onClick={() => saveAssignedClass(app.id)}
-                                  className="mt-2 px-3 py-1 bg-primary text-white text-sm rounded hover:bg-primary-dark"
+                                  className="shrink-0 px-3 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark"
                                 >
                                   {t('common.save')}
                                 </button>

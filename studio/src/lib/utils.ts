@@ -283,3 +283,19 @@ export function shouldPostponeClassWithHolidays(
   const newDate = getNextNonHolidayDateWithSet(date, holidayDates);
   return { shouldPostpone: true, newDate };
 }
+
+/** Build CSV string from rows and trigger download (UTF-8 with BOM for Excel). */
+export function downloadCsv(rows: (string | number)[][], filename: string): void {
+  const escape = (c: string | number): string => {
+    const s = String(c);
+    return /[,"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = rows.map((row) => row.map(escape).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

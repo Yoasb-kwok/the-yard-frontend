@@ -7,6 +7,7 @@ import { formatDateTime, shouldPostponeClassWithHolidays, formatProgramCodeDispl
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
+import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, type AgeTag, useAuth } from '../../contexts/AuthContext';
 
 interface Class {
@@ -26,6 +27,8 @@ interface Class {
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   level?: CourseLevel;
   age_tag?: AgeTag;
+  /** 若因假期順延，原訂日期 (YYYY-MM-DD) */
+  postponed_from?: string | null;
 }
 
 interface Instructor {
@@ -90,6 +93,42 @@ const FALLBACK_INSTRUCTORS: Instructor[] = [
   { id: 'inst_4', name: '張老師', profile_image_url: null, created_at: new Date().toISOString() },
   { id: 'inst_5', name: '黃老師', profile_image_url: null, created_at: new Date().toISOString() },
 ];
+
+/** Demo enrollments for attendance list when API returns no data */
+function getFallbackEnrollments(classId: string, enrolledCount: number): Enrollment[] {
+  const now = new Date();
+  const created = now.toISOString().slice(0, 10);
+  const demoStudents: { name: string; mobile: string }[] = [
+    { name: '陳小明', mobile: '85291234567' },
+    { name: '李美儀', mobile: '85292345678' },
+    { name: '黃家豪', mobile: '85293456789' },
+    { name: '張心怡', mobile: '85294567890' },
+    { name: '王俊傑', mobile: '85295678901' },
+    { name: '林曉晴', mobile: '85296789012' },
+    { name: '劉子軒', mobile: '85297890123' },
+    { name: '何思敏', mobile: '85298901234' },
+  ];
+  const statuses: Enrollment['status'][] = ['attended', 'attended', 'enrolled', 'absent', 'sick_leave'];
+  const count = Math.min(Math.max(enrolledCount, 1), demoStudents.length);
+  return Array.from({ length: count }, (_, i) => {
+    const s = demoStudents[i];
+    const status = statuses[i % statuses.length];
+    const checkIn = status === 'attended' ? '14:00' : null;
+    const checkOut = status === 'attended' ? '15:00' : null;
+    return {
+      id: `enr_demo_${classId}_${i + 1}`,
+      class_id: classId,
+      user_id: `user_demo_${i + 1}`,
+      user_name: s.name,
+      user_mobile: s.mobile,
+      status,
+      check_in_time: checkIn,
+      check_out_time: checkOut,
+      sick_leave_document_url: null,
+      created_at: `${created}T00:00:00.000Z`,
+    };
+  });
+}
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
@@ -207,6 +246,7 @@ export default function ClassesPage() {
           location: cls.location,
           level: cls.level,
           age_tag: cls.age_group ?? cls.age_tag,
+          postponed_from: cls.postponed_from ?? null,
         }));
         setClasses(transformedClasses);
       } else {
@@ -242,27 +282,29 @@ export default function ClassesPage() {
   async function loadAttendanceData(
     classId: string
   ): Promise<{ class: ClassWithAttendance; enrollments: Enrollment[] } | null> {
-    const c = classes.find((x) => x.id === classId);
+    const c = classes.find((x) => String(x.id) === String(classId));
     if (!c) return null;
+    const classWithAttendance: ClassWithAttendance = { ...c, id: String(c.id), attendance_confirmed: false };
     try {
       const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
       const list = res.success && Array.isArray(res.data) ? res.data : [];
-      const enrollments: Enrollment[] = list.map((e: any) => ({
-        id: String(e.id),
-        class_id: classId,
-        user_id: e.user_id ?? '',
-        user_name: e.user_name ?? '',
-        user_mobile: e.user_mobile ?? null,
-        status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
-        check_in_time: e.check_in_time ?? null,
-        check_out_time: e.check_out_time ?? null,
-        sick_leave_document_url: e.sick_leave_document_url ?? null,
-        created_at: e.created_at ?? '',
-      }));
-      const classWithAttendance: ClassWithAttendance = { ...c, attendance_confirmed: false };
+      const enrollments: Enrollment[] = list.length > 0
+        ? list.map((e: any) => ({
+            id: String(e.id),
+            class_id: classId,
+            user_id: e.user_id ?? '',
+            user_name: e.user_name ?? '',
+            user_mobile: e.user_mobile ?? null,
+            status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+            check_in_time: e.check_in_time ?? null,
+            check_out_time: e.check_out_time ?? null,
+            sick_leave_document_url: e.sick_leave_document_url ?? null,
+            created_at: e.created_at ?? '',
+          }))
+        : getFallbackEnrollments(classId, c.enrolled_count);
       return { class: classWithAttendance, enrollments };
     } catch {
-      return null;
+      return { class: classWithAttendance, enrollments: getFallbackEnrollments(classId, c.enrolled_count) };
     }
   }
 
@@ -1061,15 +1103,21 @@ export default function ClassesPage() {
                         {getLocationLabel(classItem.location)}
                       </div>
                     )}
+                    {classItem.postponed_from && (
+                      <p className="text-sm text-amber-700 bg-amber-50 px-2 py-1 rounded mb-1 inline-block">
+                        {t('admin.classes.postponedFrom', '原 {{date}} → 順延至本堂', { date: classItem.postponed_from })}
+                      </p>
+                    )}
                     <p className="text-sm text-gray-600">
                       {t('admin.classes.enrolled')}: {classItem.enrolled_count} / {classItem.capacity}
                     </p>
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => toggleAttendance(classItem.id)}
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleAttendance(String(classItem.id)); }}
                       className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
-                        expandedAttendanceClassId === classItem.id
+                        String(expandedAttendanceClassId) === String(classItem.id)
                           ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
                           : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                       }`}
@@ -1078,6 +1126,7 @@ export default function ClassesPage() {
                       {t('admin.classes.attendance')}
                     </button>
                     <button
+                      type="button"
                       onClick={() => openEditModal(classItem)}
                       className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
                     >
@@ -1085,6 +1134,7 @@ export default function ClassesPage() {
                       {t('common.edit')}
                     </button>
                     <button
+                      type="button"
                       onClick={() => toggleCancel(classItem.id, classItem.is_cancelled)}
                       className={`px-4 py-2 rounded-md text-sm font-medium ${
                         classItem.is_cancelled
@@ -1096,14 +1146,14 @@ export default function ClassesPage() {
                     </button>
                   </div>
                 </div>
-                {expandedAttendanceClassId === classItem.id && (
+                {String(expandedAttendanceClassId) === String(classItem.id) && (
                   attendanceLoading ? (
                     <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center py-8">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                     </div>
                   ) : (
                     attendanceData &&
-                    attendanceData.class.id === classItem.id && (
+                    String(attendanceData.class.id) === String(classItem.id) && (
                       <ClassAttendancePanel
                         class={attendanceData.class}
                         enrollments={attendanceData.enrollments}
@@ -1508,7 +1558,28 @@ export default function ClassesPage() {
         {/* Calendar View */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => { setView('day'); setCurrentDate(new Date()); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'day' && currentDate.toDateString() === new Date().toDateString()
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('admin.classes.filterToday', '今日')}
+              </button>
+              <button
+                onClick={() => { setView('week'); setCurrentDate(new Date()); }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'week'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('admin.classes.filterThisWeek', '本週')}
+              </button>
+              <span className="text-gray-400 hidden sm:inline">|</span>
               <button
                 onClick={() => setView('day')}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -1690,9 +1761,10 @@ export default function ClassesPage() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => toggleAttendance(classItem.id)}
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleAttendance(String(classItem.id)); }}
                     className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
-                      expandedAttendanceClassId === classItem.id
+                      String(expandedAttendanceClassId) === String(classItem.id)
                         ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
                         : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
                     }`}
@@ -1701,6 +1773,7 @@ export default function ClassesPage() {
                     {t('admin.classes.attendance')}
                   </button>
                   <button
+                    type="button"
                     onClick={() => openEditModal(classItem)}
                     className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
                   >
@@ -1708,6 +1781,7 @@ export default function ClassesPage() {
                     {t('common.edit')}
                   </button>
                   <button
+                    type="button"
                     onClick={() => toggleCancel(classItem.id, classItem.is_cancelled)}
                     className={`px-4 py-2 rounded-md text-sm font-medium ${
                       classItem.is_cancelled
@@ -1719,14 +1793,14 @@ export default function ClassesPage() {
                   </button>
                 </div>
               </div>
-              {expandedAttendanceClassId === classItem.id && (
+              {String(expandedAttendanceClassId) === String(classItem.id) && (
                 attendanceLoading ? (
                   <div className="mt-4 pt-4 border-t border-gray-200 flex justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                   </div>
                 ) : (
                   attendanceData &&
-                  attendanceData.class.id === classItem.id && (
+                  String(attendanceData.class.id) === String(classItem.id) && (
                     <ClassAttendancePanel
                       class={attendanceData.class}
                       enrollments={attendanceData.enrollments}
@@ -1877,13 +1951,12 @@ export default function ClassesPage() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.firstLessonDate')}</label>
-                <input
-                  type="date"
+                <DateSelect
                   required
                   value={form.date}
-                  onChange={(e) => setForm({ ...form, date: e.target.value })}
-                  className="w-full min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary touch-manipulation"
-                  style={{ minHeight: '48px' }}
+                  onChange={(v) => setForm({ ...form, date: v })}
+                  className="w-full min-h-[48px] text-base touch-manipulation"
+                  ariaLabel={t('admin.classes.firstLessonDate')}
                 />
                 <p className="text-xs text-gray-500 mt-1">{t('admin.classes.firstLessonDateHint')}</p>
               </div>

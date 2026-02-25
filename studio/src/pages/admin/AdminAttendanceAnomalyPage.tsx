@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
-import { ClipboardList, Calendar } from 'lucide-react';
+import { downloadCsv } from '../../lib/utils';
+import { ClipboardList, Calendar, Download } from 'lucide-react';
 import { FALLBACK_ATTENDANCE_ANOMALY, reportMonthOptions, type AttendanceAnomalyData } from '../../lib/adminReportData';
 
 export default function AdminAttendanceAnomalyPage() {
@@ -35,6 +36,19 @@ export default function AdminAttendanceAnomalyPage() {
     );
   }
 
+  const exportCsv = () => {
+    const rows: (string | number)[][] = [
+      [t('admin.dashboard.lowAttendanceRateClasses')],
+      [t('admin.dashboard.className'), t('admin.dashboard.programCode'), t('admin.dashboard.instructor'), t('admin.dashboard.attendanceRate'), t('admin.dashboard.enrolledCount')],
+      ...data.lowAttendanceRateClasses.map((r) => [r.className, r.programCode, r.instructor, `${r.attendanceRate.toFixed(1)}%`, r.enrolledCount]),
+      [],
+      [t('admin.dashboard.consecutiveAbsenceStudents')],
+      [t('admin.dashboard.name'), t('admin.dashboard.mobile'), t('admin.dashboard.consecutiveAbsences'), t('admin.dashboard.lastClassDate'), t('admin.dashboard.className')],
+      ...data.consecutiveAbsenceStudents.map((r) => [r.full_name, r.mobile, r.consecutiveAbsences, r.lastClassDate, r.className]),
+    ];
+    downloadCsv(rows, `attendance-anomaly-${reportMonth}.csv`);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -54,6 +68,14 @@ export default function AdminAttendanceAnomalyPage() {
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
+            <button
+              type="button"
+              onClick={exportCsv}
+              className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+            >
+              <Download className="h-4 w-4" />
+              {t('admin.dashboard.exportCsv')}
+            </button>
           </div>
         </div>
         <p className="text-sm text-gray-600">{t('admin.dashboard.attendanceAnomalyDesc')}</p>

@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
 import { useAdminPendingCounts } from '../lib/useAdminPendingCounts';
@@ -61,8 +61,9 @@ export default function Layout({ children }: LayoutProps) {
   const studentNavItemsDashboard = [
     { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
     { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
+    { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
   ];
-  const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history';
+  const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history' || location.pathname === '/notifications';
   const studentNavItems = isOnDashboardSection ? studentNavItemsDashboard : studentNavItemsScheduleProfile;
 
   const adminNavItems = [
@@ -83,6 +84,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin/purchase-history', icon: Receipt, label: t('nav.purchaseHistory') },
     { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
     { path: '/admin/audit-log', icon: FileText, label: t('admin.auditLog.title') },
+    { path: '/admin/class-notice', icon: MessageSquare, label: t('admin.classNotice.title', '全班通知') },
   ];
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;
