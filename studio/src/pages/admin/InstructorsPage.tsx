@@ -62,6 +62,8 @@ export default function InstructorsPage() {
     years_dancing: 0,
     teaching_experience: 0,
     dance_school: '',
+    background_image: '',
+    icon: '',
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [useImageUrl, setUseImageUrl] = useState(false);
@@ -166,6 +168,9 @@ export default function InstructorsPage() {
       years_dancing: Number(form.years_dancing) || 0,
       teaching_experience: Number(form.teaching_experience) || 0,
       dance_school: form.dance_school.trim(),
+      avatar_url: form.profile_image_url?.trim() || undefined,
+      background_image: form.background_image?.trim() || undefined,
+      icon: form.icon?.trim() || undefined,
     };
   }
 
@@ -179,6 +184,8 @@ export default function InstructorsPage() {
       years_dancing: 0,
       teaching_experience: 0,
       dance_school: '',
+      background_image: '',
+      icon: '',
     });
     setImagePreview(null);
     setUseImageUrl(false);
@@ -188,20 +195,23 @@ export default function InstructorsPage() {
 
   function openEditModal(instructor: Instructor) {
     setEditingInstructor(instructor);
-    const hasImageUrl = instructor.profile_image_url && !instructor.profile_image_url.startsWith('data:');
     const profile = getInstructorProfile(instructor.name);
+    const avatarSource = profile?.avatar_url || instructor.profile_image_url || '';
+    const hasImageUrl = avatarSource && !avatarSource.startsWith('data:');
     setForm({
       name: instructor.name,
-      profile_image_url: instructor.profile_image_url || '',
+      profile_image_url: avatarSource || '',
       intro: profile?.intro ?? '',
       awards: Array.isArray(profile?.awards) ? profile.awards.join('\n') : '',
       years_dancing: profile?.years_dancing ?? 0,
       teaching_experience: profile?.teaching_experience ?? 0,
       dance_school: profile?.dance_school ?? '',
+      background_image: profile?.background_image ?? '',
+      icon: profile?.icon ?? '',
     });
-    setImagePreview(instructor.profile_image_url || null);
-    setUseImageUrl(hasImageUrl);
-    setImageUrlInput(hasImageUrl ? instructor.profile_image_url || '' : '');
+    setImagePreview(avatarSource || null);
+    setUseImageUrl(!!hasImageUrl);
+    setImageUrlInput(hasImageUrl ? avatarSource : '');
     setShowModal(true);
   }
 
@@ -346,6 +356,8 @@ export default function InstructorsPage() {
         years_dancing: 0,
         teaching_experience: 0,
         dance_school: '',
+        background_image: '',
+        icon: '',
       });
       setImagePreview(null);
     } catch (error) {
@@ -379,11 +391,11 @@ export default function InstructorsPage() {
     }
   }
 
-  // Generate avatar URL from name if no image
+  // Avatar: prefer profile.avatar_url (synced with 導師主頁), else API profile_image_url
   const getAvatarUrl = (instructor: Instructor): string => {
-    if (instructor.profile_image_url) {
-      return instructor.profile_image_url;
-    }
+    const fromProfile = getInstructorProfile(instructor.name)?.avatar_url;
+    if (fromProfile) return fromProfile;
+    if (instructor.profile_image_url) return instructor.profile_image_url;
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(instructor.name)}&size=128&background=007257&color=fff&bold=true`;
   };
 
@@ -675,13 +687,46 @@ export default function InstructorsPage() {
                     placeholder={t('admin.instructors.danceSchoolPlaceholder')}
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.backgroundImage')}</label>
+                  <input
+                    type="url"
+                    value={form.background_image}
+                    onChange={(e) => setForm({ ...form, background_image: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    placeholder={t('admin.instructors.backgroundImagePlaceholder')}
+                  />
+                  <p className="text-xs text-gray-400 mt-0.5">{t('admin.instructors.backgroundImageHint')}</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.iconKey')}</label>
+                  <select
+                    value={form.icon}
+                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                  >
+                    <option value="">{t('admin.instructors.iconNone')}</option>
+                    <option value="ballet">ballet</option>
+                    <option value="hiphop">hiphop</option>
+                    <option value="baby">baby</option>
+                    <option value="jazz">jazz</option>
+                    <option value="chinese">chinese</option>
+                    <option value="latin">latin</option>
+                    <option value="kpop">kpop</option>
+                    <option value="classic-ballet">classic-ballet</option>
+                    <option value="breaking">breaking</option>
+                    <option value="classical">classical</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-0.5">{t('admin.instructors.iconHint')}</p>
+                </div>
               </div>
 
-              {/* Teacher intro preview */}
+              {/* Teacher intro preview – matches 導師主頁 card */}
               {form.name.trim() && (
                 <div className="pt-4 border-t border-gray-200">
                   <p className="text-xs font-medium text-gray-500 mb-2">{t('admin.instructors.introPreviewHint')}</p>
                   <InstructorIntroCard instructorName={form.name.trim()} imageUrl={imagePreview} compact profile={formToProfile()} />
+                  <p className="text-xs text-gray-400 mt-2">{t('admin.instructors.publicPageSync')}</p>
                 </div>
               )}
 
@@ -698,6 +743,8 @@ export default function InstructorsPage() {
                       years_dancing: 0,
                       teaching_experience: 0,
                       dance_school: '',
+                      background_image: '',
+                      icon: '',
                     });
                     setImagePreview(null);
                   }}

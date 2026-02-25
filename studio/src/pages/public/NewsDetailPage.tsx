@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
 import { ArrowLeft } from 'lucide-react';
+import { getStoredNewsPosts } from '../../lib/newsStorage';
 import scheduleImage from '../../assets/images/schedule.jpg';
 
 interface NewsPost {
@@ -14,7 +15,6 @@ interface NewsPost {
   published_at: string;
 }
 
-// Dummy data - same as NewsPage
 const DUMMY_NEWS_POSTS: NewsPost[] = [
   {
     id: '1',
@@ -37,12 +37,18 @@ const DUMMY_NEWS_POSTS: NewsPost[] = [
     image_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1200&h=800&fit=crop&q=80',
     published_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
   },
+  {
+    id: '4',
+    title: 'Spring Term Enrollment Open',
+    content: 'Enrollment for our spring term is now open. Secure your place in ballet, street dance, and children\'s movement classes. Early bird discount available until next Friday.',
+    image_url: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=1200&h=800&fit=crop&q=80',
+    published_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+  },
 ];
 
 export default function NewsDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
   const [post, setPost] = useState<NewsPost | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -51,18 +57,23 @@ export default function NewsDetailPage() {
   }, [id, t, i18n.language]);
 
   async function loadNewsDetail() {
-    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const foundPost = DUMMY_NEWS_POSTS.find(p => p.id === id);
-    if (foundPost) {
-      setPost({
-        ...foundPost,
-        title: t(`news.posts.${foundPost.id}.title`),
-        content: t(`news.posts.${foundPost.id}.fullContent`),
-      });
+    const stored = getStoredNewsPosts();
+    const fromStored = id ? stored.find((p) => p.id === id) : null;
+    if (fromStored) {
+      const { created_at: _, ...p } = fromStored;
+      setPost(p);
     } else {
-      setPost(null);
+      const foundPost = DUMMY_NEWS_POSTS.find((p) => p.id === id);
+      if (foundPost) {
+        setPost({
+          ...foundPost,
+          title: t(`news.posts.${foundPost.id}.title`),
+          content: t(`news.posts.${foundPost.id}.fullContent`),
+        });
+      } else {
+        setPost(null);
+      }
     }
     setLoading(false);
   }

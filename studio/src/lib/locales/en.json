@@ -155,6 +155,11 @@
         "title": "Holiday Special Promotion",
         "content": "This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.",
         "fullContent": "This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.\n\nDon't miss out on these amazing deals! Visit our shop or contact us for more information."
+      },
+      "4": {
+        "title": "Spring Term Enrollment Open",
+        "content": "Enrollment for our spring term is now open. Secure your place in ballet, street dance, and children's movement classes. Early bird discount available until next Friday.",
+        "fullContent": "Enrollment for our spring term is now open. Secure your place in ballet, street dance, and children's movement classes. Early bird discount available until next Friday.\n\nVisit the courses page or contact us to sign up. We look forward to dancing with you!"
       }
     }
   },
@@ -908,7 +913,14 @@
       "yearsDancing": "Years dancing",
       "teachingExperience": "Teaching experience (years)",
       "danceSchool": "Dance school / graduated from",
-      "danceSchoolPlaceholder": "e.g. Hong Kong Academy for Performing Arts"
+      "danceSchoolPlaceholder": "e.g. Hong Kong Academy for Performing Arts",
+      "backgroundImage": "Card background image (instructors page)",
+      "backgroundImagePlaceholder": "https://…",
+      "backgroundImageHint": "Used as the left-side background on the public instructors page. Leave empty for default gradient.",
+      "iconKey": "Icon key",
+      "iconNone": "None",
+      "iconHint": "Optional style key for the card; icon badge is currently hidden on public page.",
+      "publicPageSync": "The above is synced to the public «Instructors» page; the profile image is the avatar shown there."
     },
     "trialApplications": {
       "title": "Trial applications",
@@ -958,6 +970,23 @@
       "messagePlaceholder": "e.g. Due to bad weather, this Saturday 10:00 class is cancelled. Make-up date TBC.",
       "send": "Send class notice",
       "sent": "Sent to enrolled students"
+    },
+    "news": {
+      "navTitle": "Latest News",
+      "title": "News Management",
+      "add": "Add news",
+      "edit": "Edit news",
+      "hint": "News added or edited here will appear on the public Latest News page. Currently demo only; data is stored in browser localStorage.",
+      "noPosts": "No news posts yet",
+      "addFirst": "Add first post",
+      "titleLabel": "Title",
+      "titlePlaceholder": "e.g. New class schedule available",
+      "contentLabel": "Content",
+      "contentPlaceholder": "Enter news content…",
+      "imageLabel": "Cover image",
+      "imageHint": "Demo stores images in browser; JPG/PNG recommended.",
+      "publishedAtLabel": "Publish date",
+      "confirmDelete": "Delete this news post?"
     },
     "reports": {
       "title": "Reports",

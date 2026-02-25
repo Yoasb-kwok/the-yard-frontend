@@ -85,6 +85,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
     { path: '/admin/audit-log', icon: FileText, label: t('admin.auditLog.title') },
     { path: '/admin/class-notice', icon: MessageSquare, label: t('admin.classNotice.title', '全班通知') },
+    { path: '/admin/news', icon: Newspaper, label: t('admin.news.navTitle', '最新消息') },
   ];
 
   const navItems = isAdmin ? adminNavItems : studentNavItems;

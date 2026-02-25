@@ -33,8 +33,8 @@ const FALLBACK_UPCOMING: UpcomingClass[] = (() => {
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
   return [
-    { id: 'c1', name: 'Kids Ballet A', program_code: 'KB-A', instructor: '李老師', start_time: todayStart.toISOString(), enrolled_count: 8, capacity: 12, location: 'sanpokong' },
-    { id: 'c2', name: 'Teen Hip Hop', program_code: 'THH', instructor: '陳老師', start_time: tomorrowStart.toISOString(), enrolled_count: 10, capacity: 15, location: 'causewaybay' },
+    { id: 'c1', name: '兒童芭蕾', program_code: 'KB-A', instructor: '李老師', start_time: todayStart.toISOString(), enrolled_count: 8, capacity: 12, location: 'sanpokong' },
+    { id: 'c2', name: '青少年街舞', program_code: 'THH', instructor: '陳老師', start_time: tomorrowStart.toISOString(), enrolled_count: 10, capacity: 15, location: 'causewaybay' },
   ];
 })();
 

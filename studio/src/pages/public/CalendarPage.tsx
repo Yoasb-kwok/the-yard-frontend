@@ -11,6 +11,7 @@ import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
+import { getFallbackCalendarLessons } from '../../lib/demoCourses';
 
 interface Lesson {
   id: string;
@@ -36,58 +37,6 @@ type ViewType = 'day' | 'threeDay' | 'week' | 'month';
 
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
-/** Fallback: 4/8/16 堂、每週一次嘅興趣班 example，讓 Calendar 有課堂可顯示 */
-function getFallbackCalendarLessons(): Lesson[] {
-  const lessons: Lesson[] = [];
-  const now = new Date();
-  const hour = (h: number, m: number) => {
-    const d = new Date(now);
-    d.setHours(h, m, 0, 0);
-    return d;
-  };
-  type Program = { name: string; code: string; total: 4 | 8 | 16; weekday: number; hour: number; min: number; instructor: string; location: Lesson['location']; level: CourseLevel; age_tag: AgeTag };
-  const programs: Program[] = [
-    { name: '兒童芭蕾', code: 'KB-A', total: 8, weekday: 1, hour: 16, min: 0, instructor: '李老師', location: 'sanpokong', level: 'entry', age_tag: '5-8' },
-    { name: '青少年街舞', code: 'THH', total: 16, weekday: 3, hour: 17, min: 0, instructor: '陳老師', location: 'causewaybay', level: 'intermediate', age_tag: '9-12' },
-    { name: '幼兒律動', code: 'KIDS', total: 4, weekday: 6, hour: 10, min: 0, instructor: '王老師', location: 'sanpokong', level: 'entry', age_tag: '5-8' },
-    { name: '爵士舞', code: 'JAZZ', total: 8, weekday: 5, hour: 18, min: 0, instructor: '張老師', location: 'fotan', level: 'entry', age_tag: '9-12' },
-    { name: '兒童中國舞', code: 'CCD', total: 8, weekday: 2, hour: 15, min: 30, instructor: '黃老師', location: 'sheungshui', level: 'entry', age_tag: '5-8' },
-  ];
-  let id = 1;
-  for (const p of programs) {
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    let daysUntilWeekday = (p.weekday - start.getDay() + 7) % 7;
-    start.setDate(start.getDate() + daysUntilWeekday);
-    start.setHours(p.hour, p.min, 0, 0);
-    if (start.getTime() < now.getTime()) start.setDate(start.getDate() + 7);
-    for (let L = 1; L <= p.total; L++) {
-      const sessionDate = new Date(start);
-      sessionDate.setDate(start.getDate() + (L - 1) * 7);
-      const endDate = new Date(sessionDate);
-      endDate.setHours(endDate.getHours() + 1, 0, 0, 0);
-      if (sessionDate.getTime() < now.getTime() - 86400000) continue;
-      lessons.push({
-        id: `fb-${id++}`,
-        name: p.name,
-        instructor: p.instructor,
-        start_time: sessionDate.toISOString(),
-        end_time: endDate.toISOString(),
-        capacity: 12,
-        enrolled_count: L <= 2 ? 5 + L : 6,
-        location: p.location,
-        program_code: p.code,
-        lesson_number: L,
-        level: p.level,
-        age_tag: p.age_tag,
-        weekday: p.weekday,
-        total_lessons: p.total,
-      });
-    }
-  }
-  return lessons.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
-}
-
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
 export default function CalendarPage() {
@@ -97,7 +46,12 @@ export default function CalendarPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => {
+    const d = new Date();
+    d.setFullYear(2026);
+    d.setMonth(1); // February
+    return d;
+  });
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(false);
   const [lessonsError, setLessonsError] = useState<string | null>(null);
@@ -187,8 +141,7 @@ export default function CalendarPage() {
       const response = await api.get<any[]>('/classes');
       const rows = Array.isArray(response?.data) ? response.data : [];
       if (!response?.success) {
-        setLessons([]);
-        setLessonsError(response?.msg || 'Failed to load classes');
+        setLessons(getFallbackCalendarLessons(currentDate));
         return;
       }
       const programTotalLessons: Record<string, number> = {};
@@ -222,14 +175,10 @@ export default function CalendarPage() {
             total_lessons: clampTotal(total) as 4 | 8 | 16,
           };
         });
-      if (mapped.length > 0) {
-        setLessons(mapped);
-      } else {
-        setLessons(getFallbackCalendarLessons());
-      }
+      setLessons(mapped.length > 0 ? mapped : getFallbackCalendarLessons(currentDate));
     } catch (error) {
       console.error('Error loading calendar classes:', error);
-      setLessons(getFallbackCalendarLessons());
+      setLessons(getFallbackCalendarLessons(currentDate));
       const msg = error instanceof Error ? error.message : 'Failed to load classes';
       if (!msg.includes('Network') && !msg.includes('fetch')) {
         setLessonsError(msg);
@@ -371,7 +320,10 @@ export default function CalendarPage() {
   };
 
   // Generate tutor profile image URL from UI Avatars
+  // Use admin-set profile avatar when available (synced with 導師主頁 / admin 導師管理)
   const getTutorImageUrl = (name: string): string => {
+    const profile = getInstructorProfile(name);
+    if (profile?.avatar_url) return profile.avatar_url;
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
   };
 

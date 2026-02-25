@@ -155,6 +155,11 @@
         "title": "節日特別優惠",
         "content": "這個節日期間，我們為代幣套票提供特別折扣。購買高級套裝可享8折優惠！限時優惠，有效期至月底。",
         "fullContent": "這個節日期間，我們為代幣套票提供特別折扣。購買高級套裝可享8折優惠！限時優惠，有效期至月底。\n\n不要錯過這些超值優惠！訪問我們的商店或聯繫我們了解更多信息。"
+      },
+      "4": {
+        "title": "春季學期招生開放",
+        "content": "春季學期現正招生。芭蕾、街舞及幼兒律動班名額有限，早鳥優惠至下周五止。",
+        "fullContent": "春季學期現正招生。芭蕾、街舞及幼兒律動班名額有限，早鳥優惠至下周五止。\n\n請瀏覽課程頁或聯絡我們報名。期待與您一起跳舞！"
       }
     }
   },
@@ -911,7 +916,14 @@
       "yearsDancing": "舞齡（年）",
       "teachingExperience": "教學經驗（年）",
       "danceSchool": "畢業院校",
-      "danceSchoolPlaceholder": "例如：香港演藝學院舞蹈學院"
+      "danceSchoolPlaceholder": "例如：香港演藝學院舞蹈學院",
+      "backgroundImage": "卡片背景圖（導師主頁）",
+      "backgroundImagePlaceholder": "https://…",
+      "backgroundImageHint": "用於導師主頁大卡左側背景，留空則用預設漸層。",
+      "iconKey": "風格圖示 key",
+      "iconNone": "不選",
+      "iconHint": "對應導師主頁卡片風格（可選），目前主頁已隱藏圖示。",
+      "publicPageSync": "以上內容會同步至前台「導師介紹」頁；頭像即主頁顯示的相片。"
     },
     "trialApplications": {
       "title": "試堂申請",
@@ -961,6 +973,23 @@
       "messagePlaceholder": "例如：因惡劣天氣，本週六 10:00 課堂停課，補課日期另行通知。",
       "send": "發送全班通知",
       "sent": "已發送給該班學生"
+    },
+    "news": {
+      "navTitle": "最新消息",
+      "title": "最新消息管理",
+      "add": "新增消息",
+      "edit": "編輯消息",
+      "hint": "此處新增或編輯的消息會顯示於前台「最新消息」頁。目前為 Demo，資料儲存於瀏覽器本地。",
+      "noPosts": "尚未有任何消息",
+      "addFirst": "新增第一則",
+      "titleLabel": "標題",
+      "titlePlaceholder": "例如：新課程時間表已推出",
+      "contentLabel": "內文",
+      "contentPlaceholder": "輸入消息內容…",
+      "imageLabel": "封面圖片",
+      "imageHint": "Demo 會將圖片存於瀏覽器本地，建議使用 JPG/PNG。",
+      "publishedAtLabel": "發佈日期",
+      "confirmDelete": "確定刪除此則消息？"
     },
     "reports": {
       "title": "報表",

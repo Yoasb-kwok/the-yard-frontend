@@ -14,6 +14,12 @@ export interface InstructorProfile {
   teaching_experience: number;
   /** Dance school / academy graduated from (畢業院校) */
   dance_school: string;
+  /** Optional: icon key for display (e.g. ballet, hiphop, jazz). Used on public instructors page. */
+  icon?: string;
+  /** Optional: background image URL for the instructor card. */
+  background_image?: string;
+  /** Optional: avatar/headshot image URL. When set, used instead of text-initials avatar. */
+  avatar_url?: string;
 }
 
 /** 10 example teachers for demo; keyed by display name for lookup. */
@@ -25,6 +31,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 18,
     teaching_experience: 8,
     dance_school: '香港演藝學院舞蹈學院',
+    icon: 'ballet',
+    background_image: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '陳老師',
@@ -33,6 +42,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 15,
     teaching_experience: 6,
     dance_school: '香港專業進修學校舞蹈系',
+    icon: 'hiphop',
+    background_image: 'https://images.unsplash.com/photo-1557672172-671e2a69f690?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '王老師',
@@ -41,6 +53,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 12,
     teaching_experience: 7,
     dance_school: '香港教育大學（幼兒教育）',
+    icon: 'baby',
+    background_image: 'https://images.unsplash.com/photo-1504609813442-a8924e83f76e?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '張老師',
@@ -49,6 +64,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 14,
     teaching_experience: 5,
     dance_school: '香港演藝學院現代舞系',
+    icon: 'jazz',
+    background_image: 'https://images.unsplash.com/photo-1518834107812-67b0b7c58434?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '黃老師',
@@ -57,6 +75,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 20,
     teaching_experience: 10,
     dance_school: '北京舞蹈學院中國舞系',
+    icon: 'chinese',
+    background_image: 'https://images.unsplash.com/photo-1524594152303-9fd13543fe6e?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '劉老師',
@@ -65,6 +86,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 16,
     teaching_experience: 9,
     dance_school: '英國 IDTA 認證教師',
+    icon: 'latin',
+    background_image: 'https://images.unsplash.com/photo-1547153760-18fc949bc80b?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '林老師',
@@ -73,6 +97,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 10,
     teaching_experience: 4,
     dance_school: '韓國首爾舞蹈進修',
+    icon: 'kpop',
+    background_image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '何老師',
@@ -81,6 +108,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 22,
     teaching_experience: 12,
     dance_school: '英國皇家舞蹈學院 (RAD)',
+    icon: 'classic-ballet',
+    background_image: 'https://images.unsplash.com/photo-1551969014-7d2c4cddf0b6?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '麥老師',
@@ -89,6 +119,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 13,
     teaching_experience: 5,
     dance_school: '本地 Crew 及海外進修',
+    icon: 'breaking',
+    background_image: 'https://images.unsplash.com/photo-1557672172-671e2a69f690?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&q=80',
   },
   {
     name: '趙老師',
@@ -97,6 +130,9 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     years_dancing: 19,
     teaching_experience: 11,
     dance_school: '廣東舞蹈學校中國舞系',
+    icon: 'classical',
+    background_image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&q=80',
+    avatar_url: 'https://images.unsplash.com/photo-1545167622-3a6ac756afa4?w=400&h=400&fit=crop&q=80',
   },
 ];
 

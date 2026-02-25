@@ -47,10 +47,10 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
   const navItems = [
     { path: '/', label: t('nav.home'), icon: Home },
     { path: '/about', label: t('nav.about'), icon: Info },
+    { path: '/news', label: t('nav.news'), icon: Newspaper },
     { path: '/courses', label: t('nav.courses', '課程介紹'), icon: BookOpen },
     { path: '/instructors', label: t('nav.instructors', '導師介紹'), icon: GraduationCap },
     { path: '/calendar', label: t('nav.calendar'), icon: Calendar },
-    { path: '/news', label: t('nav.news'), icon: Newspaper },
     { path: '/token-package', label: t('nav.tokenPackage'), icon: Package },
     { path: '/contact', label: t('nav.contact'), icon: Phone },
   ];

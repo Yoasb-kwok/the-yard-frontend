@@ -51,6 +51,7 @@ import RefundRecordsPage from './pages/admin/RefundRecordsPage';
 import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import AdminClassNoticePage from './pages/admin/AdminClassNoticePage';
+import AdminNewsPage from './pages/admin/AdminNewsPage';
 
 function App() {
   return (
@@ -306,6 +307,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <AdminClassNoticePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/news"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminNewsPage />
               </ProtectedRoute>
             }
           />

@@ -9,19 +9,22 @@ export interface InstructorIntroCardProps {
   imageUrl?: string | null;
   /** Compact layout (e.g. for small modals) */
   compact?: boolean;
+  /** Use large card layout for instructors page (more visual impact) */
+  featured?: boolean;
   /** Optional: override profile (e.g. from admin form preview). If not set, uses getInstructorProfile(name). */
   profile?: InstructorProfile | null;
 }
 
-function getTutorImageUrl(name: string): string {
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
+function getTutorImageUrl(name: string, size?: number): string {
+  const s = size ?? 128;
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=${s}&background=random&color=fff&bold=true`;
 }
 
-export default function InstructorIntroCard({ instructorName, imageUrl, compact, profile: profileOverride }: InstructorIntroCardProps) {
+export default function InstructorIntroCard({ instructorName, imageUrl, compact, featured, profile: profileOverride }: InstructorIntroCardProps) {
   const { t } = useTranslation();
   const resolved = profileOverride !== undefined ? profileOverride : getInstructorProfile(instructorName);
   const profile = resolved ?? null;
-  const img = imageUrl || getTutorImageUrl(instructorName);
+  const img = imageUrl ?? resolved?.avatar_url ?? getTutorImageUrl(instructorName, featured ? 256 : undefined);
 
   // Show nothing only when no profile at all (and not a draft from form)
   if (!profile) return null;
@@ -31,6 +34,52 @@ export default function InstructorIntroCard({ instructorName, imageUrl, compact,
   const yearsDancing = profile.years_dancing ?? 0;
   const teachingExp = profile.teaching_experience ?? 0;
   const danceSchool = profile.dance_school?.trim() ?? '';
+
+  if (featured) {
+    const bgImage = profile.background_image?.trim();
+    return (
+      <article className="group flex flex-col sm:flex-row overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-lg shadow-gray-200/50 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all duration-300">
+        <div
+          className="relative sm:w-52 flex-shrink-0 min-h-[200px] sm:min-h-0 flex items-center justify-center p-6 bg-gradient-to-br from-primary/10 to-primary/5"
+          style={bgImage ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : undefined}
+        >
+          {bgImage && <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent" aria-hidden />}
+          {bgImage && <div className="absolute inset-0 bg-primary/20 mix-blend-overlay" aria-hidden />}
+          <div className="relative z-10 flex flex-col items-center gap-3">
+            <img src={img} alt={instructorName} className="w-32 h-32 sm:w-36 sm:h-36 rounded-full object-cover ring-4 ring-white shadow-lg" />
+          </div>
+        </div>
+        <div className="flex-1 p-6 sm:p-8 flex flex-col justify-center min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">{instructorName}</h2>
+          <p className="mt-2 text-gray-600 leading-relaxed">{intro || '—'}</p>
+          {awards.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {awards.map((a) => (
+                <span key={a} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200/80">
+                  <Award className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  {a}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gray-600">
+            <span className="flex items-center gap-1.5">
+              <Music className="h-4 w-4 text-primary shrink-0" />
+              {yearsDancing} {t('home.yearsUnit')} {t('home.instructorYearsDancing')}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <BookOpen className="h-4 w-4 text-primary shrink-0" />
+              {teachingExp} {t('home.yearsUnit')} {t('home.instructorTeachingExperience')}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <GraduationCap className="h-4 w-4 text-primary shrink-0" />
+              {danceSchool || '—'}
+            </span>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>

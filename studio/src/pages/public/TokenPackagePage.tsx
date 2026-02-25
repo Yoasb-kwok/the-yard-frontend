@@ -203,7 +203,10 @@ export default function TokenPackagePage() {
     });
   };
 
+  // Use admin-set profile avatar when available (synced with 導師主頁 / admin 導師管理)
   const getTutorImageUrl = (name: string): string => {
+    const profile = getInstructorProfile(name);
+    if (profile?.avatar_url) return profile.avatar_url;
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
   };
 

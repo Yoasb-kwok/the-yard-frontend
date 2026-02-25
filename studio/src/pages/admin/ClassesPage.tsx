@@ -9,6 +9,7 @@ import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, type AgeTag, useAuth } from '../../contexts/AuthContext';
+import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
 
 interface Class {
   id: string;
@@ -40,58 +41,15 @@ interface Instructor {
 
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
-/** Fallback demo: 4/8/16 堂、每週一次，讓 Admin 日曆有課堂可顯示 */
-const FALLBACK_CLASSES: Class[] = (() => {
-  const now = new Date();
-  type Prog = { name: string; code: string; total: 4 | 8 | 16; weekday: number; hour: number; min: number; instructor: string; location: NonNullable<Class['location']>; level: CourseLevel; age_tag: AgeTag };
-  const programs: Prog[] = [
-    { name: '兒童芭蕾', code: 'KB-A', total: 8, weekday: 1, hour: 16, min: 0, instructor: '李老師', location: 'sanpokong', level: 'entry', age_tag: '5-8' },
-    { name: '青少年街舞', code: 'THH', total: 16, weekday: 3, hour: 17, min: 0, instructor: '陳老師', location: 'causewaybay', level: 'intermediate', age_tag: '9-12' },
-    { name: '幼兒律動', code: 'KIDS', total: 4, weekday: 6, hour: 10, min: 0, instructor: '王老師', location: 'sanpokong', level: 'entry', age_tag: '5-8' },
-    { name: '爵士舞', code: 'JAZZ', total: 8, weekday: 5, hour: 18, min: 0, instructor: '張老師', location: 'fotan', level: 'entry', age_tag: '9-12' },
-    { name: '兒童中國舞', code: 'CCD', total: 8, weekday: 2, hour: 15, min: 30, instructor: '黃老師', location: 'sheungshui', level: 'entry', age_tag: '5-8' },
-  ];
-  const list: Class[] = [];
-  let id = 1;
-  for (const p of programs) {
-    const base = new Date(now);
-    base.setDate(base.getDate() - 14);
-    base.setHours(0, 0, 0, 0);
-    let daysToFirst = (p.weekday - base.getDay() + 7) % 7;
-    base.setDate(base.getDate() + daysToFirst);
-    base.setHours(p.hour, p.min, 0, 0);
-    for (let L = 1; L <= p.total; L++) {
-      const sessionDate = new Date(base);
-      sessionDate.setDate(base.getDate() + (L - 1) * 7);
-      const endDate = new Date(sessionDate);
-      endDate.setHours(endDate.getHours() + 1, 0, 0, 0);
-      list.push({
-        id: `cls_fb_${id++}`,
-        name: p.name,
-        class_code: p.code,
-        lesson_number: L,
-        instructor: p.instructor,
-        substitute_instructor: null,
-        start_time: sessionDate.toISOString(),
-        end_time: endDate.toISOString(),
-        capacity: 12,
-        enrolled_count: L <= 2 ? 6 : 7,
-        is_internal: false,
-        is_cancelled: false,
-        location: p.location,
-        level: p.level,
-        age_tag: p.age_tag,
-      });
-    }
-  }
-  return list;
-})();
+/** Fallback demo: 與主頁/日曆一致，用共用 demo 課程 */
+const FALLBACK_CLASSES: Class[] = getFallbackClassesForAdmin();
 const FALLBACK_INSTRUCTORS: Instructor[] = [
   { id: 'inst_1', name: '李老師', profile_image_url: null, created_at: new Date().toISOString() },
   { id: 'inst_2', name: '陳老師', profile_image_url: null, created_at: new Date().toISOString() },
   { id: 'inst_3', name: '王老師', profile_image_url: null, created_at: new Date().toISOString() },
   { id: 'inst_4', name: '張老師', profile_image_url: null, created_at: new Date().toISOString() },
   { id: 'inst_5', name: '黃老師', profile_image_url: null, created_at: new Date().toISOString() },
+  { id: 'inst_6', name: '林老師', profile_image_url: null, created_at: new Date().toISOString() },
 ];
 
 /** Demo enrollments for attendance list when API returns no data */

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { BookOpen, Users, Calendar } from 'lucide-react';
+import { BookOpen, Users, Calendar, MapPin } from 'lucide-react';
 import type { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 
 interface CourseItem {
@@ -49,33 +49,53 @@ export default function CoursesPage() {
 
   return (
     <PublicLayout>
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="flex items-center gap-3 mb-8">
-          <BookOpen className="h-10 w-10 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{t('courses.title', '課程介紹')}</h1>
-            <p className="text-gray-600 mt-1">{t('courses.subtitle', '按年齡組別瀏覽課程，歡迎預約試堂。')}</p>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+          <header className="text-center mb-12 sm:mb-16">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 text-primary mb-6">
+              <BookOpen className="h-8 w-8" />
+            </div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-gray-900 tracking-tight">
+              {t('courses.title', '課程介紹')}
+            </h1>
+            <p className="mt-3 text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+              {t('courses.subtitle', '按年齡組別瀏覽課程，歡迎預約試堂。')}
+            </p>
+          </header>
 
-        <div className="space-y-10">
+          <div className="space-y-12">
           {COURSES_BY_AGE.map(({ age_tag, labelKey, courses }) => (
-            <section key={age_tag} className="bg-white rounded-xl shadow-md overflow-hidden">
-              <div className="bg-primary/10 px-6 py-3 border-b border-primary/20">
-                <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-primary" />
+            <section key={age_tag} className="rounded-2xl border border-gray-200/80 bg-white shadow-lg shadow-gray-200/40 overflow-hidden hover:shadow-xl hover:shadow-primary/5 transition-shadow duration-300">
+              <div className="bg-gradient-to-r from-primary/15 to-primary/5 px-6 sm:px-8 py-4 border-b border-primary/10">
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-3">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-xl bg-primary/20 text-primary">
+                    <Users className="h-5 w-5" />
+                  </span>
                   {t(labelKey)}
                 </h2>
               </div>
-              <div className="p-6 space-y-6">
+              <div className="p-6 sm:p-8 space-y-6">
                 {courses.map((course) => (
-                  <div key={course.id} className="border border-gray-200 rounded-lg p-5 hover:border-primary/40 transition-colors">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div
+                    key={course.id}
+                    className="group rounded-xl border border-gray-200/80 bg-gray-50/50 p-6 sm:p-6 hover:border-primary/30 hover:bg-white hover:shadow-md transition-all duration-300"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-bold text-gray-900">{course.name}</h3>
-                        <p className="text-sm text-primary font-medium mt-0.5">{course.program_code}</p>
-                        <p className="text-gray-600 mt-3">{course.intro}</p>
-                        <p className="text-sm text-gray-500 mt-2">{t('home.tutor')}: {course.instructor}</p>
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h3 className="text-lg sm:text-xl font-bold text-gray-900">{course.name}</h3>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary/15 text-primary border border-primary/30">
+                            {course.program_code}
+                          </span>
+                        </div>
+                        <p className="text-gray-600 leading-relaxed">{course.intro}</p>
+                        <p className="text-sm text-gray-500 mt-3 flex items-center gap-1.5">
+                          <span className="font-medium text-gray-700">{t('home.tutor')}:</span>
+                          {course.instructor}
+                          <span className="text-gray-400 mx-1">·</span>
+                          <MapPin className="h-3.5 w-3.5 text-gray-400 inline" />
+                          <span>{t(`locations.${course.location}`, course.location)}</span>
+                        </p>
                       </div>
                       <Link
                         to="/trial"
@@ -92,7 +112,7 @@ export default function CoursesPage() {
                             age_tag: course.age_tag,
                           },
                         }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-colors shrink-0"
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-white font-semibold hover:bg-primary-dark shadow-md hover:shadow-lg transition-all duration-200 shrink-0"
                       >
                         <Calendar className="h-4 w-4" />
                         {t('courses.bookTrial', '預約試堂')}
@@ -103,11 +123,18 @@ export default function CoursesPage() {
               </div>
             </section>
           ))}
-        </div>
+          </div>
 
-        <p className="text-center text-gray-500 mt-8">
-          <Link to="/calendar" className="text-primary font-medium hover:underline">{t('courses.viewCalendar', '查看月曆可報名時段')}</Link>
-        </p>
+          <div className="mt-12 text-center">
+            <Link
+              to="/calendar"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-100 text-gray-800 font-medium hover:bg-primary hover:text-white hover:shadow-lg transition-all duration-200"
+            >
+              <Calendar className="h-5 w-5" />
+              {t('courses.viewCalendar', '查看月曆可報名時段')}
+            </Link>
+          </div>
+        </div>
       </div>
     </PublicLayout>
   );

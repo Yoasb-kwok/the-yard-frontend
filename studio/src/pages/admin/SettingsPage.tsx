@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { Save, Bell } from 'lucide-react';
+import { getAboutContent, saveAboutContent } from '../../lib/aboutStorage';
 
 const TOKEN_REMINDER_KEY = 'the_yard_token_expiry_reminder';
 
@@ -50,31 +51,45 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const page = pages.find(p => p.page_key === selectedPage);
-    if (page) {
+    if (selectedPage === 'about') {
+      const stored = getAboutContent();
+      setForm(
+        stored
+          ? { title: stored.title, content: stored.content }
+          : { title: t('about.title'), content: t('about.content') }
+      );
+    } else if (page) {
       setForm({ title: page.title, content: page.content });
     }
-  }, [selectedPage, pages]);
+  }, [selectedPage, pages, t]);
 
   async function loadContent() {
-    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 500));
-    setPages(MOCK_PAGES);
+    const aboutStored = getAboutContent();
+    const basePages = [...MOCK_PAGES];
+    if (aboutStored) {
+      const idx = basePages.findIndex(p => p.page_key === 'about');
+      if (idx >= 0) basePages[idx] = { page_key: 'about', title: aboutStored.title, content: aboutStored.content };
+    }
+    setPages(basePages);
     setLoading(false);
   }
 
   async function handleSave() {
     setSaving(true);
-    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // Update local state
-    setPages(pages.map(p => 
+
+    if (selectedPage === 'about') {
+      saveAboutContent({ title: form.title, content: form.content });
+    }
+
+    setPages(pages.map(p =>
       p.page_key === selectedPage
         ? { ...p, title: form.title, content: form.content }
         : p
     ));
 
-    alert('Content updated successfully');
+    alert(t('admin.settings.contentUpdated', 'Content updated successfully'));
     setSaving(false);
   }
 

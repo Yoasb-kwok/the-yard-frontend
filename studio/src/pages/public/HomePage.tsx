@@ -9,6 +9,8 @@ import roomRentalImage from '../../assets/images/room_rental.jpg';
 import kidsDanceCoursesImage from '../../assets/images/s5-kids-dance-courses.jpg';
 import { api } from '../../lib/api';
 import { getDateStringFromStartTime, formatProgramCodeDisplay } from '../../lib/utils';
+import { getInstructorProfile } from '../../lib/instructorProfiles';
+import { getFallbackNewStudentCourses } from '../../lib/demoCourses';
 
 interface TodayClass {
   id: string;
@@ -26,43 +28,6 @@ interface TodayClass {
 
 /** Upcoming class for booking (same shape, used for next 14 days) */
 type UpcomingClass = TodayClass;
-
-/** Fallback 新生課程 when API has no data — 6 堂，3 個一排共 2 行 */
-function getFallbackNewStudentCourses(): UpcomingClass[] {
-  const now = new Date();
-  const courses: UpcomingClass[] = [];
-  const list = [
-    { name: '兒童芭蕾試堂', program_code: 'TRIAL-BAL', instructor: '李老師', location: 'sanpokong' as const },
-    { name: '青少年街舞試堂', program_code: 'TRIAL-HH', instructor: '陳老師', location: 'causewaybay' as const },
-    { name: '幼兒律動試堂', program_code: 'TRIAL-KIDS', instructor: '王老師', location: 'sanpokong' as const },
-    { name: '爵士舞試堂', program_code: 'TRIAL-JAZZ', instructor: '張老師', location: 'fotan' as const },
-    { name: '兒童中國舞試堂', program_code: 'TRIAL-CCD', instructor: '黃老師', location: 'sheungshui' as const },
-    { name: 'K-Pop 流行舞試堂', program_code: 'TRIAL-KPOP', instructor: '林老師', location: 'causewaybay' as const },
-  ];
-  list.forEach((d, i) => {
-    const base = new Date(now);
-    base.setDate(base.getDate() + 1 + Math.floor(i / 2));
-    base.setHours(14 + (i % 3) * 2, 0, 0, 0);
-    const start = new Date(base);
-    const end = new Date(base);
-    end.setHours(end.getHours() + 1, 0, 0, 0);
-    courses.push({
-      id: `demo_trial_${i + 1}`,
-      name: d.name,
-      instructor: d.instructor,
-      start_time: start.toISOString(),
-      end_time: end.toISOString(),
-      capacity: 12,
-      enrolled_count: 3 + i,
-      location: d.location,
-      program_code: d.program_code,
-      lesson_number: 1,
-    });
-  });
-  return courses;
-}
-
-const FALLBACK_NEW_STUDENT_COURSES = getFallbackNewStudentCourses();
 
 export default function HomePage() {
   const { t, i18n } = useTranslation();
@@ -89,8 +54,10 @@ export default function HomePage() {
     });
   };
 
-  // Generate tutor profile image URL from UI Avatars
+  // Use admin-set profile avatar when available (synced with 導師主頁 / admin 導師管理)
   const getTutorImageUrl = (name: string): string => {
+    const profile = getInstructorProfile(name);
+    if (profile?.avatar_url) return profile.avatar_url;
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
   };
 
@@ -124,7 +91,7 @@ export default function HomePage() {
       const notCancelled = rows.filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true));
       const upcoming: UpcomingClass[] = notCancelled.length > 0
         ? notCancelled.map(mapRow)
-        : FALLBACK_NEW_STUDENT_COURSES;
+        : getFallbackNewStudentCourses();
       const forToday: TodayClass[] = upcoming.filter((c) => getDateStringFromStartTime(c.start_time) === todayStr);
       setTodayClasses(forToday);
       setUpcomingClasses(upcoming);
@@ -136,7 +103,7 @@ export default function HomePage() {
     } catch (error) {
       console.error('Error loading new student courses:', error);
       setTodayClasses([]);
-      setUpcomingClasses(FALLBACK_NEW_STUDENT_COURSES);
+      setUpcomingClasses(getFallbackNewStudentCourses());
       setLoadError(null);
     } finally {
       setLoading(false);
