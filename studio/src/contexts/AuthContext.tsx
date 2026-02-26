@@ -26,6 +26,7 @@ interface Profile {
 interface User {
   id: string;
   email: string;
+  mobile?: string | null;
 }
 
 interface Session {
@@ -78,6 +79,8 @@ interface AuthContextType {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
+  /** Refresh user and profiles from API (e.g. after updating email/mobile). */
+  refreshMe: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -180,17 +183,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       : profiles?.[0] ?? null;
 
   useEffect(() => {
+    const STORAGE_KEY_SERVER_ID = 'studio_backend_server_id';
     const token = localStorage.getItem('token');
     async function restoreSession() {
       if (token) {
         try {
+          const healthRes = await api.get<{ ok?: boolean; serverId?: string }>('health');
+          const currentServerId = (healthRes as any).serverId ?? (healthRes as any).data?.serverId;
+          if (currentServerId) {
+            const storedServerId = sessionStorage.getItem(STORAGE_KEY_SERVER_ID);
+            if (storedServerId != null && storedServerId !== currentServerId) {
+              localStorage.removeItem('token');
+              localStorage.removeItem('auth_session');
+              sessionStorage.removeItem(STORAGE_KEY_SERVER_ID);
+              setUser(null);
+              setProfiles(null);
+              setActiveProfileId(null);
+              setSession(null);
+              setLoading(false);
+              return;
+            }
+            sessionStorage.setItem(STORAGE_KEY_SERVER_ID, currentServerId);
+          }
           const res = await api.get<{ user: { id: string; email: string }; profiles: Profile[] }>('user/me');
           const userFromMe = (res as any).user ?? (res as any).data?.user;
           const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
           if (res.success && userFromMe && Array.isArray(profilesFromMe) && profilesFromMe.length) {
-            const u = userFromMe;
-            const p = profilesFromMe;
-            const userObj: User = { id: u.id, email: u.email };
+          const u = userFromMe;
+          const p = profilesFromMe;
+          const userObj: User = { id: u.id, email: u.email, mobile: u.mobile ?? null };
             const sessionObj: Session = { user: userObj };
             setUser(userObj);
             setProfiles(p);
@@ -348,6 +369,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.success && res.token && res.user) {
         const u = res.user;
         localStorage.setItem('token', res.token);
+        try {
+          const h = await api.get<{ serverId?: string }>('health');
+          const sid = (h as any).serverId ?? (h as any).data?.serverId;
+          if (sid) sessionStorage.setItem('studio_backend_server_id', sid);
+        } catch (_) {}
         const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? loginIdentifier };
         try {
           const meRes = await api.get<{ user: { id: string; email: string }; profiles: Profile[] }>('user/me');
@@ -569,6 +595,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(null);
     localStorage.removeItem('auth_session');
     localStorage.removeItem('token');
+    sessionStorage.removeItem('studio_backend_server_id');
+  }
+
+  async function refreshMe() {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const res = await api.get<{ user: { id: string; email: string; mobile?: string }; profiles: Profile[] }>('user/me');
+      const userFromMe = (res as any).user ?? (res as any).data?.user;
+      const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
+      if (res.success && userFromMe && Array.isArray(profilesFromMe)) {
+        const userObj: User = { id: userFromMe.id, email: userFromMe.email, mobile: userFromMe.mobile ?? null };
+        setUser(userObj);
+        setProfiles(profilesFromMe);
+        setActiveProfileId(profilesFromMe[0]?.id ?? null);
+        persistSession({
+          user: userObj,
+          profiles: profilesFromMe,
+          activeProfileId: profilesFromMe[0]?.id ?? null,
+          session: { user: userObj },
+        });
+      }
+    } catch (_) {}
   }
 
   const value = {
@@ -586,6 +635,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     signOut,
     isAdmin: profile?.role === 'admin',
+    refreshMe,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

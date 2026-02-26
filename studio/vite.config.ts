@@ -8,6 +8,12 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true, // Exit if port 5173 is already in use
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+      },
+    },
   },
   resolve: {
     alias: {

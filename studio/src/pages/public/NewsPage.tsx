@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
 import { getStoredNewsPosts } from '../../lib/newsStorage';
+import { api } from '../../lib/api';
 import scheduleImage from '../../assets/images/schedule.jpg';
 
 interface NewsPost {
@@ -56,7 +57,17 @@ export default function NewsPage() {
   }, [t, i18n.language]);
 
   async function loadNews() {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    setLoading(true);
+    try {
+      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news');
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setPosts(res.data.map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // API unavailable: use stored or dummy
+    }
     const stored = getStoredNewsPosts();
     if (stored.length > 0) {
       setPosts(stored.map(({ created_at: _, ...p }) => p));

@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare, KeyRound } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
 import { useAdminPendingCounts } from '../lib/useAdminPendingCounts';
@@ -173,6 +173,17 @@ export default function Layout({ children }: LayoutProps) {
                         {t('nav.dashboard')}
                       </Link>
                     )}
+                    {/* Account settings: admin -> /admin/account, student -> /profile */}
+                    {user && (
+                      <Link
+                        to={isAdmin ? '/admin/account' : '/profile'}
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+                      >
+                        <KeyRound className="h-4 w-4" />
+                        {t('nav.account')}
+                      </Link>
+                    )}
                     {/* Student: family members – click goes to schedule + profile view */}
                     {user && !isAdmin && profiles.length > 0 && (
                       <div className="border-t border-gray-100 px-3 py-2">
@@ -273,6 +284,14 @@ export default function Layout({ children }: LayoutProps) {
                         <LayoutDashboard className="h-5 w-5 text-gray-500" />
                         {t('nav.dashboard')}
                       </Link>
+                      <Link
+                        to="/profile"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200 ring-1 ring-gray-300"
+                      >
+                        <KeyRound className="h-5 w-5 text-gray-500" />
+                        {t('nav.account')}
+                      </Link>
                     </div>
                     {profiles.length > 0 && (
                       <div className="border-t border-gray-200 pt-3">
@@ -325,6 +344,14 @@ export default function Layout({ children }: LayoutProps) {
                       >
                         <LayoutDashboard className="h-5 w-5 text-gray-500" />
                         {t('nav.dashboard')}
+                      </Link>
+                      <Link
+                        to="/admin/account"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg transition-all bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200"
+                      >
+                        <KeyRound className="h-5 w-5 text-gray-500" />
+                        {t('nav.account')}
                       </Link>
                     </div>
                     <div className="pt-2">

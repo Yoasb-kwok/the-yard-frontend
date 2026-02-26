@@ -43,7 +43,7 @@ export default function NotificationsPage() {
                   <div className="font-medium text-gray-900">{n.title}</div>
                   <div className="text-sm text-gray-600 mt-1">{n.message}</div>
                   <div className="text-xs text-gray-500 mt-2">
-                    {new Date(n.date).toLocaleDateString(getLocale(), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    {new Date(n.date).toLocaleDateString(getLocale(), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
                   </div>
                 </div>
               </li>

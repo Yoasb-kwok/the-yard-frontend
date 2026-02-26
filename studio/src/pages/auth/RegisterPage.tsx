@@ -7,6 +7,7 @@ import PublicLayout from '../../components/PublicLayout';
 
 export default function RegisterPage() {
   const { t } = useTranslation();
+  const [accountType, setAccountType] = useState<'one' | 'multiple'>('one');
   const [fullName, setFullName] = useState('');
   const [idLastFour, setIdLastFour] = useState('');
   const [countryCode, setCountryCode] = useState('852');
@@ -88,6 +89,34 @@ export default function RegisterPage() {
               </div>
             )}
             <div className="rounded-md shadow-sm space-y-4">
+              <div>
+                <p className="block text-sm font-medium text-gray-700 mb-2">{t('register.accountType')}</p>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="accountType"
+                      checked={accountType === 'one'}
+                      onChange={() => setAccountType('one')}
+                      className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                    />
+                    <span className="text-sm text-gray-900">{t('register.oneChild')}</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="accountType"
+                      checked={accountType === 'multiple'}
+                      onChange={() => setAccountType('multiple')}
+                      className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
+                    />
+                    <span className="text-sm text-gray-900">{t('register.multipleChildren')}</span>
+                  </label>
+                </div>
+                {accountType === 'multiple' && (
+                  <p className="mt-2 text-xs text-gray-500">{t('register.multipleChildrenHint')}</p>
+                )}
+              </div>
               <div>
                 <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
                   {t('register.fullName')}

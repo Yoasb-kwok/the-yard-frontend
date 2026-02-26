@@ -348,9 +348,10 @@ export default function ReassignStudentsPage() {
   };
 
   const formatTime = (date: Date): string => {
-    return date.toLocaleTimeString(getLocale(), { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return date.toLocaleTimeString(getLocale(), {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
     });
   };
 

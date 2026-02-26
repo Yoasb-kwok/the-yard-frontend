@@ -35,6 +35,7 @@ export function formatDateTime(date: string | Date, locale: string = 'en-US'): s
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
 }
 

@@ -17,7 +17,7 @@ export default function AdminRenewalChurnPage() {
 
   useEffect(() => {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<RenewalChurnData>(`admin/renewal-churn?demo=1${monthParam}`)
+    api.get<RenewalChurnData>(`/admin/renewal-churn?demo=1${monthParam}`)
       .then((res: any) => {
         if (res?.success && res?.data) setRenewalChurn(res.data);
         else setRenewalChurn(FALLBACK_RENEWAL_CHURN);

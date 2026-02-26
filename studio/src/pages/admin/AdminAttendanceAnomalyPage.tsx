@@ -17,7 +17,7 @@ export default function AdminAttendanceAnomalyPage() {
 
   useEffect(() => {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<AttendanceAnomalyData>(`admin/attendance-anomaly?demo=1${monthParam}`)
+    api.get<AttendanceAnomalyData>(`/admin/attendance-anomaly?demo=1${monthParam}`)
       .then((res: any) => {
         if (res?.success && res?.data) setData(res.data);
         else setData(FALLBACK_ATTENDANCE_ANOMALY);

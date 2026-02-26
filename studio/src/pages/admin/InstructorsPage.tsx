@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { Plus, Edit, Trash2, User, Upload, X } from 'lucide-react';
+import { Plus, Edit, Trash2, User, Upload, X, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
 import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile, saveInstructorProfile, type InstructorProfile } from '../../lib/instructorProfiles';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
@@ -70,6 +70,7 @@ export default function InstructorsPage() {
   const [imageUrlInput, setImageUrlInput] = useState('');
   const [sortKey, setSortKey] = useState<string | null>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [expandedInstructorId, setExpandedInstructorId] = useState<string | null>(null);
 
   useEffect(() => {
     loadInstructors();
@@ -153,6 +154,16 @@ export default function InstructorsPage() {
       !c.is_cancelled && 
       new Date(c.start_time) > now
     ).length;
+  }
+
+  /** Unique course category names (課程類別) this instructor teaches – no L01/L02, just e.g. 兒童芭蕾, 爵士舞 */
+  function getCourseNamesForInstructor(instructorName: string): string[] {
+    const rawNames = classes
+      .filter((c) => c.instructor === instructorName && !c.is_cancelled)
+      .map((c) => (c.name || '').trim())
+      .filter(Boolean);
+    const normalized = rawNames.map((n) => n.replace(/\s*[-–—]?\s*L\d+\s*$/i, '').trim() || n);
+    return [...new Set(normalized)].sort((a, b) => (a || '').localeCompare(b || '', undefined, { sensitivity: 'base' }));
   }
 
   function formToProfile(): InstructorProfile {
@@ -431,6 +442,7 @@ export default function InstructorsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50">
                   <tr>
+                    <th className="w-10 px-2 py-3"></th>
                     <TableSortButton label={t('admin.instructors.instructor')} sortKey="name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs tracking-wider" />
                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('admin.instructors.upcomingClasses')}
@@ -444,8 +456,26 @@ export default function InstructorsPage() {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {sortedInstructors.map((instructor) => {
                     const upcomingCount = getUpcomingClassesCount(instructor.name);
+                    const courseNames = getCourseNamesForInstructor(instructor.name);
+                    const isExpanded = expandedInstructorId === instructor.id;
                     return (
-                      <tr key={instructor.id} className="hover:bg-gray-50 transition-colors">
+                      <Fragment key={instructor.id}>
+                        <tr className="hover:bg-gray-50 transition-colors">
+                          <td className="w-10 px-2 py-3 align-middle">
+                            {courseNames.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedInstructorId((id) => (id === instructor.id ? null : instructor.id))}
+                                className="p-1 rounded hover:bg-gray-200 text-gray-600"
+                                title={t('admin.instructors.showCourses') || '現任教課程'}
+                                aria-expanded={isExpanded}
+                              >
+                                {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                              </button>
+                            ) : (
+                              <span className="inline-block w-6" aria-hidden />
+                            )}
+                          </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center">
                             <img
@@ -487,6 +517,27 @@ export default function InstructorsPage() {
                           </div>
                         </td>
                       </tr>
+                      {isExpanded && courseNames.length > 0 && (
+                        <tr key={`${instructor.id}-courses`} className="bg-gray-50/80">
+                          <td colSpan={5} className="px-4 py-3">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <BookOpen className="h-4 w-4 text-gray-500 shrink-0" aria-hidden />
+                              <span className="text-xs font-medium text-gray-500 mr-2">
+                                {t('admin.instructors.teachingCourses') || '現任教課程'}：
+                              </span>
+                              {courseNames.map((name) => (
+                                <span
+                                  key={name}
+                                  className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary"
+                                >
+                                  {name}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                     );
                   })}
                 </tbody>

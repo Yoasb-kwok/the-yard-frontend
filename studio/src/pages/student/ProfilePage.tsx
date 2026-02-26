@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext';
 import { getAgeTagFromDateOfBirth } from '../../lib/utils';
@@ -7,6 +6,7 @@ import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { useTranslation } from 'react-i18next';
 import { User, Copy, Check, Pencil, Trash2, KeyRound } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
+import AccountSecurityCard from '../../components/AccountSecurityCard';
 
 const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
   full_name: '',
@@ -21,7 +21,7 @@ const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
 });
 
 export default function ProfilePage() {
-  const { profile, user, profiles, addProfile, updateProfile, deleteProfile } = useAuth();
+  const { profile, user, profiles, addProfile, updateProfile, deleteProfile, refreshMe } = useAuth();
   const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
@@ -174,6 +174,12 @@ export default function ProfilePage() {
           </div>
         )}
 
+        {isStudent && profiles.length === 1 && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-sm text-gray-700">
+            {t('profile.addMoreChildrenHint')}
+          </div>
+        )}
+
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6 relative">
           <div className="mb-4 md:mb-6 flex flex-wrap items-start justify-between gap-2">
             <div>
@@ -181,7 +187,15 @@ export default function ProfilePage() {
               <p className="text-sm md:text-base text-gray-600">{getRoleLabel(profile.role)}</p>
             </div>
             {isStudent && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={openAddModal}
+                  className="flex items-center gap-1.5 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
+                >
+                  <User className="h-4 w-4" />
+                  {t('profile.addFamilyMember')}
+                </button>
                 <button
                   type="button"
                   onClick={() => openEditModal(profile)}
@@ -322,13 +336,9 @@ export default function ProfilePage() {
               <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
                 {user?.email || t('profile.notProvided')}
               </div>
-              <Link
-                to="/forgot-password"
-                className="inline-flex items-center gap-2 mt-2 text-sm font-medium text-primary hover:text-primary-dark"
-              >
-                <KeyRound className="h-4 w-4" />
-                {t('profile.changePassword')}
-              </Link>
+              <p className="mt-1 text-xs text-gray-500">
+                {t('profile.accountSecurityHint', 'To change password, email or mobile, use the "Account & security" section below.')}
+              </p>
             </div>
 
             <div>
@@ -403,6 +413,14 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <AccountSecurityCard
+          email={user?.email ?? null}
+          mobile={user?.mobile ?? profile?.contact_number ?? profile?.mobile ?? null}
+          onAccountUpdated={() => refreshMe()}
+        />
       </div>
 
       {modalMode && (

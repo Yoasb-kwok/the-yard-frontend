@@ -18,6 +18,7 @@
     "instructors": "导师",
     "reports": "报告",
     "settings": "设置",
+    "account": "账户设置",
     "coupons": "优惠券",
     "holidays": "假期",
     "purchaseHistory": "购买记录",
@@ -335,7 +336,11 @@
   "register": {
     "title": "创建您的账户",
     "subtitle": "注册以开始使用",
-    "fullName": "全名",
+    "accountType": "账户类型",
+    "oneChild": "家庭只有一名孩子",
+    "multipleChildren": "家庭有多个孩子同时报名",
+    "multipleChildrenHint": "注册后可在「个人资料」页面新增其他子女。",
+    "fullName": "子女姓名",
     "idLastFour": "身份证后4位字",
     "mobile": "手机号码",
     "email": "电子邮件地址",
@@ -541,7 +546,31 @@
     "mainAccountUpdated": "主账户已更新。",
     "memberAdded": "已添加家庭成员。",
     "memberUpdated": "已更新家庭成员。",
-    "memberDeleted": "已移除家庭成员。"
+    "memberDeleted": "已移除家庭成员。",
+    "addMoreChildrenHint": "若要为家庭新增另一名子女，请按「新增家庭成员」。",
+    "accountSecurity": "账户与安全",
+    "boundEmail": "登录邮箱",
+    "boundMobile": "绑定手机号码",
+    "updateEmail": "更改邮箱",
+    "updateMobile": "更改手机号码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmNewPassword": "确认新密码",
+    "passwordUpdated": "密码已更新。",
+    "accountUpdated": "账户已更新。",
+    "emailInUse": "该邮箱已被使用。",
+    "wrongCurrentPassword": "当前密码不正确。",
+    "accountSecurityHint": "更改密码、邮箱或手机号码请使用下方「账户与安全」区块。",
+    "verification": {
+      "sendCode": "发送验证码",
+      "emailSentTo": "我们已向 {{email}} 发送 6 位验证码，请在下方输入。",
+      "mobileSent": "我们已向您的手机发送 6 位验证码，请在下方输入。",
+      "enterOtp": "验证码",
+      "invalidOtp": "验证码无效或已过期。",
+      "verifying": "验证中…",
+      "confirm": "确认",
+      "devOtpHint": "测试用（未发出邮件/SMS）"
+    }
   },
   "admin": {
     "dashboard": {
@@ -692,6 +721,8 @@
       "passwordReset": "发送密码重置",
       "passwordResetSent": "密码重置电子邮件已发送（模拟）",
       "userUpdated": "用户已成功更新",
+      "confirmUpdateUser": "确定要保存对此用户的修改吗？",
+      "confirmUpdateUserAgain": "请再次确认。用户资料即将更新并立即生效。",
       "student": "学生",
       "admin": "管理员",
       "editTokenExpiryDate": "编辑代币到期日",
@@ -752,6 +783,7 @@
       "classCreated": "课程已成功创建",
       "classesCreated": "已成功创建 {{count}} 个课程",
       "classUpdated": "课程已成功更新",
+      "demoDataCannotEdit": "此课程为示范资料，无法保存。请重新加载页面取得真实课程后再编辑。",
       "classesUpdated": "已成功更新 {{count}} 个课程",
       "repeatClassDetected": "发现 {{count}} 个相关重复课程",
       "editSingleClass": "仅编辑此课程",
@@ -901,7 +933,9 @@
       "iconKey": "风格图示 key",
       "iconNone": "不选",
       "iconHint": "对应导师主页卡片风格（可选），目前主页已隐藏图示。",
-      "publicPageSync": "以上内容会同步至前台「导师介绍」页；头像即主页显示的相片。"
+      "publicPageSync": "以上内容会同步至前台「导师介绍」页；头像即主页显示的相片。",
+      "showCourses": "现任教课程",
+      "teachingCourses": "现任教课程"
     },
     "trialApplications": {
       "title": "试堂申请",
@@ -1027,7 +1061,11 @@
       "quantityRequired": "数量为必填项",
       "validFromRequired": "有效期开始日期为必填项",
       "validUntilRequired": "有效期结束日期为必填项",
-      "validUntilAfterValidFrom": "有效期结束日期必须晚于开始日期"
+      "validUntilAfterValidFrom": "有效期结束日期必须晚于开始日期",
+      "validUntilPreset1Month": "1 个月",
+      "validUntilPreset3Months": "3 个月",
+      "validUntilPreset6Months": "6 个月",
+      "validUntilPreset1Year": "1 年"
     },
     "holidays": {
       "title": "假期日历",

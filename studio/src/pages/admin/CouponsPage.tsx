@@ -58,7 +58,7 @@ export default function CouponsPage() {
   async function loadCoupons() {
     setLoading(true);
     try {
-      const res = await api.get<Coupon[]>('admin/coupons?demo=1').catch(() => ({ success: true, data: FALLBACK_COUPONS }));
+      const res = await api.get<Coupon[]>('/admin/coupons?demo=1').catch(() => ({ success: true, data: FALLBACK_COUPONS }));
       setCoupons(res.data ?? FALLBACK_COUPONS);
     } catch (err) {
       console.error('Failed to load coupons:', err);
@@ -70,14 +70,17 @@ export default function CouponsPage() {
 
   function openCreateModal() {
     setEditingCoupon(null);
+    const today = new Date().toISOString().slice(0, 10);
+    const threeMonths = new Date();
+    threeMonths.setMonth(threeMonths.getMonth() + 3);
     setForm({
       code: '',
       discount_type: 'percentage',
       discount_value: '',
       min_order_amount: '',
       quantity: '',
-      valid_from: '',
-      valid_until: '',
+      valid_from: today,
+      valid_until: threeMonths.toISOString().slice(0, 10),
       is_active: true,
     });
     setShowModal(true);
@@ -85,14 +88,16 @@ export default function CouponsPage() {
 
   function openEditModal(coupon: Coupon) {
     setEditingCoupon(coupon);
+    const fromDate = new Date(coupon.valid_from).toISOString().slice(0, 10);
+    const untilDate = new Date(coupon.valid_until).toISOString().slice(0, 10);
     setForm({
       code: coupon.code,
       discount_type: coupon.discount_type,
       discount_value: coupon.discount_value.toString(),
       min_order_amount: coupon.min_order_amount.toString(),
       quantity: coupon.quantity.toString(),
-      valid_from: new Date(coupon.valid_from).toISOString().slice(0, 16),
-      valid_until: new Date(coupon.valid_until).toISOString().slice(0, 16),
+      valid_from: fromDate,
+      valid_until: untilDate,
       is_active: coupon.is_active,
     });
     setShowModal(true);
@@ -143,27 +148,27 @@ export default function CouponsPage() {
 
     try {
       if (editingCoupon) {
-        await api.patch(`admin/coupons/${editingCoupon.id}`, {
+        await api.patch(`/admin/coupons/${editingCoupon.id}`, {
           code: form.code.trim().toUpperCase(),
           discount_type: form.discount_type,
           discount_value: parseFloat(form.discount_value),
           min_order_amount: parseFloat(form.min_order_amount) || 0,
           quantity: parseInt(form.quantity),
-          valid_from: new Date(form.valid_from).toISOString(),
-          valid_until: new Date(form.valid_until).toISOString(),
+          valid_from: form.valid_from.slice(0, 10),
+          valid_until: form.valid_until.slice(0, 10),
           is_active: form.is_active,
         });
         await loadCoupons();
         alert(t('admin.coupons.couponUpdated'));
       } else {
-        await api.post('admin/coupons', {
+        await api.post('/admin/coupons', {
           code: form.code.trim().toUpperCase(),
           discount_type: form.discount_type,
           discount_value: parseFloat(form.discount_value),
           min_order_amount: parseFloat(form.min_order_amount) || 0,
           quantity: parseInt(form.quantity),
-          valid_from: new Date(form.valid_from).toISOString(),
-          valid_until: new Date(form.valid_until).toISOString(),
+          valid_from: form.valid_from.slice(0, 10),
+          valid_until: form.valid_until.slice(0, 10),
           is_active: form.is_active,
         });
         await loadCoupons();
@@ -178,7 +183,7 @@ export default function CouponsPage() {
 
   async function handleToggleActive(coupon: Coupon) {
     try {
-      await api.patch(`admin/coupons/${coupon.id}`, { is_active: !coupon.is_active });
+      await api.patch(`/admin/coupons/${coupon.id}`, { is_active: !coupon.is_active });
       await loadCoupons();
     } catch (err) {
       console.error('Toggle coupon failed:', err);
@@ -191,7 +196,7 @@ export default function CouponsPage() {
       return;
     }
     try {
-      await api.delete(`admin/coupons/${coupon.id}`);
+      await api.delete(`/admin/coupons/${coupon.id}`);
       await loadCoupons();
       alert(t('admin.coupons.couponDeleted'));
     } catch (err) {
@@ -216,14 +221,6 @@ export default function CouponsPage() {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-    });
-  }
-
-  function formatTimeOnly(date: string, locale: string): string {
-    const d = new Date(date);
-    return d.toLocaleTimeString(locale, {
-      hour: '2-digit',
-      minute: '2-digit',
     });
   }
 
@@ -416,13 +413,13 @@ export default function CouponsPage() {
                         <div className="col-span-2">
                           <span className="text-gray-500">{t('admin.coupons.validFrom')}:</span>
                           <span className="ml-2 text-gray-900 text-xs">
-                            {formatDateTime(coupon.valid_from, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}
+                            {formatDateOnly(coupon.valid_from, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}
                           </span>
                         </div>
                         <div className="col-span-2">
                           <span className="text-gray-500">{t('admin.coupons.validUntil')}:</span>
                           <span className="ml-2 text-gray-900 text-xs">
-                            {formatDateTime(coupon.valid_until, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}
+                            {formatDateOnly(coupon.valid_until, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}
                           </span>
                         </div>
                       </div>
@@ -472,11 +469,9 @@ export default function CouponsPage() {
                           <td className="px-3 lg:px-4 py-3 text-sm text-gray-600">{coupon.used_count}/{coupon.quantity}</td>
                           <td className="px-3 lg:px-4 py-3 text-sm text-gray-600">
                             <div>{formatDateOnly(coupon.valid_from, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}</div>
-                            <div className="text-xs text-gray-500">{formatTimeOnly(coupon.valid_from, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}</div>
                           </td>
                           <td className="px-3 lg:px-4 py-3 text-sm text-gray-600">
                             <div>{formatDateOnly(coupon.valid_until, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}</div>
-                            <div className="text-xs text-gray-500">{formatTimeOnly(coupon.valid_until, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}</div>
                           </td>
                           <td className="px-3 lg:px-4 py-3 text-sm">
                             <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -630,7 +625,7 @@ export default function CouponsPage() {
                   {t('admin.coupons.validFrom')} *
                 </label>
                 <input
-                  type="datetime-local"
+                  type="date"
                   required
                   value={form.valid_from}
                   onChange={(e) => setForm({ ...form, valid_from: e.target.value })}
@@ -642,8 +637,32 @@ export default function CouponsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {t('admin.coupons.validUntil')} *
                 </label>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {([1, 3, 6, 12] as const).map((months) => {
+                    const base = form.valid_from ? new Date(form.valid_from + 'T12:00:00') : new Date();
+                    const d = new Date(base);
+                    d.setMonth(d.getMonth() + months);
+                    const yyyy = d.getFullYear();
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const dateStr = `${yyyy}-${mm}-${dd}`;
+                    return (
+                      <button
+                        key={months}
+                        type="button"
+                        onClick={() => setForm({ ...form, valid_until: dateStr })}
+                        className="px-2 py-1 text-xs rounded bg-gray-100 hover:bg-primary hover:text-white text-gray-700 transition-colors"
+                      >
+                        {months === 1 && t('admin.coupons.validUntilPreset1Month')}
+                        {months === 3 && t('admin.coupons.validUntilPreset3Months')}
+                        {months === 6 && t('admin.coupons.validUntilPreset6Months')}
+                        {months === 12 && t('admin.coupons.validUntilPreset1Year')}
+                      </button>
+                    );
+                  })}
+                </div>
                 <input
-                  type="datetime-local"
+                  type="date"
                   required
                   value={form.valid_until}
                   onChange={(e) => setForm({ ...form, valid_until: e.target.value })}

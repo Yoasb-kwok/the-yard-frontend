@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { formatDate, isExpiringSoon } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import { DEMO_PROFILE_IDS, getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
+import { getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
 import { getLocationInfo } from '../../lib/locationInfo';
 import { Calendar, Coins, AlertCircle, Home, ShoppingBag, Bell, BookOpen, TrendingDown, User, ChevronRight, Plus, MapPin } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
@@ -145,25 +145,13 @@ export default function DashboardPage() {
 
   async function loadData() {
     setLoading(true);
-    const isDemoAccount = profiles?.some((p) => p.id && DEMO_PROFILE_IDS.includes(p.id));
-    const hasMultipleProfiles = profiles && profiles.length > 1;
-    if (isDemoAccount) {
-      setTokens(FALLBACK_TOKENS);
-      if (hasMultipleProfiles && profiles) {
-        setUpcomingClasses(profiles.flatMap((p) => getFallbackUpcomingClasses(p.id, p.full_name ?? undefined)));
-      } else {
-        setUpcomingClasses(getFallbackUpcomingClasses(profile?.id, profile?.full_name ?? undefined));
-      }
-      setLoading(false);
-      return;
-    }
     try {
       const [tokensRes, classesRes] = await Promise.all([
-        api.get<UserToken[]>('student/tokens?demo=1').catch(() => ({ success: true, data: FALLBACK_TOKENS })),
-        api.get<UpcomingClass[]>('student/upcoming-classes?demo=1').catch(() => ({ success: true, data: FALLBACK_UPCOMING_CLASSES })),
+        api.get<{ data?: UserToken[] }>('/student/tokens'),
+        api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes'),
       ]);
-      const tokensData = (tokensRes as any).data ?? tokensRes;
-      const classesData = (classesRes as any).data ?? classesRes;
+      const tokensData = (tokensRes as any).data;
+      const classesData = (classesRes as any).data;
       setTokens(Array.isArray(tokensData) ? tokensData : FALLBACK_TOKENS);
       setUpcomingClasses(Array.isArray(classesData) ? classesData : FALLBACK_UPCOMING_CLASSES);
     } catch {
@@ -323,7 +311,7 @@ export default function DashboardPage() {
               {recentUpcoming.map((e) => {
                 const start = new Date(e.class.start_time);
                 const dateStr = start.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', weekday: 'short' });
-                const timeStr = start.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+                const timeStr = start.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false });
                 return (
                   <li key={e.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                     <div>

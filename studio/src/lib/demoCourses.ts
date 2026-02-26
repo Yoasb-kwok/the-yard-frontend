@@ -28,7 +28,7 @@ export const DEMO_PROGRAMS: DemoProgram[] = [
   { name: '兒童芭蕾', program_code: 'KB-A', instructor: '李老師', location: 'sanpokong', weekday: 1, hour: 16, min: 0, total_lessons: 8, level: 'entry', age_tag: '5-8' },
   { name: '青少年街舞', program_code: 'THH', instructor: '陳老師', location: 'causewaybay', weekday: 3, hour: 17, min: 0, total_lessons: 16, level: 'intermediate', age_tag: '9-12' },
   { name: '幼兒律動', program_code: 'KIDS', instructor: '王老師', location: 'sanpokong', weekday: 6, hour: 10, min: 0, total_lessons: 4, level: 'entry', age_tag: '5-8' },
-  { name: '爵士舞', program_code: 'JAZZ', instructor: '張老師', location: 'fotan', weekday: 5, hour: 18, min: 0, total_lessons: 8, level: 'entry', age_tag: '9-12' },
+  { name: '爵士舞', program_code: 'JAZZ', instructor: '張老師', location: 'fotan', weekday: 5, hour: 19, min: 0, total_lessons: 8, level: 'entry', age_tag: '9-12' },
   { name: '兒童中國舞', program_code: 'CCD', instructor: '黃老師', location: 'sheungshui', weekday: 2, hour: 15, min: 30, total_lessons: 8, level: 'entry', age_tag: '5-8' },
   { name: 'K-Pop 流行舞', program_code: 'KPOP', instructor: '林老師', location: 'causewaybay', weekday: 4, hour: 18, min: 0, total_lessons: 8, level: 'entry', age_tag: '9-12' },
 ];

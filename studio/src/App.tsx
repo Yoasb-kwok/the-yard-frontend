@@ -40,6 +40,7 @@ import ClassesPage from './pages/admin/ClassesPage';
 import ClassAttendancePage from './pages/admin/ClassAttendancePage';
 import InstructorsPage from './pages/admin/InstructorsPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import AdminAccountPage from './pages/admin/AdminAccountPage';
 import CouponsPage from './pages/admin/CouponsPage';
 import UserPurchaseHistoryPage from './pages/admin/UserPurchaseHistoryPage';
 import UserPurchaseHistoryDetailPage from './pages/admin/UserPurchaseHistoryDetailPage';
@@ -227,6 +228,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/account"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminAccountPage />
               </ProtectedRoute>
             }
           />

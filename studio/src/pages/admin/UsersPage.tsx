@@ -126,6 +126,11 @@ export default function UsersPage() {
   async function handleUpdate() {
     if (!selectedUser) return;
 
+    const first = window.confirm(t('admin.users.confirmUpdateUser'));
+    if (!first) return;
+    const second = window.confirm(t('admin.users.confirmUpdateUserAgain'));
+    if (!second) return;
+
     try {
       const response = await api.patch(`/admin/users/${selectedUser.id}`, {
         full_name: editForm.full_name,
@@ -133,11 +138,10 @@ export default function UsersPage() {
         role: editForm.role,
       });
 
-      if (response.success && response.data) {
-        // Update local state with API response
+      if (response.success) {
         setUsers(users.map(u => 
           u.id === selectedUser.id 
-            ? response.data
+            ? { ...u, full_name: editForm.full_name, mobile: editForm.mobile || null, role: editForm.role }
             : u
         ));
         alert(t('admin.users.userUpdated'));

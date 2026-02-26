@@ -17,7 +17,7 @@ export default function AdminClassHealthPage() {
 
   useEffect(() => {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<ClassHealthData>(`admin/class-health?demo=1${monthParam}`)
+    api.get<ClassHealthData>(`/admin/class-health?demo=1${monthParam}`)
       .then((res: any) => {
         if (res?.success && res?.data) setData(res.data);
         else setData(FALLBACK_CLASS_HEALTH);

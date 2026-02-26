@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
-import { DEMO_PROFILE_IDS, getFallbackUpcomingClasses } from '../lib/studentEnrollments';
 
 interface SidebarClass {
   id: string;
@@ -34,24 +33,16 @@ export default function StudentSidebarSchedule() {
       setLoading(false);
       return;
     }
-    const isDemo = DEMO_PROFILE_IDS.includes(profile.id);
-    if (isDemo) {
-      const enrollments = getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined);
-      setClasses(toSidebarClasses(enrollments));
-      setLoading(false);
-      return;
-    }
     api
-      .get<unknown>('student/upcoming-classes?demo=1')
+      .get<{ data?: unknown[] }>('/student/upcoming-classes')
       .then((res: any) => {
-        const data = res?.data ?? res;
+        const data = res?.data;
         const list = Array.isArray(data) ? data : [];
-        const forProfile = list
-          .filter((e: { user_id?: string }) => (e.user_id || '').trim() === (profile.id || '').trim())
-          .sort((a: { class: { start_time: string } }, b: { class: { start_time: string } }) =>
+        const sorted = [...list].sort(
+          (a: { class: { start_time: string } }, b: { class: { start_time: string } }) =>
             new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
-          );
-        setClasses(toSidebarClasses(forProfile));
+        );
+        setClasses(toSidebarClasses(sorted));
       })
       .catch(() => setClasses([]))
       .finally(() => setLoading(false));
@@ -78,7 +69,7 @@ export default function StudentSidebarSchedule() {
               >
                 <span className="font-medium block truncate">{c.name}</span>
                 <span className="text-xs text-gray-500">
-                  {new Date(c.start_time).toLocaleDateString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(c.start_time).toLocaleDateString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
                 </span>
               </Link>
             </li>

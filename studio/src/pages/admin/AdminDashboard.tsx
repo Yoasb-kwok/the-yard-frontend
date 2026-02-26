@@ -44,6 +44,7 @@ export default function AdminDashboard() {
   const pendingCounts = useAdminPendingCounts(!!isAdmin);
   const [stats, setStats] = useState<Stats>(FALLBACK_STATS);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>(FALLBACK_UPCOMING);
+  const [todayClassCount, setTodayClassCount] = useState<number | null>(null);
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
@@ -57,23 +58,27 @@ export default function AdminDashboard() {
   const todayEnd = new Date(todayStart);
   todayEnd.setDate(todayEnd.getDate() + 1);
   const todayClasses = upcomingClasses.filter((c) => {
-    const t = new Date(c.start_time).getTime();
-    return t >= todayStart.getTime() && t < todayEnd.getTime();
+    const start = new Date(c.start_time).getTime();
+    return start >= todayStart.getTime() && start < todayEnd.getTime();
   });
+  const displayTodayCount = typeof todayClassCount === 'number' ? todayClassCount : todayClasses.length;
 
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get<{ totalRevenue: number; totalUsers: number; expiringStudents: number; lowTokenStudents: number; upcomingClasses: UpcomingClass[] }>('admin/dashboard-stats?demo=1').catch(() => ({ success: true, data: null }));
-        if (res?.data) {
+        const res = await api.get<{ totalRevenue: number; totalUsers: number; expiringStudents: number; lowTokenStudents: number; upcomingClasses: UpcomingClass[]; todayClassCount?: number }>('/admin/dashboard-stats').catch(() => ({ success: true, data: null }));
+        if (res?.success && res?.data) {
+          const d = res.data;
           setStats({
-            totalRevenue: res.data.totalRevenue ?? FALLBACK_STATS.totalRevenue,
-            totalUsers: res.data.totalUsers ?? FALLBACK_STATS.totalUsers,
-            expiringStudents: res.data.expiringStudents ?? FALLBACK_STATS.expiringStudents,
-            lowTokenStudents: res.data.lowTokenStudents ?? FALLBACK_STATS.lowTokenStudents,
+            totalRevenue: d.totalRevenue ?? FALLBACK_STATS.totalRevenue,
+            totalUsers: d.totalUsers ?? FALLBACK_STATS.totalUsers,
+            expiringStudents: d.expiringStudents ?? FALLBACK_STATS.expiringStudents,
+            lowTokenStudents: d.lowTokenStudents ?? FALLBACK_STATS.lowTokenStudents,
           });
-          setUpcomingClasses(res.data.upcomingClasses ?? FALLBACK_UPCOMING);
+          const classes = Array.isArray(d.upcomingClasses) ? d.upcomingClasses : FALLBACK_UPCOMING;
+          setUpcomingClasses(classes);
+          setTodayClassCount(typeof d.todayClassCount === 'number' ? d.todayClassCount : null);
         }
       } catch {
         setStats(FALLBACK_STATS);
@@ -153,7 +158,7 @@ export default function AdminDashboard() {
                 <Calendar className="h-8 w-8 text-green-600" />
                 <div>
                   <p className="text-sm font-medium text-green-900">{t('admin.dashboard.todayTodoClasses', '今日課堂')}</p>
-                  <p className="text-2xl font-bold text-green-800">{todayClasses.length}</p>
+                  <p className="text-2xl font-bold text-green-800">{displayTodayCount}</p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-green-600" />

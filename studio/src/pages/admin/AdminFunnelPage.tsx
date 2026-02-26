@@ -17,7 +17,7 @@ export default function AdminFunnelPage() {
 
   useEffect(() => {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<ConversionFunnelData>(`admin/conversion-funnel?demo=1${monthParam}`)
+    api.get<ConversionFunnelData>(`/admin/conversion-funnel?demo=1${monthParam}`)
       .then((res: any) => {
         if (res?.success && res?.data) setFunnel(res.data);
         else setFunnel(FALLBACK_FUNNEL);

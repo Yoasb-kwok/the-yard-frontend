@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { formatDateTime, getLessonDates, getLessonDatesSkipHolidays } from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
 import { api } from '../../lib/api';
-import { DEMO_PROFILE_IDS, getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
+import { getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
 import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
 import { getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
@@ -60,7 +60,7 @@ function LessonLeaveModal({ isOpen, onClose, enrollment, lessonIndex, lessonDate
           <div>
             <h3 id="lesson-leave-title" className="text-xl font-semibold text-gray-900">{t('schedule.leaveForLesson')}</h3>
             <p className="text-sm text-gray-500 mt-1">{enrollment.class.name} · {t('schedule.lessonN', { n: lessonIndex + 1 })}</p>
-            <p className="text-sm text-gray-600 mt-0.5">{lessonDate.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' })} {lessonDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</p>
+            <p className="text-sm text-gray-600 mt-0.5">{lessonDate.toLocaleDateString(locale, { weekday: 'long', month: 'short', day: 'numeric' })} {lessonDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
           </div>
           <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button>
         </div>
@@ -187,15 +187,9 @@ export default function SchedulePage() {
   async function loadEnrolledClasses() {
     setLoading(true);
     setError(null);
-    const isDemoProfile = profile?.id && DEMO_PROFILE_IDS.includes(profile.id);
-    if (isDemoProfile) {
-      setEnrollments(getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined));
-      setLoading(false);
-      return;
-    }
     try {
-      const response = await api.get<EnrolledClass[]>('student/upcoming-classes?demo=1').catch(() => ({ success: true, data: FALLBACK_UPCOMING_CLASSES }));
-      const data = (response as any).data ?? response;
+      const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes');
+      const data = (response as any).data;
       setEnrollments(Array.isArray(data) ? data : FALLBACK_UPCOMING_CLASSES);
     } catch (err) {
       console.error('Error loading enrolled classes:', err);
@@ -207,11 +201,10 @@ export default function SchedulePage() {
   }
 
   const myEnrollments = useMemo(() => {
-    if (!profile?.id) return [];
-    return enrollments
-      .filter((e) => (e.user_id || '').trim() === (profile.id || '').trim())
-      .sort((a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime());
-  }, [enrollments, profile?.id]);
+    return [...enrollments].sort(
+      (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
+    );
+  }, [enrollments]);
 
   /** All lesson dates (4/8/16 per course); skip holidays so 課堂撞 holiday 自動順延 */
   const lessonDatesByEnrollment = useMemo(() => {
@@ -529,7 +522,7 @@ export default function SchedulePage() {
                               </span>
                             )}
                           </div>
-                          <span className="text-gray-700 block mt-0.5">{d.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', weekday: 'short' })} {d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="text-gray-700 block mt-0.5">{d.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', weekday: 'short' })} {d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
                           {canRequestLeave && (
                             <button
                               type="button"

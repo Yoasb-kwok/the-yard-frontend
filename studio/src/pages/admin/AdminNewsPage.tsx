@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
+import { api } from '../../lib/api';
 import {
   getStoredNewsPosts,
   saveStoredNewsPosts,
@@ -12,6 +13,18 @@ import {
 } from '../../lib/newsStorage';
 import { Plus, Edit, Trash2, Newspaper, Image as ImageIcon } from 'lucide-react';
 import { useModalA11y } from '../../lib/useModalA11y';
+
+/** Normalize API or stored post to list item shape (published_at may be ISO or date-only) */
+function toPostItem(p: { id: string; title: string; content: string; image_url: string | null; published_at: string; created_at?: string }): StoredNewsPost {
+  return {
+    id: String(p.id),
+    title: p.title || '',
+    content: p.content || '',
+    image_url: p.image_url || null,
+    published_at: p.published_at || new Date().toISOString(),
+    created_at: p.created_at || p.published_at || new Date().toISOString(),
+  };
+}
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,7 +56,18 @@ export default function AdminNewsPage() {
     loadPosts();
   }, []);
 
-  function loadPosts() {
+  async function loadPosts() {
+    setLoading(true);
+    try {
+      const res = await api.get<StoredNewsPost[]>('/admin/news');
+      if (res.success && Array.isArray(res.data) && res.data.length >= 0) {
+        setPosts(res.data.map(toPostItem));
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // API unavailable: use localStorage demo
+    }
     setPosts(getStoredNewsPosts());
     setLoading(false);
   }
@@ -99,35 +123,52 @@ export default function AdminNewsPage() {
     e.preventDefault();
     if (!form.title.trim()) return;
     setSaving(true);
+    const published_at = form.published_at ? `${form.published_at}T12:00:00.000Z` : new Date().toISOString();
+    const body = { title: form.title.trim(), content: form.content.trim(), image_url: form.image_url, published_at };
     try {
-      const published_at = form.published_at ? `${form.published_at}T12:00:00.000Z` : new Date().toISOString();
+      try {
+        if (editingPost) {
+          const res = await api.patch(`/admin/news/${editingPost.id}`, body);
+          if (res.success) {
+            await loadPosts();
+            closeModal();
+            return;
+          }
+        } else {
+          const res = await api.post('/admin/news', body);
+          if (res.success) {
+            await loadPosts();
+            closeModal();
+            return;
+          }
+        }
+      } catch {
+        // Fallback to localStorage when API fails
+      }
       if (editingPost) {
-        updateStoredNewsPost(editingPost.id, {
-          title: form.title.trim(),
-          content: form.content.trim(),
-          image_url: form.image_url,
-          published_at,
-        });
+        updateStoredNewsPost(editingPost.id, { title: body.title, content: body.content, image_url: body.image_url, published_at });
       } else {
-        const created = createStoredNewsPost({
-          title: form.title.trim(),
-          content: form.content.trim(),
-          image_url: form.image_url,
-          published_at,
-        });
+        const created = createStoredNewsPost(body);
         const next = [...getStoredNewsPosts()];
         next.unshift(created);
         saveStoredNewsPosts(next);
       }
-      loadPosts();
+      await loadPosts();
       closeModal();
     } finally {
       setSaving(false);
     }
   }
 
-  function handleDelete(post: StoredNewsPost) {
+  async function handleDelete(post: StoredNewsPost) {
     if (!window.confirm(t('admin.news.confirmDelete', '確定刪除此則消息？'))) return;
+    try {
+      await api.delete(`/admin/news/${post.id}`);
+      await loadPosts();
+      return;
+    } catch {
+      // Fallback to localStorage
+    }
     deleteStoredNewsPost(post.id);
     loadPosts();
   }
@@ -153,7 +194,7 @@ export default function AdminNewsPage() {
         </div>
 
         <p className="text-gray-600 mb-6">
-          {t('admin.news.hint', '此處新增或編輯的消息會顯示於前台「最新消息」頁。目前為 Demo，資料儲存於瀏覽器本地。')}
+          {t('admin.news.hint', '此處新增或編輯的消息會顯示於前台「最新消息」頁。後端連線時會同步至資料庫，離線時儲存於瀏覽器本地。')}
         </p>
 
         {loading ? (

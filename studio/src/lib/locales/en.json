@@ -18,6 +18,7 @@
     "instructors": "Instructors",
     "reports": "Reports",
     "settings": "Settings",
+    "account": "Account",
     "coupons": "Coupons",
     "holidays": "Holidays",
     "purchaseHistory": "Purchase History",
@@ -335,7 +336,11 @@
   "register": {
     "title": "Create your account",
     "subtitle": "Sign up to get started",
-    "fullName": "Full Name",
+    "accountType": "Account type",
+    "oneChild": "One child only",
+    "multipleChildren": "Multiple children (same family)",
+    "multipleChildrenHint": "You can add more children after sign-in in Profile.",
+    "fullName": "Child's full name",
     "idLastFour": "Last 4 characters of ID Card",
     "mobile": "Mobile Number",
     "email": "Email address",
@@ -542,7 +547,31 @@
     "mainAccountUpdated": "Main account updated.",
     "memberAdded": "Family member added.",
     "memberUpdated": "Family member updated.",
-    "memberDeleted": "Family member removed."
+    "memberDeleted": "Family member removed.",
+    "addMoreChildrenHint": "To add another child to this family, use the \"Add family member\" button below.",
+    "accountSecurity": "Account & security",
+    "boundEmail": "Login email",
+    "boundMobile": "Bound mobile",
+    "updateEmail": "Update email",
+    "updateMobile": "Update mobile",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmNewPassword": "Confirm new password",
+    "passwordUpdated": "Password updated successfully.",
+    "accountUpdated": "Account updated successfully.",
+    "emailInUse": "This email is already in use.",
+    "wrongCurrentPassword": "Current password is incorrect.",
+    "accountSecurityHint": "To change password, email or mobile, use the \"Account & security\" section below.",
+    "verification": {
+      "sendCode": "Send verification code",
+      "emailSentTo": "We sent a 6-digit code to {{email}}. Enter it below.",
+      "mobileSent": "We sent a 6-digit code to your phone. Enter it below.",
+      "enterOtp": "Verification code",
+      "invalidOtp": "Invalid or expired code.",
+      "verifying": "Verifying...",
+      "confirm": "Confirm",
+      "devOtpHint": "For testing (no email/SMS sent)"
+    }
   },
   "admin": {
     "dashboard": {
@@ -707,6 +736,8 @@
       "passwordReset": "Send password reset",
       "passwordResetSent": "Password reset email sent (mock)",
       "userUpdated": "User updated successfully",
+      "confirmUpdateUser": "Are you sure you want to save changes to this user?",
+      "confirmUpdateUserAgain": "Please confirm again. User data will be updated immediately.",
       "student": "Student",
       "admin": "Admin",
       "editTokenExpiryDate": "Edit Token Expiry Date",
@@ -767,6 +798,7 @@
       "classCreated": "Class created successfully",
       "classesCreated": "{{count}} classes created successfully",
       "classUpdated": "Class updated successfully",
+      "demoDataCannotEdit": "This is demo data and cannot be saved. Reload the page to load real classes, then edit.",
       "classesUpdated": "{{count}} classes updated successfully",
       "repeatClassDetected": "Found {{count}} related repeat class(es)",
       "editSingleClass": "Edit this class only",
@@ -922,7 +954,9 @@
       "iconKey": "Icon key",
       "iconNone": "None",
       "iconHint": "Optional style key for the card; icon badge is currently hidden on public page.",
-      "publicPageSync": "The above is synced to the public «Instructors» page; the profile image is the avatar shown there."
+      "publicPageSync": "The above is synced to the public «Instructors» page; the profile image is the avatar shown there.",
+      "showCourses": "Current teaching courses",
+      "teachingCourses": "Current teaching courses"
     },
     "trialApplications": {
       "title": "Trial applications",
@@ -1064,7 +1098,11 @@
       "quantityRequired": "Quantity is required",
       "validFromRequired": "Valid from date is required",
       "validUntilRequired": "Valid until date is required",
-      "validUntilAfterValidFrom": "Valid until date must be after valid from date"
+      "validUntilAfterValidFrom": "Valid until date must be after valid from date",
+      "validUntilPreset1Month": "1 month",
+      "validUntilPreset3Months": "3 months",
+      "validUntilPreset6Months": "6 months",
+      "validUntilPreset1Year": "1 year"
     },
     "holidays": {
       "title": "Holiday Calendar",

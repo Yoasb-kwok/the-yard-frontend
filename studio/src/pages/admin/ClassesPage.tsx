@@ -383,7 +383,29 @@ export default function ClassesPage() {
     );
   }
 
-  /** Build ISO string from date (YYYY-MM-DD) + time (HH:mm) in local timezone */
+  /** Build datetime string for API: local date + time as "YYYY-MM-DDTHH:mm:ss" (no Z) so backend stores the same time. */
+  function toLocalDateTimeString(dateStr: string, timeStr: string): string {
+    if (!dateStr || !timeStr) return '';
+    const [hours, minutes] = timeStr.split(':').map((x) => parseInt(x, 10) || 0);
+    const [y, m, d] = dateStr.split('-').map((x) => parseInt(x, 10) || 0);
+    const M = String(m).padStart(2, '0');
+    const D = String(d).padStart(2, '0');
+    const H = String(hours).padStart(2, '0');
+    const Min = String(minutes).padStart(2, '0');
+    return `${y}-${M}-${D}T${H}:${Min}:00`;
+  }
+
+  /** Format a Date as local "YYYY-MM-DDTHH:mm:ss" for API (no UTC conversion). */
+  function formatDateAsLocalDateTime(d: Date): string {
+    const y = d.getFullYear();
+    const M = String(d.getMonth() + 1).padStart(2, '0');
+    const D = String(d.getDate()).padStart(2, '0');
+    const H = String(d.getHours()).padStart(2, '0');
+    const Min = String(d.getMinutes()).padStart(2, '0');
+    return `${y}-${M}-${D}T${H}:${Min}:00`;
+  }
+
+  /** Legacy: used only where ISO with Z is needed (e.g. some comparisons). Prefer toLocalDateTimeString for API payloads. */
   function toISOFromDateAndTime(dateStr: string, timeStr: string): string {
     if (!dateStr || !timeStr) return '';
     const [hours, minutes] = timeStr.split(':').map((x) => parseInt(x, 10) || 0);
@@ -471,6 +493,11 @@ export default function ClassesPage() {
 
     // If editing, update the existing class(es)
     if (editingClass) {
+      const isNumericId = (id: string | number) => /^[1-9][0-9]*$/.test(String(id));
+      if (!isNumericId(editingClass.id)) {
+        alert(t('admin.classes.demoDataCannotEdit') || '此課程為示範資料，無法儲存。請重新載入頁面取得真實課程後再編輯。');
+        return;
+      }
       try {
         if (editAllRepeats) {
           // Update all repeated classes
@@ -485,7 +512,9 @@ export default function ClassesPage() {
           const duration = newEnd.getTime() - newStart.getTime();
           
           // Update each class via API
-          const updatePromises = allClassesToUpdate.map(async (c) => {
+          const updatePromises = allClassesToUpdate
+            .filter((c) => isNumericId(c.id))
+            .map(async (c) => {
             // Calculate new times for this class
             const classStart = new Date(c.start_time);
             const newClassStart = new Date(classStart.getTime() + timeDiff);
@@ -496,8 +525,8 @@ export default function ClassesPage() {
               program_code: form.class_code,
               instructor: form.instructor,
               substitute_instructor: form.substitute_instructor || null,
-              start_time: newClassStart.toISOString(),
-              end_time: newClassEnd.toISOString(),
+              start_time: formatDateAsLocalDateTime(newClassStart),
+              end_time: formatDateAsLocalDateTime(newClassEnd),
               capacity: form.capacity,
               is_internal: form.is_internal ? 1 : 0,
               location: form.location,
@@ -514,9 +543,9 @@ export default function ClassesPage() {
           await loadClasses();
           alert(t('admin.classes.classesUpdated', { count: allClassesToUpdate.length }));
         } else {
-          // Update single class via API
-          const startISO = toISOFromDateAndTime(form.date, form.start_time);
-          const endISO = toISOFromDateAndTime(form.date, form.end_time);
+          // Update single class via API (send local time so backend stores 11:00 as 11:00, not UTC)
+          const startISO = toLocalDateTimeString(form.date, form.start_time);
+          const endISO = toLocalDateTimeString(form.date, form.end_time);
           const updateData = {
             name: form.name,
             program_code: form.class_code,
