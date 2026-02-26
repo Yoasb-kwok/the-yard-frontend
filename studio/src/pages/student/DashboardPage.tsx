@@ -92,7 +92,7 @@ export default function DashboardPage() {
       map[p.id] = { count: 0, name: p.full_name ?? t('dashboard.child') };
     });
     upcomingClasses.forEach((e) => {
-      const id = (e.user_id || '').trim() || (profile?.id ?? '');
+      const id = (e.profile_id || e.user_id || '').trim() || (profile?.id ?? '');
       if (!id && profile) {
         map[profile.id] = map[profile.id] ?? { count: 0, name: profile.full_name ?? t('dashboard.child') };
         map[profile.id].count += 1;

@@ -34,7 +34,7 @@ export default function StudentSidebarSchedule() {
       return;
     }
     api
-      .get<{ data?: unknown[] }>('/student/upcoming-classes')
+      .get<{ data?: unknown[] }>('/student/upcoming-classes', profile?.id ? { profileId: profile.id } : undefined)
       .then((res: any) => {
         const data = res?.data;
         const list = Array.isArray(data) ? data : [];

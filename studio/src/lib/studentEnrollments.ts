@@ -13,6 +13,7 @@ export interface EnrolledClass {
   id: string;
   status: string;
   user_id?: string;
+  profile_id?: string;
   user_name?: string;
   class: {
     name: string;

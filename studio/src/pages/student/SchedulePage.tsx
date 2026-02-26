@@ -188,7 +188,8 @@ export default function SchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes');
+      const params = profile?.id ? { profileId: profile.id } : undefined;
+      const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes', params);
       const data = (response as any).data;
       setEnrollments(Array.isArray(data) ? data : FALLBACK_UPCOMING_CLASSES);
     } catch (err) {
