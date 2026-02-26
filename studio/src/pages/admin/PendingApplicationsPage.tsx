@@ -1,27 +1,80 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { ClipboardList, Eye, X, FileText, Check, Ban, Filter } from 'lucide-react';
+import { api } from '../../lib/api';
+import { ClipboardList, Eye, X, FileText, Check, Ban, Filter, RefreshCw } from 'lucide-react';
 
 type Application = {
   id: string;
+  rawType?: 'extension' | 'sick_leave';
+  rawId?: number;
   studentName: string;
   className: string;
   type: 'reschedule' | 'sickLeave';
+  leaveType?: 'personal' | 'sick';
   reason: string;
   documentUrl?: string | null;
 };
 
-const EXAMPLE_APPLICATIONS: Application[] = [
-  { id: '1', studentName: '陳小明', className: '兒童芭蕾 A', type: 'reschedule', reason: '時間未能配合' },
-  { id: '2', studentName: '李小花', className: 'Teen Hip Hop', type: 'sickLeave', reason: '發燒', documentUrl: null },
-  { id: '3', studentName: '王大明', className: '兒童芭蕾 A', type: 'sickLeave', reason: '感冒', documentUrl: null },
-];
+/** Normalise API response: flat array or nested { sick_leave_requests, extension_requests } */
+function normaliseApplications(data: unknown): Application[] {
+  if (Array.isArray(data)) {
+    return data.map((a: Record<string, unknown>) => ({
+      id: String(a.id ?? ''),
+      rawType: (a.rawType ?? a.raw_type) as 'extension' | 'sick_leave',
+      rawId: typeof a.rawId === 'number' ? a.rawId : (typeof a.raw_id === 'number' ? a.raw_id : undefined),
+      studentName: String(a.studentName ?? a.student_name ?? ''),
+      className: String(a.className ?? a.class_name ?? ''),
+      type: (a.type === 'reschedule' ? 'reschedule' : 'sickLeave') as 'reschedule' | 'sickLeave',
+      leaveType: (a.leaveType === 'personal' || a.leave_type === 'personal' ? 'personal' : 'sick') as 'personal' | 'sick',
+      reason: String(a.reason ?? ''),
+      documentUrl: (a.documentUrl ?? a.document_url ?? null) as string | null,
+    }));
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const out: Application[] = [];
+    const sick = (data as Record<string, unknown>).sick_leave_requests;
+    if (Array.isArray(sick)) {
+      sick.forEach((r: Record<string, unknown>) => {
+        out.push({
+          id: `sick_leave_${r.id}`,
+          rawType: 'sick_leave',
+          rawId: typeof r.id === 'number' ? r.id : undefined,
+          studentName: String(r.student_name ?? r.studentName ?? ''),
+          className: String(r.class_name ?? r.className ?? ''),
+          type: 'sickLeave',
+          leaveType: (r.leave_type === 'personal' || r.leaveType === 'personal' ? 'personal' : 'sick') as 'personal' | 'sick',
+          reason: String(r.reason ?? ''),
+          documentUrl: (r.document_url ?? r.documentUrl ?? null) as string | null,
+        });
+      });
+    }
+    const ext = (data as Record<string, unknown>).extension_requests;
+    if (Array.isArray(ext)) {
+      ext.forEach((r: Record<string, unknown>) => {
+        out.push({
+          id: `extension_${r.id}`,
+          rawType: 'extension',
+          rawId: typeof r.id === 'number' ? r.id : undefined,
+          studentName: String(r.student_name ?? r.studentName ?? ''),
+          className: String(r.class_name ?? r.className ?? ''),
+          type: 'reschedule',
+          reason: String(r.reason ?? ''),
+          documentUrl: null,
+        });
+      });
+    }
+    return out;
+  }
+  return [];
+}
 
 export default function PendingApplicationsPage() {
   const { t } = useTranslation();
-  const [applications, setApplications] = useState<Application[]>(() => [...EXAMPLE_APPLICATIONS]);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -34,6 +87,33 @@ export default function PendingApplicationsPage() {
   const [bulkRejectModal, setBulkRejectModal] = useState(false);
   const [bulkRejectReason, setBulkRejectReason] = useState('');
   const [bulkRejectError, setBulkRejectError] = useState('');
+
+  const loadApplications = useCallback(() => {
+    setApiError(null);
+    setLoading(true);
+    api
+      .get<{ data?: unknown }>('/admin/pending-applications')
+      .then((res) => {
+        const data = res.data;
+        setApplications(normaliseApplications(Array.isArray(data) ? data : data));
+      })
+      .catch((err) => {
+        setApiError(err instanceof Error ? err.message : 'Failed to load');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
+
+  useEffect(() => {
+    const onFocus = () => loadApplications();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [loadApplications]);
 
   const courseOptions = Array.from(new Set(applications.map((a) => a.className)));
   const filteredApplications = applications.filter((a) => {
@@ -67,16 +147,28 @@ export default function PendingApplicationsPage() {
       });
     }
   }
+  async function patchApplication(app: Application, status: 'approved' | 'rejected', rejectionReason?: string) {
+    if (app.rawType === 'extension' && app.rawId != null) {
+      await api.patch(`/admin/extension-requests/${app.rawId}`, { status, rejection_reason: rejectionReason ?? undefined });
+    } else if (app.rawType === 'sick_leave' && app.rawId != null) {
+      await api.patch(`/admin/sick-leave-requests/${app.rawId}`, { status, rejection_reason: rejectionReason ?? undefined });
+    }
+  }
   function handleBulkApprove() {
-    const ids = filteredApplications.filter((a) => selectedIds.has(a.id)).map((a) => a.id);
-    setApplications((prev) => prev.filter((a) => !ids.includes(a.id)));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => next.delete(id));
-      return next;
-    });
-    setSuccessMessage(t('admin.dashboard.bulkApproved', { count: ids.length }, `已批准 ${ids.length} 件申請`));
-    setTimeout(() => setSuccessMessage(null), 4000);
+    const toApprove = filteredApplications.filter((a) => selectedIds.has(a.id));
+    Promise.all(toApprove.map((a) => patchApplication(a, 'approved')))
+      .then(() => {
+        const ids = toApprove.map((a) => a.id);
+        setApplications((prev) => prev.filter((a) => !ids.includes(a.id)));
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        });
+        setSuccessMessage(t('admin.dashboard.bulkApproved', { count: ids.length }, `已批准 ${ids.length} 件申請`));
+        setTimeout(() => setSuccessMessage(null), 4000);
+      })
+      .catch((err) => setApiError(err instanceof Error ? err.message : 'Request failed'));
   }
   function handleBulkRejectSubmit() {
     const reason = bulkRejectReason.trim();
@@ -84,18 +176,23 @@ export default function PendingApplicationsPage() {
       setBulkRejectError(t('admin.dashboard.rejectReasonRequired'));
       return;
     }
-    const ids = filteredApplications.filter((a) => selectedIds.has(a.id)).map((a) => a.id);
-    setApplications((prev) => prev.filter((a) => !ids.includes(a.id)));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      ids.forEach((id) => next.delete(id));
-      return next;
-    });
-    setBulkRejectModal(false);
-    setBulkRejectReason('');
-    setBulkRejectError('');
-    setSuccessMessage(t('admin.dashboard.bulkRejected', { count: ids.length }, `已拒絕 ${ids.length} 件申請`));
-    setTimeout(() => setSuccessMessage(null), 4000);
+    const toReject = filteredApplications.filter((a) => selectedIds.has(a.id));
+    Promise.all(toReject.map((a) => patchApplication(a, 'rejected', reason)))
+      .then(() => {
+        const ids = toReject.map((a) => a.id);
+        setApplications((prev) => prev.filter((a) => !ids.includes(a.id)));
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.delete(id));
+          return next;
+        });
+        setBulkRejectModal(false);
+        setBulkRejectReason('');
+        setBulkRejectError('');
+        setSuccessMessage(t('admin.dashboard.bulkRejected', { count: ids.length }, `已拒絕 ${ids.length} 件申請`));
+        setTimeout(() => setSuccessMessage(null), 4000);
+      })
+      .catch((err) => setApiError(err instanceof Error ? err.message : 'Request failed'));
   }
 
   const viewing = applications.find((a) => a.id === viewingId);
@@ -109,12 +206,18 @@ export default function PendingApplicationsPage() {
   }
 
   function handleApprove(id: string, studentName: string, withRefund: boolean) {
-    setApplications((prev) => prev.filter((a) => a.id !== id));
-    closeModal();
-    if (withRefund) {
-      setSuccessMessage(t('admin.dashboard.applicationApprovedWithRefund', { name: studentName }));
-      setTimeout(() => setSuccessMessage(null), 5000);
-    }
+    const app = applications.find((a) => a.id === id);
+    if (!app) return;
+    patchApplication(app, 'approved')
+      .then(() => {
+        setApplications((prev) => prev.filter((a) => a.id !== id));
+        closeModal();
+        if (withRefund) {
+          setSuccessMessage(t('admin.dashboard.applicationApprovedWithRefund', { name: studentName }));
+          setTimeout(() => setSuccessMessage(null), 5000);
+        }
+      })
+      .catch((err) => setApiError(err instanceof Error ? err.message : 'Request failed'));
   }
 
   function handleReject(id: string) {
@@ -123,8 +226,14 @@ export default function PendingApplicationsPage() {
       setRejectReasonError(t('admin.dashboard.rejectReasonRequired'));
       return;
     }
-    setApplications((prev) => prev.filter((a) => a.id !== id));
-    closeModal();
+    const app = applications.find((a) => a.id === id);
+    if (!app) return;
+    patchApplication(app, 'rejected', reason)
+      .then(() => {
+        setApplications((prev) => prev.filter((a) => a.id !== id));
+        closeModal();
+      })
+      .catch((err) => setApiError(err instanceof Error ? err.message : 'Request failed'));
   }
 
   return (
@@ -133,10 +242,30 @@ export default function PendingApplicationsPage() {
         <div className="flex items-center gap-3">
           <ClipboardList className="h-7 w-7 text-primary" />
           <h1 className="text-2xl font-bold text-gray-900">{t('admin.dashboard.pendingApplications')}</h1>
+          <button
+            type="button"
+            onClick={() => loadApplications()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+            title={t('common.retry', '重新載入')}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {t('common.retry', '重新載入')}
+          </button>
         </div>
 
         <p className="text-sm text-gray-600">{t('admin.dashboard.pendingApplicationsHint')}</p>
 
+        {apiError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+            {apiError}
+          </div>
+        )}
+
+        {loading ? (
+          <p className="text-gray-500">{t('common.loading', '載入中...')}</p>
+        ) : (
+        <>
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-gray-500" />
@@ -222,10 +351,10 @@ export default function PendingApplicationsPage() {
                   <span className="text-gray-700">{app.className}</span>
                   <span className="text-gray-500 mx-1">·</span>
                   <span className={app.type === 'sickLeave' ? 'text-amber-700 font-medium' : 'text-primary font-medium'}>
-                    {app.type === 'sickLeave' ? t('admin.dashboard.applicationTypeSickLeave') : t('admin.dashboard.applicationTypeReschedule')}
+                    {app.type === 'reschedule' ? t('admin.dashboard.applicationTypeReschedule') : app.leaveType === 'personal' ? t('admin.dashboard.applicationTypePersonalLeave') : t('admin.dashboard.applicationTypeSickLeave')}
                   </span>
-                  {app.type === 'sickLeave' && (
-                    <span className="text-sm text-green-600 ml-1">✓ {t('admin.dashboard.sickLeaveDocUploaded')}</span>
+                  {app.type === 'sickLeave' && app.leaveType === 'sick' && (
+                    <span className="text-sm text-green-600 ml-1">✓ {app.documentUrl ? t('admin.dashboard.sickLeaveDocUploaded') : t('admin.dashboard.noDocUploaded')}</span>
                   )}
                 </div>
                 </div>
@@ -290,43 +419,33 @@ export default function PendingApplicationsPage() {
                 <span className="text-gray-700">{viewing.className}</span>
               </p>
               <p className="text-sm text-gray-500 mb-2">
-                {viewing.type === 'sickLeave' ? t('admin.dashboard.applicationTypeSickLeave') : t('admin.dashboard.applicationTypeReschedule')}
+                {viewing.type === 'reschedule' ? t('admin.dashboard.applicationTypeReschedule') : viewing.leaveType === 'personal' ? t('admin.dashboard.applicationTypePersonalLeave') : t('admin.dashboard.applicationTypeSickLeave')}
               </p>
               <div className="mb-4">
                 <p className="text-xs font-medium text-gray-500 uppercase mb-1">{t('schedule.reason')}</p>
                 <p className="text-sm text-gray-900">{viewing.reason}</p>
               </div>
-              {viewing.type === 'sickLeave' && (
+              {viewing.type === 'sickLeave' && viewing.leaveType === 'sick' && (
                 <div className="mb-4">
                   <p className="text-xs font-medium text-gray-500 uppercase mb-2">{t('admin.attendance.sickLeaveDoc')}</p>
                   {viewing.documentUrl ? (
-                    <a
-                      href={viewing.documentUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 text-sm text-primary font-medium hover:underline"
-                    >
-                      <FileText className="h-4 w-4" />
-                      {t('admin.attendance.viewSickLeaveDoc')}
-                    </a>
-                  ) : viewing.id === '2' ? (
-                    <div className="border border-gray-200 rounded-lg bg-gray-50 p-4 text-sm text-gray-800 shadow-inner">
-                      <div className="text-center border-b border-gray-300 pb-2 mb-3">
-                        <p className="font-bold text-base text-gray-900">醫生證明書</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Medical Certificate</p>
-                      </div>
-                      <table className="w-full text-left">
-                        <tbody>
-                          <tr><td className="py-1 text-gray-500 w-28">病人姓名</td><td className="font-medium">李小花</td></tr>
-                          <tr><td className="py-1 text-gray-500">診斷／病況</td><td>發燒 (Fever)</td></tr>
-                          <tr><td className="py-1 text-gray-500">建議休息</td><td>2026年2月20日至2月21日</td></tr>
-                          <tr><td className="py-1 text-gray-500">簽發日期</td><td>2026年2月20日</td></tr>
-                        </tbody>
-                      </table>
-                      <div className="mt-4 pt-3 border-t border-gray-200 flex justify-end">
-                        <p className="text-gray-600 text-xs">陳大文醫生</p>
-                        <p className="text-gray-400 text-xs ml-2">XX 診所</p>
-                      </div>
+                    <div className="space-y-2">
+                      {viewing.documentUrl.startsWith('data:') ? (
+                        <img
+                          src={viewing.documentUrl}
+                          alt=""
+                          className="max-w-full max-h-64 rounded border border-gray-200 object-contain bg-gray-50"
+                        />
+                      ) : null}
+                      <a
+                        href={viewing.documentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 text-sm text-primary font-medium hover:underline"
+                      >
+                        <FileText className="h-4 w-4" />
+                        {t('admin.attendance.viewSickLeaveDoc')}
+                      </a>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">{t('admin.dashboard.noDocUploaded')}</p>
@@ -405,6 +524,8 @@ export default function PendingApplicationsPage() {
         >
           {t('admin.dashboard.goToClasses')} →
         </Link>
+        </>
+        )}
       </div>
     </Layout>
   );

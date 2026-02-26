@@ -26,6 +26,8 @@ export interface EnrolledClass {
   };
   attended_lessons?: number;
   total_lessons?: number;
+  /** Per-lesson leave from API (approved/pending/rejected) */
+  leave_requests?: { lesson_index: number; leave_type: 'personal' | 'sick'; status: string }[];
   extension_application?: { status: string; rejection_reason?: string };
   sick_leave_application?: { status: string; rejection_reason?: string };
 }

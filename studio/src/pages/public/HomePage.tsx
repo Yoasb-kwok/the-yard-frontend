@@ -3,14 +3,15 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import BannerSlider from '../../components/BannerSlider';
-import { Calendar, Clock, MapPin, ChevronRight, LogIn } from 'lucide-react';
+import { Calendar, Clock, MapPin, ChevronRight, LogIn, Newspaper } from 'lucide-react';
 import greenBgImage from '../../assets/images/green_bg.jpg';
 import roomRentalImage from '../../assets/images/room_rental.jpg';
 import kidsDanceCoursesImage from '../../assets/images/s5-kids-dance-courses.jpg';
 import { api } from '../../lib/api';
-import { getDateStringFromStartTime, formatProgramCodeDisplay } from '../../lib/utils';
+import { getDateStringFromStartTime, formatProgramCodeDisplay, formatDate } from '../../lib/utils';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { getFallbackNewStudentCourses } from '../../lib/demoCourses';
+import { getStoredNewsPosts } from '../../lib/newsStorage';
 
 interface TodayClass {
   id: string;
@@ -29,10 +30,19 @@ interface TodayClass {
 /** Upcoming class for booking (same shape, used for next 14 days) */
 type UpcomingClass = TodayClass;
 
+interface NewsPost {
+  id: string;
+  title: string;
+  content: string;
+  image_url: string | null;
+  published_at: string;
+}
+
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const [todayClasses, setTodayClasses] = useState<TodayClass[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
+  const [latestNews, setLatestNews] = useState<NewsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -64,6 +74,28 @@ export default function HomePage() {
   useEffect(() => {
     loadBookingCourses();
   }, []);
+
+  useEffect(() => {
+    loadLatestNews();
+  }, [t, i18n.language]);
+
+  async function loadLatestNews() {
+    try {
+      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news');
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setLatestNews(res.data.slice(0, 3).map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));
+        return;
+      }
+    } catch {
+      // API unavailable
+    }
+    const stored = getStoredNewsPosts();
+    if (stored.length > 0) {
+      setLatestNews(stored.slice(0, 3).map(({ created_at: _, ...p }) => p));
+    } else {
+      setLatestNews([]);
+    }
+  }
 
   async function loadBookingCourses() {
     setLoading(true);
@@ -250,6 +282,49 @@ export default function HomePage() {
               <span>{t('home.viewMore')}</span>
               <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
             </Link>
+          </div>
+        )}
+
+        {/* 最新消息 - Front page latest news */}
+        {latestNews.length > 0 && (
+          <div className="mt-16">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <Newspaper className="h-7 w-7 text-primary" />
+                {t('home.latestNewsTitle', '最新消息')}
+              </h2>
+              <Link
+                to="/news"
+                className="inline-flex items-center gap-2 text-primary font-semibold hover:text-primary-dark transition-colors group"
+              >
+                {t('home.viewAllNews', '更多消息')}
+                <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {latestNews.map((post) => (
+                <Link
+                  key={post.id}
+                  to={`/news/${post.id}`}
+                  className="flex flex-col bg-white rounded-xl border border-gray-200/80 shadow-md overflow-hidden hover:shadow-lg hover:border-primary/20 transition-all"
+                >
+                  {post.image_url && (
+                    <div className="aspect-video w-full bg-gray-100 shrink-0">
+                      <img src={post.image_url} alt="" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="p-4 flex flex-col flex-1">
+                    <div className="text-sm text-gray-500 mb-2">
+                      {formatDate(post.published_at, i18n.language === 'zh-TW' || i18n.language === 'zh-CN' ? 'zh-TW' : 'en-US')}
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2 hover:text-primary transition-colors line-clamp-2">
+                      {post.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm line-clamp-2 flex-1">{post.content}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
           </div>
         )}
       </div>

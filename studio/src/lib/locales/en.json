@@ -133,7 +133,9 @@
       "causewaybay": "Causeway Bay",
       "fotan": "Fo Tan",
       "sheungshui": "Sheung Shui"
-    }
+    },
+    "latestNewsTitle": "Latest News",
+    "viewAllNews": "View all"
   },
   "about": {
     "title": "About Us",
@@ -168,9 +170,34 @@
   },
   "notifications": {
     "title": "Notifications",
-    "subtitle": "Personalised notices: sick leave, next class reminder, class-wide notices.",
+    "subtitle": "Class notices, your classes, tokens, leave/reschedule updates.",
+    "subtitleStudent": "Class notices, your classes, tokens, leave/reschedule updates.",
     "latestNews": "Latest news",
-    "latestNewsDesc": "Centre announcements, offers and events."
+    "latestNewsDesc": "Centre announcements, offers and events.",
+    "latestNewsOnHome": "For centre announcements and offers, see Latest News on the home page.",
+    "forStudent": "Re: {{studentName}}",
+    "leaveApprovedTitle": "{{studentName}}'s leave approved",
+    "leaveApprovedMessage": "{{studentName}}'s {{leaveTypeLabel}} request ({{className}}) has been approved by admin.",
+    "leaveRejectedTitle": "{{studentName}}'s leave not approved",
+    "leaveRejectedMessage": "{{studentName}}'s {{leaveTypeLabel}} request ({{className}}) was not approved. Please check the reason or re-apply.",
+    "leavePendingTitle": "Leave request pending",
+    "leavePendingMessage": "Your {{leaveTypeLabel}} request for {{className}} lesson {{n}} is being processed.",
+    "extensionApprovedTitle": "{{studentName}}'s reschedule approved",
+    "extensionApprovedMessage": "{{studentName}}'s reschedule request ({{className}}) has been approved by admin.",
+    "extensionRejectedTitle": "{{studentName}}'s reschedule not approved",
+    "extensionRejectedMessage": "{{studentName}}'s reschedule request ({{className}}) was not approved.",
+    "nextLessonTitle": "Next class reminder: {{studentName}}",
+    "nextLessonMessage": "{{studentName}}'s next class: {{dateTimeStr}} {{className}}. Please arrive on time.",
+    "trialConfirmedTitle": "Trial confirmed: {{studentName}}",
+    "trialConfirmedMessage": "{{studentName}}'s trial ({{className}}) is confirmed. Please attend on time.",
+    "leaveTypePersonal": "Personal leave",
+    "leaveTypeSick": "Sick leave",
+    "typeClassAnnouncement": "Class notice",
+    "noNotifications": "No notifications",
+    "tokenExpiringTitle": "Tokens expiring soon",
+    "tokenExpiringMessage": "Some tokens will expire within {{daysLeft}} days. Please use them soon.",
+    "tokenLowTitle": "Low token balance",
+    "tokenLowMessage": "Current balance: {{remainingTokens}} token(s). Consider purchasing more to continue classes."
   },
   "tokenPackage": {
     "title": "Token Packages",
@@ -404,6 +431,7 @@
     "calendarLegend": "Calendar and table show only this child's enrolled courses; different colours for each course.",
     "loading": "Loading schedule...",
     "loadError": "Unable to load schedule. Please try again later.",
+    "documentTooLarge": "File too large. Please use a smaller image (under 2MB) or take a photo of the document.",
     "nextLesson": "Next lesson",
     "comingWithin24h": "Coming up within 24 hours",
     "openMap": "Open map",
@@ -602,6 +630,7 @@
     "applicationApprovedWithRefund": "Application approved and 1 token refunded to {{name}}.",
     "applicationTypeReschedule": "Reschedule",
     "applicationTypeSickLeave": "Sick leave",
+    "applicationTypePersonalLeave": "Personal leave",
     "trialApplications": "Trial applications",
     "trialApplicationsExample": "Example list (for demo)",
     "hasDanceExperience": "Dance experience",

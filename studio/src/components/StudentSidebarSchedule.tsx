@@ -34,10 +34,13 @@ export default function StudentSidebarSchedule() {
       return;
     }
     api
-      .get<{ data?: unknown[] }>('/student/upcoming-classes', profile?.id ? { profileId: profile.id } : undefined)
+      .get<{ data?: unknown[] }>('/student/upcoming-classes')
       .then((res: any) => {
         const data = res?.data;
-        const list = Array.isArray(data) ? data : [];
+        let list = Array.isArray(data) ? data : [];
+        if (profile?.id && list.length > 0) {
+          list = list.filter((e: { profile_id?: string; user_id?: string }) => (e.profile_id || e.user_id || '') === profile.id);
+        }
         const sorted = [...list].sort(
           (a: { class: { start_time: string } }, b: { class: { start_time: string } }) =>
             new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()

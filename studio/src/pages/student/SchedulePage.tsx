@@ -14,6 +14,73 @@ import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreV
 import { getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
 
+const MAX_DOCUMENT_BASE64_LENGTH = 200000; // ~150KB base64 — 伺服器 body 上限可能較細（如 256KB）
+const MAX_IMAGE_DIMENSION = 800;
+const JPEG_QUALITY = 0.5;
+
+/** Compress image to JPEG data URL to avoid 413 Payload Too Large. PNG/相片會壓細至符合伺服器上限。 */
+async function compressImageToDataUrl(file: File): Promise<string> {
+  const isImage = file.type.startsWith('image/');
+  if (!isImage) {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+    if (dataUrl.length > MAX_DOCUMENT_BASE64_LENGTH) {
+      throw new Error('File too large. Please upload an image (JPG/PNG under 2MB).');
+    }
+    return dataUrl;
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const w = img.naturalWidth;
+      const h = img.naturalHeight;
+      let width = w;
+      let height = h;
+      if (w > MAX_IMAGE_DIMENSION || h > MAX_IMAGE_DIMENSION) {
+        if (w >= h) {
+          width = MAX_IMAGE_DIMENSION;
+          height = Math.round((h * MAX_IMAGE_DIMENSION) / w);
+        } else {
+          height = MAX_IMAGE_DIMENSION;
+          width = Math.round((w * MAX_IMAGE_DIMENSION) / h);
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        reject(new Error('Canvas not supported'));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      let quality = JPEG_QUALITY;
+      let dataUrl = canvas.toDataURL('image/jpeg', quality);
+      while (dataUrl.length > MAX_DOCUMENT_BASE64_LENGTH && quality > 0.2) {
+        quality -= 0.08;
+        dataUrl = canvas.toDataURL('image/jpeg', quality);
+      }
+      if (dataUrl.length > MAX_DOCUMENT_BASE64_LENGTH) {
+        reject(new Error('Image too large after compression. Please use a smaller image or take a new photo.'));
+        return;
+      }
+      resolve(dataUrl);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = url;
+  });
+}
+
 const FALLBACK_UPCOMING_CLASSES: EnrolledClass[] = getFallbackUpcomingClasses();
 
 /** One color per course for calendar (same idea as admin location colors). */
@@ -179,6 +246,7 @@ export default function SchedulePage() {
   const [lessonLeaveRequests, setLessonLeaveRequests] = useState<Record<string, Record<number, LessonLeaveRequest>>>({});
   const [leaveLessonModal, setLeaveLessonModal] = useState<{ enrollment: EnrolledClass; lessonIndex: number; lessonDate: Date } | null>(null);
   const [lessonLeaveSuccess, setLessonLeaveSuccess] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (profile?.id) loadEnrolledClasses();
@@ -188,14 +256,35 @@ export default function SchedulePage() {
     setLoading(true);
     setError(null);
     try {
-      const params = profile?.id ? { profileId: profile.id } : undefined;
-      const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes', params);
+      const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes');
       const data = (response as any).data;
-      setEnrollments(Array.isArray(data) ? data : FALLBACK_UPCOMING_CLASSES);
+      let list: EnrolledClass[] = Array.isArray(data) ? data : FALLBACK_UPCOMING_CLASSES;
+      if (profile?.id && Array.isArray(data)) {
+        const filtered = data.filter((e: EnrolledClass) => (e.profile_id || e.user_id || '') === profile.id);
+        if (filtered.length > 0) list = filtered;
+        else list = getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined);
+      } else if (!Array.isArray(data) || data.length === 0) {
+        list = getFallbackUpcomingClasses(profile?.id, profile?.full_name);
+      }
+      setEnrollments(list);
+      setLessonLeaveRequests((prev) => {
+        const next = { ...prev };
+        list.forEach((enrollment: EnrolledClass) => {
+          (enrollment.leave_requests || []).forEach((r) => {
+            if (r.lesson_index == null) return;
+            if (!next[enrollment.id]) next[enrollment.id] = {};
+            next[enrollment.id][r.lesson_index] = {
+              type: r.leave_type,
+              status: r.status as 'pending' | 'approved' | 'rejected',
+            };
+          });
+        });
+        return next;
+      });
     } catch (err) {
       console.error('Error loading enrolled classes:', err);
       setError(err instanceof Error ? err.message : t('schedule.loadError'));
-      setEnrollments(FALLBACK_UPCOMING_CLASSES);
+      setEnrollments(getFallbackUpcomingClasses(profile?.id, profile?.full_name));
     } finally {
       setLoading(false);
     }
@@ -254,31 +343,60 @@ export default function SchedulePage() {
 
   const getLocale = (): string => ({ 'en': 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' }[i18n.language] || 'en-US');
 
-  const handleApplicationSubmit = (enrollmentId: string, type: 'extension' | 'sickLeave', _reason: string) => {
-    setEnrollments((prev) =>
-      prev.map((e) =>
-        e.id === enrollmentId
-          ? {
-              ...e,
-              [type === 'sickLeave' ? 'sick_leave_application' : 'extension_application']: { status: 'pending' },
-            }
-          : e
-      )
-    );
-    setApplicationModal({ isOpen: false, type: null, enrollment: null });
+  const handleApplicationSubmit = async (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string, _documentFile?: File | null) => {
+    setSubmitError(null);
+    try {
+      if (type === 'sickLeave') {
+        await api.post('/student/sick-leave-request', { enrollmentId, reason });
+      } else {
+        await api.post('/student/extension-request', { enrollmentId, reason });
+      }
+      setEnrollments((prev) =>
+        prev.map((e) =>
+          e.id === enrollmentId
+            ? {
+                ...e,
+                [type === 'sickLeave' ? 'sick_leave_application' : 'extension_application']: { status: 'pending' },
+              }
+            : e
+        )
+      );
+      setApplicationModal({ isOpen: false, type: null, enrollment: null });
+      setLessonLeaveSuccess(t('schedule.leaveSubmittedWaitAdmin'));
+      setTimeout(() => setLessonLeaveSuccess(null), 4000);
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : t('schedule.loadError'));
+    }
   };
 
-  const handleLessonLeaveSubmit = (enrollmentId: string, lessonIndex: number, type: 'personal' | 'sick', _reason: string, documentFile?: File | null) => {
-    setLessonLeaveRequests((prev) => ({
-      ...prev,
-      [enrollmentId]: {
-        ...(prev[enrollmentId] ?? {}),
-        [lessonIndex]: { type, status: 'pending', documentName: documentFile?.name },
-      },
-    }));
-    setLeaveLessonModal(null);
-    setLessonLeaveSuccess(t('schedule.leaveSubmittedWaitAdmin'));
-    setTimeout(() => setLessonLeaveSuccess(null), 4000);
+  const handleLessonLeaveSubmit = async (enrollmentId: string, lessonIndex: number, type: 'personal' | 'sick', reason: string, documentFile?: File | null) => {
+    setSubmitError(null);
+    try {
+      let document_url: string | undefined;
+      if (type === 'sick' && documentFile) {
+        document_url = await compressImageToDataUrl(documentFile);
+      }
+      await api.post('/student/sick-leave-request', {
+        enrollmentId,
+        reason,
+        lessonIndex,
+        leaveType: type,
+        ...(document_url ? { document_url } : {}),
+      });
+      setLessonLeaveRequests((prev) => ({
+        ...prev,
+        [enrollmentId]: {
+          ...(prev[enrollmentId] ?? {}),
+          [lessonIndex]: { type, status: 'pending' },
+        },
+      }));
+      setLeaveLessonModal(null);
+      setLessonLeaveSuccess(t('schedule.leaveSubmittedWaitAdmin'));
+      setTimeout(() => setLessonLeaveSuccess(null), 4000);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('schedule.loadError');
+      setSubmitError(msg.includes('too large') || msg.includes('Too large') ? t('schedule.documentTooLarge', '檔案過大，請上傳較細的圖片（例如 2MB 以下）或拍攝病假紙相片。') : msg);
+    }
   };
 
   const year = calendarMonth.getFullYear();
@@ -321,10 +439,17 @@ export default function SchedulePage() {
       const enrollment = myEnrollments[idx];
       if (!enrollment) return;
       const color = LESSON_COLORS[idx % LESSON_COLORS.length];
-      dates.forEach((lessonDate) => {
+      dates.forEach((lessonDate, lessonIndex) => {
         if (lessonDate.getFullYear() === y && lessonDate.getMonth() === m && lessonDate.getDate() === d) {
+          const approvedLeave = enrollment.leave_requests?.find(
+            (r) => r.lesson_index === lessonIndex && r.status === 'approved'
+          );
+          const leaveLabel = approvedLeave
+            ? (approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal'))
+            : '';
+          const name = leaveLabel ? `${enrollment.class.name} ${leaveLabel}` : enrollment.class.name;
           result.push({
-            name: enrollment.class.name,
+            name,
             time: lessonDate.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false }),
             color,
           });
@@ -369,6 +494,7 @@ export default function SchedulePage() {
           />
         )}
         {lessonLeaveSuccess && <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md">{lessonLeaveSuccess}</div>}
+        {submitError && <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">{submitError}</div>}
 
         {/* 下一堂：課堂提醒 */}
         {nextLesson && (
@@ -511,7 +637,10 @@ export default function SchedulePage() {
                   })()}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                     {dates.map((d, i) => {
-                      const leaveReq = lessonLeaveRequests[e.id]?.[i];
+                      const fromApi = e.leave_requests?.find((r) => r.lesson_index === i);
+                      const leaveReq = fromApi
+                        ? { type: fromApi.leave_type as 'personal' | 'sick', status: fromApi.status as 'pending' | 'approved' | 'rejected' }
+                        : lessonLeaveRequests[e.id]?.[i];
                       const canRequestLeave = !leaveReq || leaveReq.status === 'rejected';
                       return (
                         <div key={i} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">

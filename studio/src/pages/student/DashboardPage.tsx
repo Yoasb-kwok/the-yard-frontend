@@ -9,6 +9,7 @@ import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
 import { getLocationInfo } from '../../lib/locationInfo';
+import { buildNotification, buildPendingLeaveNotifications, type ApiNotification, type NotificationItem } from '../../lib/studentNotifications';
 import { Calendar, Coins, AlertCircle, Home, ShoppingBag, Bell, BookOpen, TrendingDown, User, ChevronRight, Plus, MapPin } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 
@@ -55,21 +56,7 @@ const FALLBACK_TOKEN_USAGE: TokenUsageItem[] = [
   { id: 'u3', date: new Date(Date.now() - 7 * 86400000).toISOString(), class_name: '兒童芭蕾 A', change: -1 },
 ];
 
-/** Demo: In-app 通知（個人化：病假已批准、下堂提醒等） */
-interface NotificationItem {
-  id: string;
-  title: string;
-  message: string;
-  date: string;
-  type?: 'personal' | 'class' | 'system';
-}
-const FALLBACK_NOTIFICATIONS: NotificationItem[] = [
-  { id: 'n1', title: '試堂已確認', message: '你的兒童芭蕾試堂已確認，請按時上課。', date: new Date().toISOString(), type: 'personal' },
-  { id: 'n2', title: '代幣即將到期', message: '部分代幣將於 30 日內到期，請盡快使用。', date: new Date().toISOString(), type: 'system' },
-  { id: 'n3', title: '病假已批准', message: '你的病假申請已批准，已安排補堂日期。', date: new Date(Date.now() - 86400000).toISOString(), type: 'personal' },
-  { id: 'n4', title: '下堂提醒', message: '下堂 2 月 25 日 14:00 兒童芭蕾 A，請準時到新蒲崗分店。', date: new Date().toISOString(), type: 'personal' },
-  { id: 'n5', title: '全班通知', message: '因惡劣天氣，本週六 10:00 兒童芭蕾 A 停課，補課日期另行通知。', date: new Date(Date.now() - 2 * 86400000).toISOString(), type: 'class' },
-];
+/** 通知由 API 取得，失敗時為空 */
 
 function emptyAddForm(): AddProfileData & { has_joined_courses: boolean } {
   return { full_name: '', nick_name: '', date_of_birth: '', sex: null, parents_name: '', contact_number: '', residential_district: '', has_joined_courses: false, level: null };
@@ -81,6 +68,7 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
+  const [rawNotifications, setRawNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyAddForm());
@@ -146,24 +134,46 @@ export default function DashboardPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [tokensRes, classesRes] = await Promise.all([
+      const profileId = profile?.id;
+      const [tokensRes, classesRes, notifRes] = await Promise.all([
         api.get<{ data?: UserToken[] }>('/student/tokens'),
         api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes'),
+        api.get<{ data?: ApiNotification[] }>('/student/notifications').catch(() => ({ success: true, data: [] })),
       ]);
       const tokensData = (tokensRes as any).data;
-      const classesData = (classesRes as any).data;
+      let classesData = (classesRes as any).data;
+      const notifData = (notifRes as any).data;
       setTokens(Array.isArray(tokensData) ? tokensData : FALLBACK_TOKENS);
-      setUpcomingClasses(Array.isArray(classesData) ? classesData : FALLBACK_UPCOMING_CLASSES);
+      if (Array.isArray(classesData) && profileId) {
+        classesData = classesData.filter((e: UpcomingClass) => (e.profile_id || e.user_id || '') === profileId);
+      }
+      setUpcomingClasses(Array.isArray(classesData) && classesData.length > 0 ? classesData : getFallbackUpcomingClasses(profileId ?? undefined, profile?.full_name ?? undefined));
+      setRawNotifications(Array.isArray(notifData) ? notifData : []);
     } catch {
       setTokens(FALLBACK_TOKENS);
-      setUpcomingClasses(FALLBACK_UPCOMING_CLASSES);
+      setUpcomingClasses(getFallbackUpcomingClasses(profile?.id ?? undefined, profile?.full_name ?? undefined));
+      setRawNotifications([]);
     } finally {
       setLoading(false);
     }
   }
 
-  const totalTokens = tokens.reduce((sum, t) => sum + t.remaining_tokens, 0);
-  const expiringTokens = tokens.filter(t => isExpiringSoon(t.expiry_date));
+  const totalTokens = tokens.reduce((sum, tok) => sum + tok.remaining_tokens, 0);
+  /** 只顯示訊息中心內容（全班消息、個人課堂、代幣、請假），不顯示首頁「最新消息」；並加入「請假申請待定中」*/
+  const notifications = useMemo(
+    () => {
+      const fromApi = rawNotifications
+        .filter((n) => n.type !== 'news')
+        .map((n) => buildNotification(n, t));
+      const pendingLeave = buildPendingLeaveNotifications(upcomingClasses, t);
+      const combined = [...fromApi, ...pendingLeave].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      return combined;
+    },
+    [rawNotifications, upcomingClasses, t, i18n.language]
+  );
+  const expiringTokens = tokens.filter(tok => isExpiringSoon(tok.expiry_date));
   
   // Get the earliest expiry date from all tokens
   const earliestExpiryDate = tokens.length > 0 
@@ -224,21 +234,35 @@ export default function DashboardPage() {
           );
         })()}
 
-        {/* 最新消息 */}
+        {/* 最新消息：標示哪位學生，多與 admin 相關（請假回覆、下堂提醒、全班通知） */}
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <h2 className="text-lg md:text-xl font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <Bell className="h-5 w-5 text-primary" />
-            {t('dashboard.notificationsTitle')}
-          </h2>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <h2 className="text-lg md:text-xl font-semibold text-gray-900 flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              {t('dashboard.notificationsTitle')}
+            </h2>
+            <Link to="/notifications" className="text-sm font-medium text-primary hover:underline">
+              {t('notifications.title', '訊息中心')} →
+            </Link>
+          </div>
           <ul className="space-y-3">
-            {FALLBACK_NOTIFICATIONS.map((n) => (
-              <li key={n.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900">{n.title}</div>
-                  <div className="text-sm text-gray-600 mt-0.5">{n.message}</div>
-                </div>
-              </li>
-            ))}
+            {notifications.length === 0 ? (
+              <li className="py-4 text-center text-gray-500 text-sm">{t('notifications.noNotifications', '暫無通知')}</li>
+            ) : (
+              notifications.slice(0, 5).map((n) => (
+                <li key={n.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    {n.studentName && (
+                      <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded mb-1.5 inline-block">
+                        {t('notifications.forStudent', { studentName: n.studentName }, `有關：${n.studentName}`)}
+                      </span>
+                    )}
+                    <div className="font-medium text-gray-900">{n.title}</div>
+                    <div className="text-sm text-gray-600 mt-0.5">{n.message}</div>
+                  </div>
+                </li>
+              ))
+            )}
           </ul>
         </div>
 
