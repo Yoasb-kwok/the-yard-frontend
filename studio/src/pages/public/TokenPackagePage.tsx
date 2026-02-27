@@ -83,8 +83,17 @@ export default function TokenPackagePage() {
     discount_type: 'percentage' | 'fixed';
     discount_value: number;
   } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash'>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash' | 'alipay' | 'wechatpay' | 'payme'>('credit_card');
   const [submitting, setSubmitting] = useState(false);
+  const [cardNumber, setCardNumber] = useState('');
+  const [expiry, setExpiry] = useState('');
+  const [cvv, setCvv] = useState('');
+  const [cardholderName, setCardholderName] = useState('');
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [city, setCity] = useState('');
+  const [postalCode, setPostalCode] = useState('');
+  const [fpsIdOrPhone, setFpsIdOrPhone] = useState('');
 
   useEffect(() => {
     // Simulate API call delay
@@ -153,6 +162,34 @@ export default function TokenPackagePage() {
 
   async function handleCheckout() {
     if (cart.length === 0) return;
+    if (paymentMethod === 'credit_card') {
+      const num = cardNumber.replace(/\D/g, '');
+      if (num.length < 13) {
+        alert(t('shop.cardNumber') + ' ' + (t('common.error') || '請填寫正確'));
+        return;
+      }
+      const expiryMatch = expiry.match(/^(\d{2})\/?(\d{2})$/);
+      if (!expiryMatch) {
+        alert(t('shop.expiryDate') + ' ' + (t('common.error') || '請填寫 MM/YY'));
+        return;
+      }
+      if (cvv.replace(/\D/g, '').length < 3) {
+        alert(t('shop.cvv') + ' ' + (t('common.error') || '請填寫安全碼'));
+        return;
+      }
+      if (!cardholderName.trim()) {
+        alert(t('shop.cardholderName') + ' ' + (t('common.error') || '請填寫'));
+        return;
+      }
+      if (!addressLine1.trim()) {
+        alert(t('shop.addressLine1') + ' ' + (t('common.error') || '請填寫帳單地址'));
+        return;
+      }
+    }
+    if (paymentMethod === 'fps' && !fpsIdOrPhone.trim()) {
+      alert(t('shop.fpsIdOrPhone') + ' ' + (t('common.error') || '請填寫'));
+      return;
+    }
     setSubmitting(true);
 
     // Simulate API call delay
@@ -163,6 +200,15 @@ export default function TokenPackagePage() {
     setAppliedCoupon(null);
     setCouponCode('');
     setReferralCode('');
+    setCardNumber('');
+    setExpiry('');
+    setCvv('');
+    setCardholderName('');
+    setAddressLine1('');
+    setAddressLine2('');
+    setCity('');
+    setPostalCode('');
+    setFpsIdOrPhone('');
     navigate('/dashboard');
     setSubmitting(false);
   }
@@ -463,9 +509,140 @@ export default function TokenPackagePage() {
                       >
                         <option value="credit_card">{t('shop.creditCard')}</option>
                         <option value="fps">{t('shop.fps')}</option>
+                        <option value="alipay">{t('shop.alipay')}</option>
+                        <option value="wechatpay">{t('shop.wechatpay')}</option>
+                        <option value="payme">{t('shop.payme')}</option>
                         <option value="cash">{t('shop.cash')}</option>
                       </select>
                     </div>
+
+                    {/* Payment method specific fields */}
+                    {paymentMethod === 'credit_card' && (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                        <p className="text-xs font-medium text-gray-500 uppercase">{t('shop.billingAddress')}</p>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">{t('shop.cardNumber')}</label>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder={t('shop.cardNumberPlaceholder')}
+                            value={cardNumber}
+                            onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm text-gray-700 mb-1">{t('shop.expiryDate')}</label>
+                            <input
+                              type="text"
+                              placeholder={t('shop.expiryPlaceholder')}
+                              value={expiry}
+                              onChange={(e) => {
+                                const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                                if (v.length >= 2) setExpiry(v.slice(0, 2) + '/' + v.slice(2));
+                                else setExpiry(v);
+                              }}
+                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-gray-700 mb-1">{t('shop.cvv')}</label>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              placeholder={t('shop.cvvPlaceholder')}
+                              value={cvv}
+                              onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">{t('shop.cardholderName')}</label>
+                          <input
+                            type="text"
+                            placeholder={t('shop.cardholderName')}
+                            value={cardholderName}
+                            onChange={(e) => setCardholderName(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">{t('shop.addressLine1')}</label>
+                          <input
+                            type="text"
+                            value={addressLine1}
+                            onChange={(e) => setAddressLine1(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">{t('shop.addressLine2')}</label>
+                          <input
+                            type="text"
+                            value={addressLine2}
+                            onChange={(e) => setAddressLine2(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-sm text-gray-700 mb-1">{t('shop.city')}</label>
+                            <input
+                              type="text"
+                              value={city}
+                              onChange={(e) => setCity(e.target.value)}
+                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm text-gray-700 mb-1">{t('shop.postalCode')}</label>
+                            <input
+                              type="text"
+                              value={postalCode}
+                              onChange={(e) => setPostalCode(e.target.value)}
+                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {paymentMethod === 'fps' && (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                        <div>
+                          <label className="block text-sm text-gray-700 mb-1">{t('shop.fpsIdOrPhone')}</label>
+                          <input
+                            type="text"
+                            placeholder={t('shop.fpsPlaceholder')}
+                            value={fpsIdOrPhone}
+                            onChange={(e) => setFpsIdOrPhone(e.target.value)}
+                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
+                          />
+                        </div>
+                        <p className="text-sm text-gray-600">{t('shop.fpsInstruction')}</p>
+                      </div>
+                    )}
+                    {paymentMethod === 'alipay' && (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm text-gray-700">{t('shop.redirectToAlipay')}</p>
+                      </div>
+                    )}
+                    {paymentMethod === 'wechatpay' && (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm text-gray-700">{t('shop.redirectToWechat')}</p>
+                      </div>
+                    )}
+                    {paymentMethod === 'payme' && (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                        <p className="text-sm text-gray-700">{t('shop.redirectToPayMe')}</p>
+                      </div>
+                    )}
+                    {paymentMethod === 'cash' && (
+                      <div className="mb-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                        <p className="text-sm text-amber-800">{t('shop.payAtVenue')}</p>
+                      </div>
+                    )}
 
                     <button
                       onClick={handleCheckout}

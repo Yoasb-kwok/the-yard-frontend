@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { KeyRound, Mail, Phone } from 'lucide-react';
@@ -7,6 +7,8 @@ export interface AccountSecurityCardProps {
   email: string | null;
   mobile: string | null;
   onAccountUpdated?: (email?: string, mobile?: string) => void;
+  /** When true, open the change-password modal on mount (e.g. after trial signup). */
+  initialOpenPasswordModal?: boolean;
 }
 
 function getMobileParts(mobile: string | null): { countryCode: string; number: string } {
@@ -17,7 +19,7 @@ function getMobileParts(mobile: string | null): { countryCode: string; number: s
   return { countryCode: '+852', number: mobile };
 }
 
-export default function AccountSecurityCard({ email, mobile, onAccountUpdated }: AccountSecurityCardProps) {
+export default function AccountSecurityCard({ email, mobile, onAccountUpdated, initialOpenPasswordModal }: AccountSecurityCardProps) {
   const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -37,6 +39,10 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated }:
   const [mobileOtp, setMobileOtp] = useState('');
   const [emailDevOtp, setEmailDevOtp] = useState<string | null>(null);
   const [mobileDevOtp, setMobileDevOtp] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialOpenPasswordModal) setPasswordModal(true);
+  }, [initialOpenPasswordModal]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +64,7 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated }:
         setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
+        onAccountUpdated?.();
       } else {
         setError((res as any).msg || t('profile.wrongCurrentPassword'));
       }

@@ -25,7 +25,7 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const { profile, signOut, isAdmin, user, profiles, activeProfileId, switchProfile } = useAuth();
+  const { profile, signOut, isAdmin, user, profiles, activeProfileId, switchProfile, requirePasswordChange } = useAuth();
   const hasMultipleProfiles = !isAdmin && profiles.length > 1;
   const { t } = useTranslation();
   const location = useLocation();
@@ -463,6 +463,15 @@ export default function Layout({ children }: LayoutProps) {
 
         <main id="main-content" className="flex-1 min-w-0 p-4 sm:p-6 xl:p-8" tabIndex={-1}>
           <div className="max-w-7xl mx-auto">
+            {!isAdmin && requirePasswordChange && (
+              <Link
+                to="/profile?changePassword=1"
+                className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 hover:bg-amber-100"
+              >
+                <KeyRound className="h-5 w-5 flex-shrink-0" />
+                <span className="font-medium">{t('auth.requirePasswordChangeBanner')}</span>
+              </Link>
+            )}
             {children}
           </div>
         </main>

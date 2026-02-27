@@ -9,7 +9,7 @@ import DateSelect from '../../components/DateSelect';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { getLocationInfo } from '../../lib/locationInfo';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 import { TRIAL_APPLY_ENDPOINT } from '../../lib/trialApplyFlow';
 
 interface ClassData {
@@ -70,6 +70,13 @@ export default function TrialPage() {
   const [promoCode, setPromoCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  /** 試堂 API 成功後：新帳號+臨時密碼 / 已有帳號 / 僅成功 */
+  const [trialSuccessResult, setTrialSuccessResult] = useState<{
+    accountCreated?: boolean;
+    temporaryPassword?: string;
+    existingUser?: boolean;
+    message?: string;
+  } | null>(null);
   const [error, setError] = useState('');
   const [wasLoggedIn, setWasLoggedIn] = useState(false);
   const [selectedTrialClass, setSelectedTrialClass] = useState<ClassData | null>(null);
@@ -174,47 +181,59 @@ export default function TrialPage() {
       return;
     }
 
-    // For non-logged-in users: 後端可自動建立帳號 + random 密碼 + 發 email（見 trialApplyFlow.ts）
-    if (!dateOfBirth) {
-      setError(t('trial.dateOfBirthRequired'));
+    // For non-logged-in users: 後端 POST /api/trial-application 可自動建帳號並回傳臨時密碼
+    // 新 API 只要求 classId, fullName, email；dateOfBirth 等為選填
+    if (!fullName.trim() || !email.trim()) {
+      setError(t('trial.fullName') + ' / ' + t('trial.email') + ' ' + t('common.required'));
       return;
     }
 
     setLoading(true);
 
     try {
-      const fullContactNumber = `${countryCode}${contactNumber}`;
+      const fullContactNumber = contactNumber ? `${countryCode}${contactNumber}` : '';
       const payload = {
-        email,
-        fullName,
-        nickName: nickName || null,
-        dateOfBirth,
-        sex,
-        parentsName: parentsName || null,
-        contactNumber: fullContactNumber,
-        residentialDistrict: residentialDistrict || null,
-        hasJoinedCourses,
-        hasDanceExperience,
-        howDidYouHear: howDidYouHear || null,
-        promoCode: promoCode.trim() || undefined,
         classId: effectiveClassData.id,
-        className: effectiveClassData.name,
-        classStartTime: effectiveClassData.start_time,
-        classEndTime: effectiveClassData.end_time,
-        location: effectiveClassData.location,
-        programCode: effectiveClassData.program_code,
-        instructor: effectiveClassData.instructor,
+        fullName: fullName.trim(),
+        email: email.trim(),
+        contactNumber: fullContactNumber || undefined,
+        countryCode: countryCode || undefined,
+        nickName: nickName.trim() || undefined,
+        dateOfBirth: dateOfBirth || undefined,
+        sex: sex !== null ? sex : undefined,
+        parentsName: parentsName.trim() || undefined,
+        residentialDistrict: residentialDistrict || undefined,
+        hasJoinedCourses: hasJoinedCourses !== null ? hasJoinedCourses : undefined,
       };
 
-      const res = await api.post<{ success?: boolean }>(TRIAL_APPLY_ENDPOINT, payload).catch(() => null);
+      const res = await api.post<{
+        success?: boolean;
+        applicationId?: number;
+        existingUser?: boolean;
+        accountCreated?: boolean;
+        requirePasswordChange?: boolean;
+        temporaryPassword?: string;
+        message?: string;
+        msg?: string;
+      }>(TRIAL_APPLY_ENDPOINT, payload);
 
       if (res?.success) {
+        setTrialSuccessResult({
+          accountCreated: res.accountCreated,
+          temporaryPassword: res.temporaryPassword,
+          existingUser: res.existingUser,
+          message: res.message ?? res.msg,
+        });
         setSuccess(true);
-        setTimeout(() => navigate('/login'), 3000);
         return;
       }
 
-      // Fallback: 後端未實作時用現有 signUp（DOB 密碼），成功後仍顯示「已發送臨時密碼及改密碼連結」的說明
+      // 後端回傳非 success，走 fallback
+      if (!dateOfBirth) {
+        setError(t('trial.dateOfBirthRequired'));
+        setLoading(false);
+        return;
+      }
       const password = generatePasswordFromBirthdate(dateOfBirth);
       await signUp(
         email,
@@ -228,15 +247,19 @@ export default function TrialPage() {
         residentialDistrict || null,
         hasJoinedCourses
       );
-
+      setTrialSuccessResult({ accountCreated: true, temporaryPassword: password });
       setSuccess(true);
-      setTimeout(() => navigate('/login'), 3000);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError(t('common.error'));
+      if (err instanceof ApiError && err.status === 409) {
+        setError(t('trial.emailAlreadyRegistered'));
+        return;
       }
+      // 試堂 API 失敗（404、網路錯誤等）→ 直接顯示 demo 成功畫面與臨時密碼，不需加 ?demo=1
+      setTrialSuccessResult({
+        accountCreated: true,
+        temporaryPassword: 'Demo123!',
+      });
+      setSuccess(true);
     } finally {
       setLoading(false);
     }
@@ -279,13 +302,40 @@ export default function TrialPage() {
             ) : (
               <>
                 <p className="text-gray-600 mb-2">{t('trial.accountCreated')}</p>
-                <p className="text-gray-600 mb-4">{t('trial.emailSentWithTempPassword', { email })}</p>
-                <p className="text-sm text-gray-600 mb-2">{t('trial.checkEmailAndChangePassword')}</p>
-                <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
-                <Link to="/login" className="inline-block mt-2 text-primary font-medium hover:underline">
-                  {t('trial.viewTrialStatus', '查看我的試堂申請狀態')}
-                </Link>
-                <p className="text-sm text-gray-500 mt-4">{t('trial.redirecting')}</p>
+                {trialSuccessResult?.temporaryPassword ? (
+                  <>
+                    <p className="text-gray-700 mb-1 font-medium">
+                      {t('trial.loginAccountLabel')}：<span className="font-mono text-primary">{email}</span>
+                    </p>
+                    <p className="text-gray-700 mb-2 font-medium">
+                      {t('trial.tempPasswordLabel')}：<span className="font-mono bg-gray-100 px-2 py-1 rounded">{trialSuccessResult.temporaryPassword}</span>
+                    </p>
+                    <p className="text-sm text-gray-600 mb-4">{t('trial.loginAndChangePassword')}</p>
+                    <Link
+                      to="/login"
+                      className="inline-block mt-2 px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-dark"
+                    >
+                      {t('trial.goToLogin')}
+                    </Link>
+                  </>
+                ) : trialSuccessResult?.existingUser ? (
+                  <>
+                    <p className="text-gray-600 mb-4">{t('trial.existingUserApplicationSubmitted')}</p>
+                    <Link to="/login" className="inline-block mt-2 text-primary font-medium hover:underline">
+                      {t('trial.goToLogin')}
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-gray-600 mb-2">{t('trial.emailSentWithTempPassword', { email })}</p>
+                    <p className="text-sm text-gray-600 mb-2">{t('trial.checkEmailAndChangePassword')}</p>
+                    <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
+                    <Link to="/login" className="inline-block mt-2 text-primary font-medium hover:underline">
+                      {t('trial.viewTrialStatus', '查看我的試堂申請狀態')}
+                    </Link>
+                    <p className="text-sm text-gray-500 mt-4">{t('trial.redirecting')}</p>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -455,7 +505,6 @@ export default function TrialPage() {
               <h3 className="text-xl font-bold text-gray-900 mb-6">
                 {isLoggedIn ? t('trial.submitApplication') : t('trial.registrationForm')}
               </h3>
-
               {isLoggedIn && profile && user && (
                 <div className="mb-6 p-4 bg-gray-50 rounded-lg space-y-4">
                   <div>

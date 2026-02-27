@@ -437,15 +437,36 @@ export default function PendingApplicationsPage() {
                           className="max-w-full max-h-64 rounded border border-gray-200 object-contain bg-gray-50"
                         />
                       ) : null}
-                      <a
-                        href={viewing.documentUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 text-sm text-primary font-medium hover:underline"
-                      >
-                        <FileText className="h-4 w-4" />
-                        {t('admin.attendance.viewSickLeaveDoc')}
-                      </a>
+                      {viewing.documentUrl.startsWith('data:') ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const w = window.open('', '_blank');
+                            if (w) {
+                              w.document.write(
+                                '<!DOCTYPE html><html><head><meta charset="utf-8"><title>病假證明</title></head><body style="margin:0;background:#f3f4f6;display:flex;justify-content:center;align-items:center;min-height:100vh"><img src="' +
+                                  viewing.documentUrl +
+                                  '" style="max-width:100%;height:auto;display:block" alt="Sick leave document"/></body></html>'
+                              );
+                              w.document.close();
+                            }
+                          }}
+                          className="inline-flex items-center gap-2 text-sm text-primary font-medium hover:underline"
+                        >
+                          <FileText className="h-4 w-4" />
+                          {t('admin.attendance.viewSickLeaveDoc')}
+                        </button>
+                      ) : (
+                        <a
+                          href={viewing.documentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 text-sm text-primary font-medium hover:underline"
+                        >
+                          <FileText className="h-4 w-4" />
+                          {t('admin.attendance.viewSickLeaveDoc')}
+                        </a>
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-gray-500">{t('admin.dashboard.noDocUploaded')}</p>

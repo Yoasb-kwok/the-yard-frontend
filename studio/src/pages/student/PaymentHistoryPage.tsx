@@ -158,6 +158,12 @@ export default function PaymentHistoryPage() {
         return t('shop.fps');
       case 'cash':
         return t('shop.cash');
+      case 'alipay':
+        return t('shop.alipay');
+      case 'wechatpay':
+        return t('shop.wechatpay');
+      case 'payme':
+        return t('shop.payme');
       default:
         return method;
     }

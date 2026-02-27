@@ -14,12 +14,17 @@ import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreV
 import { getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
 
-const MAX_DOCUMENT_BASE64_LENGTH = 200000; // ~150KB base64 — 伺服器 body 上限可能較細（如 256KB）
-const MAX_IMAGE_DIMENSION = 800;
-const JPEG_QUALITY = 0.5;
+const MAX_DOCUMENT_BASE64_LENGTH = 80000; // ~60KB base64，盡量避開 413（伺服器 body 上限可能好細）
+const MAX_IMAGE_DIMENSION = 600;
+const JPEG_QUALITY = 0.4;
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-/** Compress image to JPEG data URL to avoid 413 Payload Too Large. PNG/相片會壓細至符合伺服器上限。 */
+/** Compress image to JPEG data URL to avoid 413. 只接受 5MB 以內嘅檔案，會自動壓細再上傳。 */
 async function compressImageToDataUrl(file: File): Promise<string> {
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error('File over 5MB. Please use an image under 5MB.');
+  }
   const isImage = file.type.startsWith('image/');
   if (!isImage) {
     const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -29,7 +34,7 @@ async function compressImageToDataUrl(file: File): Promise<string> {
       reader.readAsDataURL(file);
     });
     if (dataUrl.length > MAX_DOCUMENT_BASE64_LENGTH) {
-      throw new Error('File too large. Please upload an image (JPG/PNG under 2MB).');
+      throw new Error('File too large. Please upload an image under 5MB.');
     }
     return dataUrl;
   }
@@ -63,7 +68,7 @@ async function compressImageToDataUrl(file: File): Promise<string> {
       ctx.drawImage(img, 0, 0, width, height);
       let quality = JPEG_QUALITY;
       let dataUrl = canvas.toDataURL('image/jpeg', quality);
-      while (dataUrl.length > MAX_DOCUMENT_BASE64_LENGTH && quality > 0.2) {
+      while (dataUrl.length > MAX_DOCUMENT_BASE64_LENGTH && quality > 0.15) {
         quality -= 0.08;
         dataUrl = canvas.toDataURL('image/jpeg', quality);
       }
@@ -381,8 +386,11 @@ export default function SchedulePage() {
         reason,
         lessonIndex,
         leaveType: type,
-        ...(document_url ? { document_url } : {}),
+        ...(document_url
+          ? { document_url, documentUrl: document_url }
+          : {}),
       });
+      await loadEnrolledClasses();
       setLessonLeaveRequests((prev) => ({
         ...prev,
         [enrollmentId]: {
@@ -395,7 +403,7 @@ export default function SchedulePage() {
       setTimeout(() => setLessonLeaveSuccess(null), 4000);
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('schedule.loadError');
-      setSubmitError(msg.includes('too large') || msg.includes('Too large') ? t('schedule.documentTooLarge', '檔案過大，請上傳較細的圖片（例如 2MB 以下）或拍攝病假紙相片。') : msg);
+      setSubmitError(msg.includes('too large') || msg.includes('Too large') ? t('schedule.documentTooLarge', '檔案過大，請上傳 5MB 以內的圖片或拍攝病假紙相片。') : msg);
     }
   };
 

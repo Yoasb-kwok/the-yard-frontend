@@ -36,13 +36,13 @@ const defaultLabels = {
 };
 
 export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 'orderId' | 'date' | 'description' | 'paymentMethod' | 'amount' | 'status'>): string {
+  const { labels: dataLabels, ...rest } = data ?? {};
   const d: ReceiptData = {
     receiptTitle: 'Payment Receipt',
-    labels: defaultLabels,
     printHint: 'You can print this page (Ctrl+P / Cmd+P) and choose "Save as PDF".',
     brandName: 'The Yard',
-    ...data,
-    labels: { ...defaultLabels, ...data.labels },
+    ...rest,
+    labels: { ...defaultLabels, ...dataLabels },
   };
 
   return `<!DOCTYPE html>

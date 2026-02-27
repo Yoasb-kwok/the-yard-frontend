@@ -4,6 +4,7 @@ import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext
 import { getAgeTagFromDateOfBirth } from '../../lib/utils';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { User, Copy, Check, Pencil, Trash2, KeyRound } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import AccountSecurityCard from '../../components/AccountSecurityCard';
@@ -21,8 +22,9 @@ const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
 });
 
 export default function ProfilePage() {
-  const { profile, user, profiles, addProfile, updateProfile, deleteProfile, refreshMe } = useAuth();
+  const { profile, user, profiles, addProfile, updateProfile, deleteProfile, refreshMe, requirePasswordChange } = useAuth();
   const { t } = useTranslation();
+  const [searchParams] = useSearchParams();
   const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
@@ -171,6 +173,13 @@ export default function ProfilePage() {
         {message && (
           <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded">
             {message}
+          </div>
+        )}
+
+        {requirePasswordChange && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded flex items-center gap-2">
+            <KeyRound className="h-5 w-5 flex-shrink-0" />
+            <span>{t('auth.requirePasswordChangeBanner')}</span>
           </div>
         )}
 
@@ -420,6 +429,7 @@ export default function ProfilePage() {
           email={user?.email ?? null}
           mobile={user?.mobile ?? profile?.contact_number ?? profile?.mobile ?? null}
           onAccountUpdated={() => refreshMe()}
+          initialOpenPasswordModal={requirePasswordChange || searchParams.get('changePassword') === '1'}
         />
       </div>
 

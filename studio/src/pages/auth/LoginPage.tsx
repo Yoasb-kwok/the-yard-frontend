@@ -32,7 +32,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signIn(loginIdentifier.trim(), password);
+      const result = await signIn(loginIdentifier.trim(), password);
+      if (result?.requirePasswordChange) {
+        navigate('/profile?changePassword=1');
+        return;
+      }
       // Navigate by role (admin vs student)
       const stored = localStorage.getItem('auth_session');
       let isAdmin = loginIdentifier === 'admin@admin.com';

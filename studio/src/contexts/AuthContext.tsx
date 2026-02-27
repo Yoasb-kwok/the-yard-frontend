@@ -63,7 +63,7 @@ interface AuthContextType {
   deleteProfile: (profileId: string) => void;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ requirePasswordChange?: boolean } | void>;
   signUp: (
     email: string,
     password: string,
@@ -79,6 +79,8 @@ interface AuthContextType {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   isAdmin: boolean;
+  /** True when backend requires user to change password (e.g. after trial signup). */
+  requirePasswordChange: boolean;
   /** Refresh user and profiles from API (e.g. after updating email/mobile). */
   refreshMe: () => Promise<void>;
 }
@@ -175,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
 
   // Derive active profile from profiles + activeProfileId
   const profile =
@@ -205,9 +208,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             sessionStorage.setItem(STORAGE_KEY_SERVER_ID, currentServerId);
           }
-          const res = await api.get<{ user: { id: string; email: string }; profiles: Profile[] }>('user/me');
+          const res = await api.get<{ user: { id: string; email: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('user/me');
           const userFromMe = (res as any).user ?? (res as any).data?.user;
           const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
+          if ((res as any).requirePasswordChange !== undefined) {
+            setRequirePasswordChange((res as any).requirePasswordChange === true);
+          }
           if (res.success && userFromMe && Array.isArray(profilesFromMe) && profilesFromMe.length) {
           const u = userFromMe;
           const p = profilesFromMe;
@@ -368,6 +374,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.success && res.token && res.user) {
         const u = res.user;
+        const needPasswordChange = (res as { requirePasswordChange?: boolean }).requirePasswordChange === true;
+        setRequirePasswordChange(needPasswordChange);
         localStorage.setItem('token', res.token);
         try {
           const h = await api.get<{ serverId?: string }>('health');
@@ -376,8 +384,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (_) {}
         const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? loginIdentifier };
         try {
-          const meRes = await api.get<{ user: { id: string; email: string }; profiles: Profile[] }>('user/me');
+          const meRes = await api.get<{ user: { id: string; email: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('user/me');
           const profilesFromMe = (meRes as any).profiles ?? (meRes as any).data?.profiles;
+          if ((meRes as any).requirePasswordChange !== undefined) {
+            setRequirePasswordChange((meRes as any).requirePasswordChange === true);
+          }
           if (meRes.success && Array.isArray(profilesFromMe) && profilesFromMe.length) {
             const sessionObj: Session = { user: userObj };
             setUser(userObj);
@@ -390,7 +401,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               activeProfileId: profilesFromMe[0]?.id ?? null,
               session: sessionObj,
             });
-            return;
+            return { requirePasswordChange: needPasswordChange || (meRes as any).requirePasswordChange === true };
           }
         } catch {
           // /me failed; use single profile from login response
@@ -422,7 +433,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           activeProfileId: mainProfile.id,
           session: sessionObj,
         });
-        return;
+        return { requirePasswordChange: needPasswordChange };
       }
     } catch (apiErr) {
       if (apiErr instanceof ApiError && apiErr.status === 401) {
@@ -593,6 +604,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfiles(null);
     setActiveProfileId(null);
     setSession(null);
+    setRequirePasswordChange(false);
     localStorage.removeItem('auth_session');
     localStorage.removeItem('token');
     sessionStorage.removeItem('studio_backend_server_id');
@@ -602,9 +614,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await api.get<{ user: { id: string; email: string; mobile?: string }; profiles: Profile[] }>('user/me');
+      const res = await api.get<{ user: { id: string; email: string; mobile?: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('user/me');
       const userFromMe = (res as any).user ?? (res as any).data?.user;
       const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
+      if ((res as any).requirePasswordChange !== undefined) {
+        setRequirePasswordChange((res as any).requirePasswordChange === true);
+      }
       if (res.success && userFromMe && Array.isArray(profilesFromMe)) {
         const userObj: User = { id: userFromMe.id, email: userFromMe.email, mobile: userFromMe.mobile ?? null };
         setUser(userObj);
@@ -635,6 +650,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     signOut,
     isAdmin: profile?.role === 'admin',
+    requirePasswordChange,
     refreshMe,
   };
 
