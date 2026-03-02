@@ -9,6 +9,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true, // Exit if port 5173 is already in use
     proxy: {
+      // Forward /api to backend. Start backend first: cd the-yard-backend/studio_backend && npm start (port 3002)
       '/api': {
         target: 'http://localhost:3002',
         changeOrigin: true,

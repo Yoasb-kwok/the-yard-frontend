@@ -159,21 +159,40 @@ export default function TrialPage() {
       return;
     }
 
-    // If logged in, use user's information
+    // If logged in, still call backend so trial is saved and shows in 我的試堂申請
     if (isLoggedIn && user && profile) {
       setLoading(true);
       setWasLoggedIn(true);
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setSuccess(true);
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 3000);
-      } catch (err: unknown) {
-        if (err instanceof Error) {
-          setError(err.message);
+        const fullContactNumber = profile.mobile || profile.contact_number || '';
+        const payload = {
+          classId: effectiveClassData.id,
+          fullName: (profile.full_name || user.name || user.email || '').trim(),
+          email: (user.email || '').trim().toLowerCase(),
+          contactNumber: fullContactNumber || undefined,
+          countryCode: undefined,
+          nickName: (profile.nick_name || '').trim() || undefined,
+          dateOfBirth: profile.date_of_birth || undefined,
+          sex: profile.sex !== undefined && profile.sex !== null ? profile.sex : undefined,
+          parentsName: (profile.parents_name || '').trim() || undefined,
+          residentialDistrict: (profile.residential_district || '').trim() || undefined,
+          hasJoinedCourses: profile.has_joined_courses !== undefined && profile.has_joined_courses !== null ? profile.has_joined_courses : undefined,
+        };
+        const res = await api.post<{ success?: boolean; applicationId?: number; existingUser?: boolean }>(TRIAL_APPLY_ENDPOINT, payload);
+        if (res?.success) {
+          setTrialSuccessResult({ existingUser: true });
+          setSuccess(true);
+          setTimeout(() => navigate('/dashboard'), 3000);
         } else {
-          setError(t('common.error'));
+          setSuccess(true);
+          setTimeout(() => navigate('/dashboard'), 3000);
+        }
+      } catch (err: unknown) {
+        if (err instanceof ApiError && err.status === 409) {
+          setError(t('trial.emailAlreadyRegistered'));
+        } else {
+          const msg = err instanceof ApiError ? err.message : (err as Error)?.message || t('common.error');
+          setError(msg);
         }
       } finally {
         setLoading(false);

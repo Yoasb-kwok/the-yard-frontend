@@ -5,6 +5,14 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '/api' : 'http://localhost:3002/api');
 
+/** Build full request path. Backend expects /api/student/..., /api/admin/..., so ensure /api prefix when base might not include it. */
+function buildRequestUrl(endpoint: string): string {
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const pathWithApi = path.startsWith('/api') ? path : `/api${path}`;
+  const base = (API_BASE_URL || '').replace(/\/api\/?$/, '') || (import.meta.env.DEV ? '' : 'http://localhost:3002');
+  return base ? `${base}${pathWithApi}` : pathWithApi;
+}
+
 interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -35,8 +43,7 @@ async function request<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${API_BASE_URL}${path}`;
+  const url = buildRequestUrl(endpoint);
   const token = getAuthToken();
 
   const headers: HeadersInit = {

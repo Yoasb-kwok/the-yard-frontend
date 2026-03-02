@@ -16,10 +16,24 @@ export interface TrialApplication {
   status: 'pending' | 'confirmed' | 'assigned' | 'cancelled' | 'contacted' | 'attended_trial' | 'converted';
   assigned_class_id?: string | null;
   assigned_class_name?: string | null;
+  assigned_lessons?: number | null;
+  class_total_lessons?: number | null;
   notes?: string;
   applied_at: string;
   updated_at?: string;
   trial_date?: string; // for "本週試堂" filter
+}
+
+/** Class from GET /admin/classes for 分配班別 dropdown */
+interface AdminClassOption {
+  id: number;
+  name: string;
+  start_time: string;
+  end_time: string;
+  total_lessons?: number | null;
+  program_code?: string;
+  instructor?: string;
+  is_cancelled?: number;
 }
 
 const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
@@ -78,13 +92,17 @@ type QuickFilter = typeof QUICK_FILTERS[number];
 export default function TrialApplicationsPage() {
   const { t, i18n } = useTranslation();
   const [applications, setApplications] = useState<TrialApplication[]>([]);
+  const [classes, setClasses] = useState<AdminClassOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<TrialApplication['status'] | 'all'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
   const [editAssignedClass, setEditAssignedClass] = useState<Record<string, string>>({});
+  const [editAssignedClassId, setEditAssignedClassId] = useState<Record<string, string>>({});
+  const [editAssignedLessons, setEditAssignedLessons] = useState<Record<string, number | ''>>({});
   const [editStatus, setEditStatus] = useState<Record<string, TrialApplication['status']>>({});
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [savingId, setSavingId] = useState<string | null>(null);
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
 
@@ -118,30 +136,50 @@ export default function TrialApplicationsPage() {
 
   useEffect(() => {
     loadApplications();
+    loadClasses();
   }, []);
+
+  async function loadClasses() {
+    try {
+      const res = await api.get<{ success?: boolean; data?: AdminClassOption[] }>('/admin/classes').catch(() => null);
+      const data = res?.success && Array.isArray((res as any).data) ? (res as any).data : [];
+      setClasses(data.filter((c: AdminClassOption) => !c.is_cancelled));
+    } catch {
+      setClasses([]);
+    }
+  }
 
   async function loadApplications() {
     setLoading(true);
     try {
-      const res = await api.get<TrialApplication[]>('/admin/trial-applications?demo=1').catch(() => ({ success: true, data: FALLBACK_TRIAL_APPLICATIONS }));
-      const data = (res as any).data ?? res;
-      setApplications(Array.isArray(data) ? data : FALLBACK_TRIAL_APPLICATIONS);
+      const res = await api.get<{ success?: boolean; data?: TrialApplication[] }>('/admin/trial-applications').catch(() => null);
+      const data = res?.success && Array.isArray((res as any).data) ? (res as any).data : null;
+      const list = data ?? FALLBACK_TRIAL_APPLICATIONS;
+      setApplications(list);
       const initialNotes: Record<string, string> = {};
       const initialAssigned: Record<string, string> = {};
+      const initialAssignedId: Record<string, string> = {};
+      const initialAssignedLessons: Record<string, number | ''> = {};
       const initialStatus: Record<string, TrialApplication['status']> = {};
-      (Array.isArray(data) ? data : FALLBACK_TRIAL_APPLICATIONS).forEach((a) => {
+      list.forEach((a) => {
         initialNotes[a.id] = a.notes ?? '';
         initialAssigned[a.id] = a.assigned_class_name ?? '';
+        initialAssignedId[a.id] = a.assigned_class_id ?? '';
+        initialAssignedLessons[a.id] = a.assigned_lessons != null ? a.assigned_lessons : '';
         initialStatus[a.id] = a.status;
       });
       setEditNotes(initialNotes);
       setEditAssignedClass(initialAssigned);
+      setEditAssignedClassId(initialAssignedId);
+      setEditAssignedLessons(initialAssignedLessons);
       setEditStatus(initialStatus);
     } catch {
       setApplications(FALLBACK_TRIAL_APPLICATIONS);
       FALLBACK_TRIAL_APPLICATIONS.forEach((a) => {
         setEditNotes((prev) => ({ ...prev, [a.id]: a.notes ?? '' }));
         setEditAssignedClass((prev) => ({ ...prev, [a.id]: a.assigned_class_name ?? '' }));
+        setEditAssignedClassId((prev) => ({ ...prev, [a.id]: a.assigned_class_id ?? '' }));
+        setEditAssignedLessons((prev) => ({ ...prev, [a.id]: '' }));
         setEditStatus((prev) => ({ ...prev, [a.id]: a.status }));
       });
     } finally {
@@ -171,15 +209,35 @@ export default function TrialApplicationsPage() {
     setExpandedId(null);
   }
 
-  function saveAssignedClass(id: string) {
-    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, assigned_class_name: editAssignedClass[id] || undefined } : a)));
-  }
-
-  function saveStatus(id: string) {
-    const newStatus = editStatus[id];
-    if (newStatus == null) return;
-    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, status: newStatus } : a)));
-    setExpandedId(null);
+  /** 一次儲存：狀態、備註（僅本地）、分配班別與堂數，只打一次 PATCH */
+  function saveAll(id: string) {
+    const app = applications.find((a) => a.id === id);
+    if (!app) return;
+    const classId = editAssignedClassId[id] ? String(editAssignedClassId[id]).trim() : '';
+    const lessons = editAssignedLessons[id];
+    const status = editStatus[id] ?? app.status;
+    const payload: { status?: string; assigned_class_id?: number; assigned_lessons?: number } = { status };
+    if (classId) payload.assigned_class_id = Number(classId);
+    else if (app.assigned_class_id) payload.assigned_class_id = Number(app.assigned_class_id);
+    if (lessons !== '' && Number(lessons) >= 1) payload.assigned_lessons = Number(lessons);
+    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, notes: editNotes[id], status } : a)));
+    setSavingId(id);
+    api.patch(`/admin/trial-applications/${id}`, payload)
+      .then(() => {
+        const cls = classId ? classes.find((c) => String(c.id) === classId) : null;
+        setApplications((prev) => prev.map((a) => (a.id === id ? {
+          ...a,
+          notes: editNotes[id],
+          status,
+          assigned_class_id: (classId || a.assigned_class_id) ?? undefined,
+          assigned_class_name: (cls?.name ?? (classId ? editAssignedClass[id] : a.assigned_class_name)) ?? undefined,
+          assigned_lessons: payload.assigned_lessons != null ? payload.assigned_lessons : (a.assigned_lessons ?? null),
+        } : a)));
+        if (cls) setEditAssignedClass((prev) => ({ ...prev, [id]: cls.name }));
+        setExpandedId(null);
+      })
+      .catch(() => {})
+      .finally(() => setSavingId(null));
   }
 
   if (loading) {
@@ -262,7 +320,7 @@ export default function TrialApplicationsPage() {
                             {getStatusLabel(app.status)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{app.assigned_class_name || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{app.assigned_class_name || '—'}{app.assigned_lessons != null ? ` · ${app.assigned_lessons} ${t('admin.trialApplications.assignedLessons', '堂')}` : ''}</td>
                         <td className="px-4 py-3 text-sm text-gray-600">{formatDateTime(app.applied_at, getLocale())}</td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -278,67 +336,84 @@ export default function TrialApplicationsPage() {
                       {expandedId === app.id && (
                         <tr key={`${app.id}-expand`} className="bg-gray-50">
                           <td colSpan={6} className="px-4 py-4">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                              <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
-                                <label className="shrink-0 text-sm font-medium text-gray-600 w-14">
-                                  {t('admin.trialApplications.statusLabel')}
-                                </label>
-                                <select
-                                  value={editStatus[app.id] ?? app.status}
-                                  onChange={(e) => setEditStatus((prev) => ({ ...prev, [app.id]: e.target.value as TrialApplication['status'] }))}
-                                  className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                                >
-                                  {STATUS_OPTIONS.map((s) => (
-                                    <option key={s} value={s}>{getStatusLabel(s)}</option>
-                                  ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  onClick={() => saveStatus(app.id)}
-                                  className="shrink-0 px-3 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark"
-                                >
-                                  {t('common.save')}
-                                </button>
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                  <label className="shrink-0 text-sm font-medium text-gray-600 w-14">
+                                    {t('admin.trialApplications.statusLabel')}
+                                  </label>
+                                  <select
+                                    value={editStatus[app.id] ?? app.status}
+                                    onChange={(e) => setEditStatus((prev) => ({ ...prev, [app.id]: e.target.value as TrialApplication['status'] }))}
+                                    className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                  >
+                                    {STATUS_OPTIONS.map((s) => (
+                                      <option key={s} value={s}>{getStatusLabel(s)}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                  <label className="shrink-0 text-sm font-medium text-gray-600 flex items-center gap-1 w-14">
+                                    <MessageSquare className="h-4 w-4" />
+                                    {t('admin.trialApplications.notes')}
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={editNotes[app.id] ?? ''}
+                                    onChange={(e) => setEditNotes((prev) => ({ ...prev, [app.id]: e.target.value }))}
+                                    className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                    placeholder={t('admin.trialApplications.notesPlaceholder')}
+                                  />
+                                </div>
+                                <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                                  <label className="shrink-0 text-sm font-medium text-gray-600 flex items-center gap-1 w-14">
+                                    <Calendar className="h-4 w-4" />
+                                    {t('admin.trialApplications.assignClass')}
+                                  </label>
+                                  <select
+                                    value={editAssignedClassId[app.id] ?? ''}
+                                    onChange={(e) => {
+                                      const v = e.target.value;
+                                      setEditAssignedClassId((prev) => ({ ...prev, [app.id]: v }));
+                                      const c = classes.find((x) => String(x.id) === v);
+                                      setEditAssignedClass((prev) => ({ ...prev, [app.id]: c?.name ?? '' }));
+                                    }}
+                                    className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                  >
+                                    <option value="">{t('admin.trialApplications.assignClassPlaceholder')}</option>
+                                    {classes.map((c) => (
+                                      <option key={c.id} value={String(c.id)}>
+                                        {c.name}
+                                        {c.start_time ? ` (${new Date(c.start_time).toLocaleString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})` : ''}
+                                        {c.total_lessons != null ? ` · ${c.total_lessons} ${t('admin.trialApplications.assignedLessons', '堂')}` : ''}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <select
+                                    value={editAssignedLessons[app.id] ?? ''}
+                                    onChange={(e) => setEditAssignedLessons((prev) => ({ ...prev, [app.id]: e.target.value === '' ? '' : Number(e.target.value) }))}
+                                    className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                    title={t('admin.trialApplications.assignedLessons')}
+                                  >
+                                    <option value="">{t('admin.trialApplications.assignedLessonsPlaceholder')}</option>
+                                    {[1, 2, 4, 6, 8].map((n) => (
+                                      <option key={n} value={n}>{n}</option>
+                                    ))}
+                                  </select>
+                                </div>
                               </div>
-                              <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
-                                <label className="shrink-0 text-sm font-medium text-gray-600 flex items-center gap-1 w-14">
-                                  <MessageSquare className="h-4 w-4" />
-                                  {t('admin.trialApplications.notes')}
-                                </label>
-                                <input
-                                  type="text"
-                                  value={editNotes[app.id] ?? ''}
-                                  onChange={(e) => setEditNotes((prev) => ({ ...prev, [app.id]: e.target.value }))}
-                                  className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                                  placeholder={t('admin.trialApplications.notesPlaceholder')}
-                                />
+                              <div className="flex items-center gap-3 pt-1 border-t border-gray-100">
                                 <button
                                   type="button"
-                                  onClick={() => saveNotes(app.id)}
-                                  className="shrink-0 px-3 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark"
+                                  disabled={savingId === app.id}
+                                  onClick={() => saveAll(app.id)}
+                                  className="px-5 py-2.5 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
                                 >
-                                  {t('common.save')}
+                                  {savingId === app.id ? '...' : t('common.save')}
                                 </button>
-                              </div>
-                              <div className="flex flex-row items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
-                                <label className="shrink-0 text-sm font-medium text-gray-600 flex items-center gap-1 w-14">
-                                  <Calendar className="h-4 w-4" />
-                                  {t('admin.trialApplications.assignClass')}
-                                </label>
-                                <input
-                                  type="text"
-                                  value={editAssignedClass[app.id] ?? ''}
-                                  onChange={(e) => setEditAssignedClass((prev) => ({ ...prev, [app.id]: e.target.value }))}
-                                  className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
-                                  placeholder={t('admin.trialApplications.assignClassPlaceholder')}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => saveAssignedClass(app.id)}
-                                  className="shrink-0 px-3 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark"
-                                >
-                                  {t('common.save')}
-                                </button>
+                                <span className="text-xs text-gray-500">
+                                  {t('admin.trialApplications.saveAllHint', '一次儲存：狀態、備註、分配班別與堂數')}
+                                </span>
                               </div>
                             </div>
                           </td>

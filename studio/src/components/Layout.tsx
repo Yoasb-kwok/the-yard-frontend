@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare, KeyRound } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
+import ClassNoticePopup from './ClassNoticePopup';
 import { useAdminPendingCounts } from '../lib/useAdminPendingCounts';
 const logoUrl = '/images/the-yard-logo.png';
 
@@ -554,6 +555,9 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
       </footer>
+
+      {/* 學生端：全班通知彈出（有選擇該課程的學生進入介面時自動顯示） */}
+      {!isAdmin && user && <ClassNoticePopup />}
     </div>
   );
 }

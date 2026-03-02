@@ -195,6 +195,8 @@
     "leaveTypeSick": "病假",
     "typeClassAnnouncement": "全班通知",
     "noNotifications": "暂无通知",
+    "gotIt": "知道了",
+    "nextNotice": "下一则",
     "tokenExpiringTitle": "代币即将到期",
     "tokenExpiringMessage": "部分代币将于 {{daysLeft}} 日内到期，请尽快使用。",
     "tokenLowTitle": "代币余额不足",
@@ -428,6 +430,7 @@
     "myTrialApplications": "我的试堂申请",
     "trialStatusConfirmed": "已确认",
     "trialStatusPending": "待确认",
+    "noTrialApplications": "暂无试堂申请",
     "courseProgress": "已上 {{current}} 堂 / 共 {{total}} 堂",
     "recentActivity": "最近事务",
     "enterChildPage": "进入主页",
@@ -1020,7 +1023,10 @@
       "notesPlaceholder": "输入备注…",
       "assignClass": "分配班别",
       "assignClassPlaceholder": "例如：儿童芭蕾 A（周一 16:00）",
+      "assignedLessons": "堂数",
+      "assignedLessonsPlaceholder": "选择堂数",
       "notesAndAssign": "备注／分配班别",
+      "saveAllHint": "一次保存：状态、备注、分配班别与堂数",
       "noApplications": "暂无试堂申请"
     },
     "auditLog": {

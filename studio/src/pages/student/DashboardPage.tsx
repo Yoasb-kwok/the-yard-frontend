@@ -68,6 +68,8 @@ export default function DashboardPage() {
   const navigate = useNavigate();
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
+  const [trialApplications, setTrialApplications] = useState<TrialApplicationItem[]>([]);
+  const [trialApplicationsLoaded, setTrialApplicationsLoaded] = useState(false);
   const [rawNotifications, setRawNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
@@ -135,15 +137,19 @@ export default function DashboardPage() {
     setLoading(true);
     try {
       const profileId = profile?.id;
-      const [tokensRes, classesRes, notifRes] = await Promise.all([
+      const [tokensRes, classesRes, notifRes, trialRes] = await Promise.all([
         api.get<{ data?: UserToken[] }>('/student/tokens'),
         api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes'),
         api.get<{ data?: ApiNotification[] }>('/student/notifications').catch(() => ({ success: true, data: [] })),
+        api.get<{ success?: boolean; data?: TrialApplicationItem[] }>('/student/trial-applications').catch(() => ({ success: false, data: [] })),
       ]);
       const tokensData = (tokensRes as any).data;
       let classesData = (classesRes as any).data;
       const notifData = (notifRes as any).data;
+      const trialData = (trialRes as any).data;
       setTokens(Array.isArray(tokensData) ? tokensData : FALLBACK_TOKENS);
+      setTrialApplications(Array.isArray(trialData) ? trialData : []);
+      setTrialApplicationsLoaded((trialRes as any).success === true);
       if (Array.isArray(classesData) && profileId) {
         classesData = classesData.filter((e: UpcomingClass) => (e.profile_id || e.user_id || '') === profileId);
       }
@@ -151,6 +157,8 @@ export default function DashboardPage() {
       setRawNotifications(Array.isArray(notifData) ? notifData : []);
     } catch {
       setTokens(FALLBACK_TOKENS);
+      setTrialApplications([]);
+      setTrialApplicationsLoaded(false);
       setUpcomingClasses(getFallbackUpcomingClasses(profile?.id ?? undefined, profile?.full_name ?? undefined));
       setRawNotifications([]);
     } finally {
@@ -456,16 +464,25 @@ export default function DashboardPage() {
             <BookOpen className="h-5 w-5 text-primary" />
             {t('dashboard.myTrialApplications')}
           </h2>
-          <ul className="space-y-2">
-            {FALLBACK_TRIAL_APPLICATIONS.map((trial) => (
-              <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                <span className="font-medium text-gray-900">{trial.class_name}</span>
-                <span className={`text-sm font-medium px-2 py-0.5 rounded ${trial.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                  {trial.status === 'confirmed' ? t('dashboard.trialStatusConfirmed') : t('dashboard.trialStatusPending')}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {trialApplicationsLoaded && trialApplications.length === 0 ? (
+            <p className="text-sm text-gray-500 py-2">{t('dashboard.noTrialApplications', '暫無試堂申請')}</p>
+          ) : (
+            <ul className="space-y-2">
+              {(trialApplicationsLoaded ? trialApplications : FALLBACK_TRIAL_APPLICATIONS).map((trial) => (
+                <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div>
+                    <span className="font-medium text-gray-900">{trial.class_name}</span>
+                    {trial.applied_date && (
+                      <span className="block text-xs text-gray-500 mt-0.5">{formatDate(trial.applied_date, getLocale())}</span>
+                    )}
+                  </div>
+                  <span className={`text-sm font-medium px-2 py-0.5 rounded ${trial.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                    {trial.status === 'confirmed' ? t('dashboard.trialStatusConfirmed') : t('dashboard.trialStatusPending')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
         <p className="text-sm text-gray-600">{t('dashboard.scheduleHint')}</p>

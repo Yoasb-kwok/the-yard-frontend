@@ -195,6 +195,8 @@
     "leaveTypeSick": "病假",
     "typeClassAnnouncement": "全班通知",
     "noNotifications": "暫無通知",
+    "gotIt": "知道了",
+    "nextNotice": "下一則",
     "tokenExpiringTitle": "代幣即將到期",
     "tokenExpiringMessage": "部分代幣將於 {{daysLeft}} 日內到期，請盡快使用。",
     "tokenLowTitle": "代幣餘額不足",
@@ -428,6 +430,7 @@
     "myTrialApplications": "我的試堂申請",
     "trialStatusConfirmed": "已確認",
     "trialStatusPending": "待確認",
+    "noTrialApplications": "暫無試堂申請",
     "courseProgress": "已上 {{current}} 堂 / 共 {{total}} 堂",
     "recentActivity": "最近事務",
     "enterChildPage": "進入主頁",
@@ -1050,7 +1053,10 @@
       "notesPlaceholder": "輸入備註…",
       "assignClass": "分配班別",
       "assignClassPlaceholder": "例如：兒童芭蕾 A（週一 16:00）",
+      "assignedLessons": "堂數",
+      "assignedLessonsPlaceholder": "選擇堂數",
       "notesAndAssign": "備註／分配班別",
+      "saveAllHint": "一次儲存：狀態、備註、分配班別與堂數",
       "noApplications": "暫無試堂申請"
     },
     "auditLog": {

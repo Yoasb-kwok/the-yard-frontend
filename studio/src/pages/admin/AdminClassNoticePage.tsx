@@ -1,30 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { Send, Users, MessageSquare } from 'lucide-react';
+import { api } from '../../lib/api';
 
-const DEMO_CLASSES = [
-  { id: 'c1', name: '兒童芭蕾 A', programCode: 'KB-A' },
-  { id: 'c2', name: '兒童爵士 B', programCode: 'KJ-B' },
-  { id: 'c3', name: '青少年街舞', programCode: 'THH' },
-  { id: 'c4', name: '幼兒律動', programCode: 'YM' },
-];
+interface ClassOption {
+  id: number;
+  name: string;
+  program_code?: string;
+  start_time?: string;
+  is_cancelled?: number;
+}
 
 export default function AdminClassNoticePage() {
   const { t } = useTranslation();
+  const [classes, setClasses] = useState<ClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api.get<{ success?: boolean; data?: ClassOption[] }>('/admin/classes')
+      .then((res) => {
+        const data = (res as any).data;
+        if (Array.isArray(data)) {
+          setClasses(data.filter((c: ClassOption) => !c.is_cancelled));
+        }
+      })
+      .catch(() => setClasses([]));
+  }, []);
 
   async function handleSend() {
     if (!selectedClassId || !message.trim()) return;
     setSending(true);
     setSent(false);
-    await new Promise((r) => setTimeout(r, 800));
-    setSending(false);
-    setSent(true);
-    setMessage('');
+    setError('');
+    try {
+      const res = await api.post<{ success?: boolean; id?: number; msg?: string }>('/admin/class-notice', {
+        classId: Number(selectedClassId),
+        message: message.trim(),
+      });
+      if ((res as any).success) {
+        setSent(true);
+        setMessage('');
+      } else {
+        setError((res as any).msg || t('common.error'));
+      }
+    } catch (e: unknown) {
+      setError((e as Error)?.message || t('common.error'));
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -50,9 +78,9 @@ export default function AdminClassNoticePage() {
               className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">{t('admin.classNotice.chooseClass', '請選擇')}</option>
-              {DEMO_CLASSES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.programCode})
+              {classes.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}{c.program_code ? ` (${c.program_code})` : ''}
                 </option>
               ))}
             </select>
@@ -71,6 +99,7 @@ export default function AdminClassNoticePage() {
             />
           </div>
           <div className="flex items-center gap-2 pt-2">
+            {error && <span className="text-sm text-red-600">{error}</span>}
             <button
               type="button"
               onClick={handleSend}

@@ -195,6 +195,8 @@
     "leaveTypeSick": "Sick leave",
     "typeClassAnnouncement": "Class notice",
     "noNotifications": "No notifications",
+    "gotIt": "Got it",
+    "nextNotice": "Next",
     "tokenExpiringTitle": "Tokens expiring soon",
     "tokenExpiringMessage": "Some tokens will expire within {{daysLeft}} days. Please use them soon.",
     "tokenLowTitle": "Low token balance",
@@ -428,6 +430,7 @@
     "myTrialApplications": "My trial applications",
     "trialStatusConfirmed": "Confirmed",
     "trialStatusPending": "Pending",
+    "noTrialApplications": "No trial applications",
     "courseProgress": "{{current}} / {{total}} lessons attended",
     "recentActivity": "Recent activity",
     "enterChildPage": "Go to page",
@@ -1047,7 +1050,10 @@
       "notesPlaceholder": "Add notes…",
       "assignClass": "Assign class",
       "assignClassPlaceholder": "e.g. Kids Ballet A (Mon 4pm)",
+      "assignedLessons": "Lessons",
+      "assignedLessonsPlaceholder": "Select number of lessons",
       "notesAndAssign": "Notes / Assign class",
+      "saveAllHint": "Saves status, notes, assigned class and lessons at once",
       "noApplications": "No trial applications"
     },
     "auditLog": {
