@@ -338,7 +338,8 @@
     "invalidCredentials": "Invalid email or password",
     "dontHaveAccount": "Don't have an account?",
     "register": "Register",
-    "forgotPassword": "Forgot Password?"
+    "forgotPassword": "Forgot Password?",
+    "demoHint": "Demo (no backend): student@student.com / student123 · admin@admin.com / admin123"
   },
   "forgotPassword": {
     "title": "Forgot Password",

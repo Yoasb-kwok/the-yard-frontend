@@ -185,6 +185,72 @@ export function getFallbackCalendarLessons(displayedDate?: Date): DemoLessonForC
       });
     }
   }
+
+  // Demo: 同時段多個課程（同一日同一時段 4 堂，方便測試週視圖並排顯示）
+  const firstSunday = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  firstSunday.setDate(1 + (7 - firstSunday.getDay()) % 7);
+  if (firstSunday.getMonth() === anchor.getMonth()) {
+    const overlapNames = ['兒童芭蕾', '兒童中國舞', '幼兒律動', '爵士舞'];
+    const overlapInstructors = ['李老師', '黃老師', '王老師', '張老師'];
+    const overlapLocations: DemoLocation[] = ['sanpokong', 'sheungshui', 'sanpokong', 'fotan'];
+    const overlapCodes = ['KB-A', 'CCD', 'KIDS', 'JAZZ'];
+    for (let i = 0; i < 4; i++) {
+      const startDemo = new Date(firstSunday);
+      startDemo.setHours(10, 0, 0, 0);
+      const endDemo = new Date(startDemo);
+      endDemo.setHours(11, 0, 0, 0);
+      lessons.push({
+        id: `fb-overlap-${i + 1}`,
+        name: overlapNames[i],
+        instructor: overlapInstructors[i],
+        start_time: startDemo.toISOString(),
+        end_time: endDemo.toISOString(),
+        capacity: 12,
+        enrolled_count: 4 + i,
+        location: overlapLocations[i],
+        program_code: overlapCodes[i],
+        lesson_number: 1,
+        level: 'entry',
+        age_tag: i % 2 === 0 ? '5-8' : '9-12',
+        weekday: 0,
+        total_lessons: 8,
+      });
+    }
+  }
+
+  // Demo: 一日 15 堂課（同一日從早到晚排滿，方便測試月視圖 / 週視圖單日多堂）
+  const firstSaturday = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  firstSaturday.setDate(1 + (6 - firstSaturday.getDay() + 7) % 7);
+  if (firstSaturday.getMonth() === anchor.getMonth()) {
+    const day15Names = ['幼兒律動', '兒童芭蕾', '兒童中國舞', 'K-Pop 流行舞', '爵士舞', '青少年街舞', '兒童芭蕾', '幼兒律動', '兒童中國舞', '爵士舞', 'K-Pop 流行舞', '青少年街舞', '兒童芭蕾', '幼兒律動', '爵士舞'];
+    const day15Instructors = ['王老師', '李老師', '黃老師', '林老師', '張老師', '陳老師', '李老師', '王老師', '黃老師', '張老師', '林老師', '陳老師', '李老師', '王老師', '張老師'];
+    const day15Locations: DemoLocation[] = ['sanpokong', 'sanpokong', 'sheungshui', 'causewaybay', 'fotan', 'causewaybay', 'sanpokong', 'sanpokong', 'sheungshui', 'fotan', 'causewaybay', 'causewaybay', 'sanpokong', 'sanpokong', 'fotan'];
+    const day15Codes = ['KIDS', 'KB-A', 'CCD', 'KPOP', 'JAZZ', 'THH', 'KB-A', 'KIDS', 'CCD', 'JAZZ', 'KPOP', 'THH', 'KB-A', 'KIDS', 'JAZZ'];
+    for (let i = 0; i < 15; i++) {
+      const hour = 8 + i; // 8:00, 9:00, ... 22:00
+      const startDemo = new Date(firstSaturday);
+      startDemo.setHours(hour, 0, 0, 0);
+      const endDemo = new Date(startDemo);
+      endDemo.setHours(hour + 1, 0, 0, 0);
+      lessons.push({
+        id: `fb-day15-${i + 1}`,
+        name: day15Names[i],
+        instructor: day15Instructors[i],
+        start_time: startDemo.toISOString(),
+        end_time: endDemo.toISOString(),
+        capacity: 12,
+        enrolled_count: 3 + (i % 5),
+        location: day15Locations[i],
+        program_code: day15Codes[i],
+        lesson_number: (i % 4) + 1,
+        level: i % 3 === 0 ? 'entry' : i % 3 === 1 ? 'intermediate' : 'advanced',
+        age_tag: i % 3 === 0 ? '5-8' : i % 3 === 1 ? '9-12' : '13-16',
+        weekday: 6,
+        total_lessons: 8,
+      });
+    }
+  }
+
   return lessons.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
 }
 

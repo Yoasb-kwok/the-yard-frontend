@@ -152,6 +152,9 @@ export default function LoginPage() {
                   {t('login.register')}
                 </Link>
               </p>
+              <p className="text-xs text-gray-500 mt-4 pt-4 border-t border-gray-200">
+                {t('login.demoHint', 'Demo (no backend):')} student@student.com / student123 · admin@admin.com / admin123
+              </p>
             </div>
           </form>
         </div>

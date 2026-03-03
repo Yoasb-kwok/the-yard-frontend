@@ -338,7 +338,8 @@
     "invalidCredentials": "电子邮件或密码无效",
     "dontHaveAccount": "还没有账户？",
     "register": "注册",
-    "forgotPassword": "忘记密码？"
+    "forgotPassword": "忘记密码？",
+    "demoHint": "演示账号（无需后端）：student@student.com / student123 · admin@admin.com / admin123"
   },
   "forgotPassword": {
     "title": "忘记密码",

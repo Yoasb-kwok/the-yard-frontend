@@ -40,6 +40,15 @@ const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'f
 
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
+/** Time-grid layout (Google Calendar style): 8:00–22:00, 30-min slots */
+const TIME_GRID_START_HOUR = 8;
+const TIME_GRID_END_HOUR = 22;
+const TIME_GRID_ROW_HEIGHT_PX = 48;
+/** 週視圖方塊最小高度，讓不同時長的課程方塊視覺一致 */
+const WEEK_VIEW_EVENT_MIN_HEIGHT_PX = 48;
+/** 重疊時段內每個課程方塊的最小寬度（px），以便完整顯示課程名稱 */
+const WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX = 100;
+
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const { user, profile } = useAuth();
@@ -60,8 +69,15 @@ export default function CalendarPage() {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
+  const [isNarrowScreen, setIsNarrowScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const lessonModalRef = useRef<HTMLDivElement>(null);
   useModalA11y(showLessonModal && !!selectedLesson, () => { setShowLessonModal(false); setSelectedLesson(null); }, lessonModalRef);
+
+  useEffect(() => {
+    const onResize = () => setIsNarrowScreen(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const isStudent = user && profile?.role === 'student';
   const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
@@ -252,6 +268,59 @@ export default function CalendarPage() {
       .map((x) => ({ lesson: x.lesson, _postponedFrom: x.isPostponed ? x.originalDateStr : undefined }));
   };
 
+  /**
+   * For time-grid view: get events for a day with start/end in minutes from midnight,
+   * and column index for overlapping events (side-by-side like Google Calendar).
+   */
+  const getDayEventsForTimeGrid = (day: Date): { lesson: Lesson; _postponedFrom?: string; startMinutes: number; endMinutes: number; columnIndex: number; totalColumns: number }[] => {
+    const dayLessons = getLessonsForDate(day);
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const startMin = TIME_GRID_START_HOUR * 60;
+    const endMin = TIME_GRID_END_HOUR * 60;
+
+    const events: { lesson: Lesson; _postponedFrom?: string; startMinutes: number; endMinutes: number }[] = [];
+    for (const { lesson, _postponedFrom } of dayLessons) {
+      const start = new Date(lesson.start_time);
+      const end = new Date(lesson.end_time);
+      const displayStart = new Date(dayStart);
+      displayStart.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+      const displayEnd = new Date(dayStart);
+      displayEnd.setHours(end.getHours(), end.getMinutes(), end.getSeconds(), 0);
+      let sm = displayStart.getHours() * 60 + displayStart.getMinutes();
+      let em = displayEnd.getHours() * 60 + displayEnd.getMinutes();
+      if (displayEnd <= displayStart) em += 24 * 60;
+      sm = Math.max(startMin, Math.min(endMin, sm));
+      em = Math.max(startMin, Math.min(endMin, em));
+      if (sm < em) events.push({ lesson, _postponedFrom, startMinutes: sm, endMinutes: em });
+    }
+    events.sort((a, b) => a.startMinutes - b.startMinutes);
+
+    const columnAssignments = new Map<typeof events[0], number>();
+    for (const ev of events) {
+      const overlapping = events.filter(
+        (o) => ev.startMinutes < o.endMinutes && ev.endMinutes > o.startMinutes
+      );
+      const used = new Set(
+        overlapping.filter((o) => columnAssignments.has(o)).map((o) => columnAssignments.get(o)!)
+      );
+      let k = 0;
+      while (used.has(k)) k++;
+      columnAssignments.set(ev, k);
+    }
+    const withColumns = events.map((ev) => {
+      const overlapping = events.filter(
+        (o) => ev.startMinutes < o.endMinutes && ev.endMinutes > o.startMinutes
+      );
+      const columnIndex = columnAssignments.get(ev)!;
+      const totalColumns = overlapping.length > 0
+        ? Math.max(...overlapping.map((o) => columnAssignments.get(o)!)) + 1
+        : 1;
+      return { ...ev, columnIndex, totalColumns };
+    });
+    return withColumns;
+  };
+
   // Get level tag styling
   const getLevelTag = (level: CourseLevel) => {
     const levelConfig = {
@@ -438,165 +507,70 @@ export default function CalendarPage() {
             <p className="text-gray-600 text-center py-8">{t('calendar.noLessons')}</p>
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {dayLessons.map(({ lesson, _postponedFrom }) => {
-              const locationColors = getLocationColors(lesson.location);
-              const suggested = isLessonSuggested(lesson);
-              return (
-                <div 
-                  key={lesson.id} 
-                  className={`bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 transition-all duration-300 flex flex-col ${suggested ? 'hover:shadow-2xl hover:-translate-y-1' : 'opacity-75'}`}
-                  style={{
-                    borderColor: suggested ? locationColors.lighter : '#e5e7eb',
-                  }}
-                  onMouseEnter={suggested ? (e) => {
-                    e.currentTarget.style.borderColor = locationColors.primary;
-                  } : undefined}
-                  onMouseLeave={suggested ? (e) => {
-                    e.currentTarget.style.borderColor = locationColors.lighter;
-                  } : undefined}
-                >
-                  {/* Top accent border */}
-                  <div 
-                    className="h-1 rounded-t-xl -mx-8 -mt-8 mb-6"
-                    style={{
-                      background: `linear-gradient(to right, ${locationColors.primary}, ${locationColors.light})`,
-                    }}
-                  ></div>
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className="text-xs font-semibold text-white bg-green-600 px-2.5 py-1 rounded">
-                      {t('calendar.trialAvailable', '可試堂')}
-                    </span>
-                  {_postponedFrom && (
-                    <p className="text-xs text-amber-600 font-medium">
-                      {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
-                    </p>
-                  )}
-                  </div>
-                  <div className="flex items-start justify-between mb-6">
-                    <h3 className="text-2xl font-bold text-gray-900 leading-tight pr-2">{lesson.name}</h3>
-                    <div className="flex flex-col gap-2 items-end">
-                      <span 
-                        className="text-xs font-bold text-white px-3 py-1.5 rounded-full whitespace-nowrap flex-shrink-0"
-                        style={{
-                          backgroundColor: locationColors.primary,
-                        }}
+          (() => {
+            const dayEvents = getDayEventsForTimeGrid(currentDate);
+            const gridHeightPx = (TIME_GRID_END_HOUR - TIME_GRID_START_HOUR) * TIME_GRID_ROW_HEIGHT_PX;
+            const startMin = TIME_GRID_START_HOUR * 60;
+            const hourLabels = Array.from(
+              { length: TIME_GRID_END_HOUR - TIME_GRID_START_HOUR },
+              (_, i) => `${String(TIME_GRID_START_HOUR + i).padStart(2, '0')}:00`
+            );
+            return (
+              <div className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="flex border-b" style={{ minHeight: gridHeightPx }}>
+                  <div className="w-14 flex-shrink-0 border-r bg-gray-50/80">
+                    {hourLabels.map((label) => (
+                      <div
+                        key={label}
+                        className="text-xs text-gray-500 pr-1 text-right border-t border-gray-100 first:border-t-0"
+                        style={{ height: TIME_GRID_ROW_HEIGHT_PX }}
                       >
-                        {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number) || lesson.program_code}
-                      </span>
-                      {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
-                        <span className="text-xs font-medium text-gray-600">
-                          {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
-                        </span>
-                      )}
-                      <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(lesson.level).className}`}>
-                        {getLevelTag(lesson.level).label}
-                      </span>
-                      <span className={`text-xs font-semibold px-2 py-1 rounded border ${getAgeTag(lesson.age_tag).className}`}>
-                        {getAgeTag(lesson.age_tag).label}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Tutor Profile */}
-                  <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
-                    <img
-                      src={getTutorImageUrl(lesson.instructor)}
-                      alt={lesson.instructor}
-                      className="w-20 h-20 rounded-full object-cover mr-4"
-                    />
-                    <div>
-                      <p className="text-base font-bold text-gray-900">{lesson.instructor}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4 mb-6 flex-1">
-                    <div className="flex items-center text-gray-800 rounded-lg p-3">
-                      <Clock 
-                        className="h-5 w-5 mr-3 flex-shrink-0" 
-                        style={{ color: locationColors.primary }}
-                      />
-                      <span className="text-base font-semibold">
-                        {formatTime(new Date(lesson.start_time))} - {formatTime(new Date(lesson.end_time))}
-                      </span>
-                    </div>
-                    <div className="flex items-center text-gray-800 rounded-lg p-3">
-                      <MapPin 
-                        className="h-5 w-5 mr-3 flex-shrink-0" 
-                        style={{ color: locationColors.primary }}
-                      />
-                      <span className="text-base font-semibold">{t(`home.locations.${lesson.location}`)}</span>
-                    </div>
-                    <div className="flex items-center text-gray-800 rounded-lg p-3">
-                      <Repeat 
-                        className="h-5 w-5 mr-3 flex-shrink-0" 
-                        style={{ color: locationColors.primary }}
-                      />
-                      <span className="text-base font-semibold">
-                        {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: lesson.total_lessons })}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => handleLessonClick(lesson)}
-                      className="w-full px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg flex items-center justify-center gap-2 border-2"
-                      style={{
-                        borderColor: locationColors.primary,
-                        color: locationColors.primary,
-                        backgroundColor: 'transparent',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = locationColors.lighter;
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                      }}
-                    >
-                      <Info className="w-5 h-5" />
-                      {t('calendar.preview')}
-                    </button>
-                    {isStudent && (suggested ? (
-                      <Link
-                        to="/token-package"
-                        state={{
-                          classData: {
-                            id: lesson.id,
-                            name: lesson.name,
-                            instructor: lesson.instructor,
-                            start_time: lesson.start_time,
-                            end_time: lesson.end_time,
-                            location: lesson.location,
-                            program_code: lesson.program_code,
-                            level: lesson.level,
-                            age_tag: lesson.age_tag,
-                          }
-                        }}
-                        className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
-                        style={{
-                          backgroundColor: locationColors.primary,
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.dark;
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.primary;
-                        }}
-                      >
-                        {t('calendar.enroll')}
-                      </Link>
-                    ) : (
-                      <span className="w-full px-6 py-3 rounded-lg text-base font-medium text-center block bg-gray-200 text-gray-500 cursor-not-allowed">
-                        {t('calendar.notSuggested')}
-                      </span>
+                        {label}
+                      </div>
                     ))}
                   </div>
+                  <div
+                    className="flex-1 relative min-w-0"
+                    style={{ minHeight: gridHeightPx }}
+                  >
+                    {dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
+                      const locationColors = getLocationColors(lesson.location);
+                      const suggested = isLessonSuggested(lesson);
+                      const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                      const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                      const leftPct = totalColumns > 0 ? (columnIndex / totalColumns) * 100 : 0;
+                      const widthPct = totalColumns > 0 ? 100 / totalColumns : 100;
+                      const gap = 1;
+                      const leftAdj = leftPct + (gap / totalColumns) * columnIndex;
+                      const widthAdj = widthPct - gap;
+                      return (
+                        <button
+                          key={lesson.id}
+                          type="button"
+                          onClick={() => handleLessonClick(lesson)}
+                          className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                          style={{
+                            top: topPx + 2,
+                            height: Math.max(heightPx - 4, 24),
+                            left: `${leftAdj}%`,
+                            width: `${widthAdj}%`,
+                            backgroundColor: locationColors.lighter,
+                            borderLeft: `4px solid ${locationColors.primary}`,
+                          }}
+                          title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                        >
+                          <div className="p-1.5 h-full overflow-hidden flex flex-col justify-center">
+                            <span className="text-sm font-semibold text-gray-900 truncate">{lesson.name}</span>
+                            <span className="text-xs text-gray-600 truncate">{formatTime(new Date(lesson.start_time))}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            );
+          })()
         )}
       </div>
     );
@@ -707,7 +681,9 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={lesson.id}
-                        className={`mb-2 p-2 text-white rounded text-xs transition-all ${suggested ? 'hover:shadow-md' : 'opacity-70'}`}
+                        role="button"
+                        tabIndex={0}
+                        className={`mb-2 p-2 text-white rounded text-xs cursor-pointer transition-all truncate ${suggested ? 'hover:shadow-md' : 'opacity-70'}`}
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
@@ -717,42 +693,11 @@ export default function CalendarPage() {
                         onMouseLeave={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         } : undefined}
+                        onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
+                        title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
                       >
-                        {_postponedFrom && (
-                          <div className="text-white/90 text-[10px] mb-0.5 italic">
-                            {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
-                          </div>
-                        )}
                         <div className="font-medium truncate">{lesson.name}</div>
-                        <span className="text-[10px] text-white/90 font-medium block">{t('calendar.trialAvailable', '可試堂')}</span>
-                        {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
-                          <div className="text-white/90 text-xs mt-0.5 font-medium">
-                            {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
-                          </div>
-                        )}
-                        <div className="text-white/70 text-xs mt-1 truncate">
-                          {lesson.instructor}
-                        </div>
-                        <div className="text-white/80 text-xs mt-0.5">
-                          {formatTime(new Date(lesson.start_time))}
-                        </div>
-                        <div className="text-white/80 text-xs mt-0.5 truncate">
-                          {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: lesson.total_lessons })}
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
-                        </div>
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                            className="w-full px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-[11px] font-medium flex items-center justify-center gap-1"
-                          >
-                            <Info className="w-3 h-3 flex-shrink-0" />
-                            {t('calendar.preview')}
-                          </button>
-                        </div>
+                        <div className="text-white/90 text-[10px] mt-0.5">{formatTime(new Date(lesson.start_time))}</div>
                       </div>
                     );
                   })}
@@ -815,109 +760,141 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="grid grid-cols-7 border-b">
-            {weekDays.map((day, idx) => {
-              const holidayName = getHolidayName(day);
-              return (
-                <div key={idx} className="border-r last:border-r-0 p-3 text-center bg-gray-50">
-                  <div className="text-sm font-medium text-gray-600">
-                    {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
-                  </div>
-                  <div className={`text-lg font-semibold mt-1 ${
-                    day.toDateString() === new Date().toDateString() 
-                      ? 'text-primary' 
-                      : 'text-gray-900'
-                  }`}>
-                    {day.getDate()}
-                  </div>
-                  {holidayName && (
-                    <div className="text-xs text-gray-400 mt-1 italic truncate" title={holidayName}>
-                      {holidayName}
+        <div className="bg-white rounded-lg shadow-md overflow-x-auto overflow-y-hidden">
+          <div className="min-w-[800px]">
+            {/* Header row: 56px time column + 7 equal day columns so borders align with time grid below */}
+            <div
+              className="grid border-b bg-gray-50"
+              style={{ gridTemplateColumns: '56px repeat(7, minmax(0, 1fr))' }}
+            >
+              <div className="border-r p-2 text-xs font-medium text-gray-500 bg-gray-50/80" />
+              {weekDays.map((day) => {
+                const holidayName = getHolidayName(day);
+                const isToday = day.toDateString() === new Date().toDateString();
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`p-2 text-center border-r last:border-r-0 ${isToday ? 'bg-primary-lighter' : ''}`}
+                  >
+                    <div className="text-sm font-medium text-gray-600">
+                      {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
                     </div>
-                  )}
-                </div>
+                    <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-primary' : 'text-gray-900'}`}>
+                      {day.getDate()}
+                    </div>
+                    {holidayName && (
+                      <div className="text-xs text-gray-400 italic truncate" title={holidayName}>
+                        {holidayName}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {(() => {
+              const gridHeightPx = (TIME_GRID_END_HOUR - TIME_GRID_START_HOUR) * TIME_GRID_ROW_HEIGHT_PX;
+              const startMin = TIME_GRID_START_HOUR * 60;
+              const hourLabels = Array.from(
+                { length: TIME_GRID_END_HOUR - TIME_GRID_START_HOUR },
+                (_, i) => `${String(TIME_GRID_START_HOUR + i).padStart(2, '0')}:00`
               );
-            })}
-          </div>
-          <div className="grid grid-cols-7 min-h-[400px]">
-            {weekDays.map((day, idx) => {
-              const dayLessons = getLessonsForDate(day);
-              const isToday = day.toDateString() === new Date().toDateString();
-              const holidayName = getHolidayName(day);
-              
               return (
                 <div
-                  key={idx}
-                  className={`border-r last:border-r-0 p-2 ${
-                    isToday ? 'bg-primary-lighter' : ''
-                  }`}
+                  className="grid border-b"
+                  style={{
+                    gridTemplateColumns: '56px repeat(7, minmax(0, 1fr))',
+                    minHeight: gridHeightPx,
+                  }}
                 >
-                  {holidayName && (
-                    <div className="text-xs text-gray-400 mb-2 italic truncate" title={holidayName}>
-                      {holidayName}
-                    </div>
-                  )}
-                  {dayLessons.map(({ lesson, _postponedFrom }) => {
-                    const locationColors = getLocationColors(lesson.location);
-                    const levelTag = getLevelTag(lesson.level);
-                    const ageTag = getAgeTag(lesson.age_tag);
-                    const suggested = isLessonSuggested(lesson);
+                  <div className="border-r bg-gray-50/80">
+                    {hourLabels.map((label) => (
+                      <div
+                        key={label}
+                        className="text-xs text-gray-500 pr-1 text-right border-t border-gray-100 first:border-t-0"
+                        style={{ height: TIME_GRID_ROW_HEIGHT_PX }}
+                      >
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  {weekDays.map((day) => {
+                    const isToday = day.toDateString() === new Date().toDateString();
+                    const dayEvents = getDayEventsForTimeGrid(day);
+                    const maxColumns = dayEvents.length > 0
+                      ? Math.max(...dayEvents.map((e) => e.totalColumns))
+                      : 1;
+                    const useHorizontalScroll = maxColumns > 1 && !isNarrowScreen;
+                    const contentMinWidth = useHorizontalScroll ? maxColumns * WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX : '100%';
                     return (
                       <div
-                        key={lesson.id}
-                        className={`mb-2 p-2 text-white rounded text-xs transition-all ${suggested ? 'hover:shadow-md' : 'opacity-70'}`}
-                        style={{
-                          backgroundColor: locationColors.primary,
-                        }}
-                        onMouseEnter={suggested ? (e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.dark;
-                        } : undefined}
-                        onMouseLeave={suggested ? (e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.primary;
-                        } : undefined}
+                        key={day.toISOString()}
+                        className={`border-r last:border-r-0 relative ${isToday ? 'bg-primary-lighter/20' : 'bg-white'}`}
+                        style={{ minHeight: gridHeightPx }}
                       >
-                        {_postponedFrom && (
-                          <div className="text-white/90 text-[10px] mb-0.5 italic">
-                            {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
-                          </div>
-                        )}
-                        <div className="font-medium truncate">{lesson.name}</div>
-                        <span className="text-[10px] text-white/90 font-medium block">{t('calendar.trialAvailable', '可試堂')}</span>
-                        {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
-                          <div className="text-white/90 text-xs mt-0.5 font-medium">
-                            {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
-                          </div>
-                        )}
-                        <div className="text-white/70 text-xs mt-1 truncate">
-                          {lesson.instructor}
-                        </div>
-                        <div className="text-white/80 text-xs mt-0.5">
-                          {formatTime(new Date(lesson.start_time))}
-                        </div>
-                        <div className="text-white/80 text-xs mt-0.5 truncate">
-                          {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[lesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: lesson.total_lessons })}
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-1">
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
-                        </div>
-                        <div className="mt-2">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                            className="w-full px-2 py-1 rounded bg-white/20 hover:bg-white/30 text-[11px] font-medium flex items-center justify-center gap-1"
+                        <div className="absolute inset-0 overflow-x-auto overflow-y-hidden">
+                          <div
+                            className="relative h-full"
+                            style={{
+                              minWidth: contentMinWidth,
+                              minHeight: gridHeightPx,
+                            }}
                           >
-                            <Info className="w-3 h-3 flex-shrink-0" />
-                            {t('calendar.preview')}
-                          </button>
+                        {dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
+                          const locationColors = getLocationColors(lesson.location);
+                          const suggested = isLessonSuggested(lesson);
+                          const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                          const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                          const isOverlap = totalColumns > 1;
+                          const stackVertically = isNarrowScreen && isOverlap;
+                          const blockWidth = isOverlap && !stackVertically ? WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX : undefined;
+                          const blockLeftPct = !isOverlap && totalColumns > 0 ? (columnIndex / totalColumns) * 100 : undefined;
+                          const blockLeftPx = isOverlap && !stackVertically ? columnIndex * WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX : undefined;
+                          const widthPct = !isOverlap && totalColumns > 0 ? 100 / totalColumns : 100;
+                          const gap = isOverlap && !stackVertically ? 2 : 2;
+                          const leftAdj = blockLeftPct != null ? blockLeftPct + (gap / totalColumns) * columnIndex : undefined;
+                          const widthAdj = blockLeftPct != null ? widthPct - gap : undefined;
+                          const stackTopPx = stackVertically ? topPx + columnIndex * (WEEK_VIEW_EVENT_MIN_HEIGHT_PX + 4) : undefined;
+                          return (
+                            <button
+                              key={lesson.id}
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
+                              className={`absolute text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                                style={{
+                                  top: (stackVertically ? stackTopPx : topPx + 2) ?? topPx + 2,
+                                  height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
+                                  ...(stackVertically
+                                    ? { left: 2, right: 2, width: 'calc(100% - 4px)' }
+                                    : isOverlap
+                                    ? {
+                                        left: blockLeftPx,
+                                        width: (blockWidth ?? 0) - 4,
+                                        minWidth: (blockWidth ?? 0) - 4,
+                                      }
+                                    : {
+                                        left: `${leftAdj ?? 0}%`,
+                                        width: `${widthAdj ?? 100}%`,
+                                      }),
+                                  backgroundColor: locationColors.lighter,
+                                  borderLeft: `4px solid ${locationColors.primary}`,
+                                }}
+                              title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                            >
+                              <div className="p-1.5 h-full flex flex-col justify-center gap-0.5 min-h-0 min-w-0 overflow-hidden">
+                                <span className={`text-xs font-semibold text-gray-900 min-h-[1.25em] block ${(isOverlap && !stackVertically) ? 'break-words line-clamp-2 leading-tight' : 'truncate min-w-0'}`} title={lesson.name}>{lesson.name || (t('calendar.unnamedClass') || '課程')}</span>
+                                <span className="text-[10px] text-gray-600 shrink-0">{formatTime(new Date(lesson.start_time))}</span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               );
-            })}
+            })()}
           </div>
         </div>
       </div>
@@ -1015,8 +992,6 @@ export default function CalendarPage() {
                 <div className="space-y-1">
                   {dayLessons.slice(0, 3).map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
-                    const levelTag = getLevelTag(lesson.level);
-                    const ageTag = getAgeTag(lesson.age_tag);
                     const suggested = isLessonSuggested(lesson);
                     const titleExtra = _postponedFrom
                       ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}`
@@ -1024,7 +999,9 @@ export default function CalendarPage() {
                     return (
                       <div
                         key={lesson.id}
-                        className={`text-xs p-1 text-white rounded transition-colors ${suggested ? '' : 'opacity-70'}`}
+                        role="button"
+                        tabIndex={0}
+                        className={`text-xs py-1 px-1.5 text-white rounded cursor-pointer transition-colors truncate ${suggested ? '' : 'opacity-70'}`}
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
@@ -1034,39 +1011,10 @@ export default function CalendarPage() {
                         onMouseLeave={suggested ? (e) => {
                           e.currentTarget.style.backgroundColor = locationColors.primary;
                         } : undefined}
-                        title={`${lesson.name}${lesson.lesson_number != null && lesson.lesson_number >= 1 ? ` · ${formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · ${t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}` : ''} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}${titleExtra}`}
+                        onClick={() => handleLessonClick(lesson)}
+                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}${titleExtra}`}
                       >
-                        {_postponedFrom && (
-                          <div className="truncate text-white/90 text-[10px] italic">
-                            {t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}
-                          </div>
-                        )}
-                        <div className="truncate">
-                          {formatTime(new Date(lesson.start_time))} {lesson.name}
-                        </div>
-                        <span className="text-[10px] text-white/90">{t('calendar.trialAvailable', '可試堂')}</span>
-                        {(lesson.lesson_number != null && lesson.lesson_number >= 1) && (
-                          <div className="truncate text-white/90 text-[10px] font-medium">
-                            {formatProgramCodeDisplay(lesson.program_code, lesson.lesson_number)} · {t('calendar.lessonXOfY', { current: lesson.lesson_number, total: lesson.total_lessons })}
-                          </div>
-                        )}
-                        <div className="truncate text-white/80">
-                          {lesson.instructor}
-                        </div>
-                        <div className="flex flex-wrap gap-0.5 mt-0.5">
-                          <span className={`text-xs px-1 py-0.5 rounded ${levelTag.className}`}>{levelTag.label}</span>
-                          <span className={`text-xs px-1 py-0.5 rounded ${ageTag.className}`}>{ageTag.label}</span>
-                        </div>
-                        <div className="mt-1">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                            className="w-full px-1 py-0.5 rounded bg-white/20 hover:bg-white/30 text-[10px] font-medium truncate flex items-center justify-center gap-0.5"
-                          >
-                            <Info className="w-2.5 h-2.5 flex-shrink-0" />
-                            <span className="truncate">{t('calendar.preview')}</span>
-                          </button>
-                        </div>
+                        {formatTime(new Date(lesson.start_time))} {lesson.name}
                       </div>
                     );
                   })}

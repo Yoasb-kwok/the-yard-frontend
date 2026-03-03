@@ -190,6 +190,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token');
     async function restoreSession() {
       if (token) {
+        // Demo token (no backend): restore from auth_session only to avoid failed API calls
+        if (token.startsWith('sheet_')) {
+          const stored = localStorage.getItem('auth_session');
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              setUser(parsed.user);
+              setSession(parsed.session ?? null);
+              if (parsed.profiles && Array.isArray(parsed.profiles)) {
+                setProfiles(parsed.profiles);
+                setActiveProfileId(parsed.activeProfileId ?? parsed.profiles[0]?.id ?? null);
+              } else if (parsed.profile) {
+                const profs = [parsed.profile];
+                setProfiles(profs);
+                setActiveProfileId(parsed.profile.id);
+              } else {
+                setProfiles(null);
+                setActiveProfileId(null);
+              }
+            } catch {
+              localStorage.removeItem('auth_session');
+              localStorage.removeItem('token');
+            }
+          }
+          setLoading(false);
+          return;
+        }
         try {
           const healthRes = await api.get<{ ok?: boolean; serverId?: string }>('health');
           const currentServerId = (healthRes as any).serverId ?? (healthRes as any).data?.serverId;
@@ -439,11 +466,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (apiErr instanceof ApiError && apiErr.status === 401) {
         throw new Error('Invalid email or password');
       }
-      if (apiErr instanceof Error && (apiErr.message.includes('Network') || apiErr.message.includes('fetch'))) {
-        // Fall through to hardcoded when API unreachable
-      } else {
+      const isBackendUnreachable =
+        (apiErr instanceof ApiError && [502, 503, 504, 0].includes(apiErr.status)) ||
+        (apiErr instanceof Error && /Network|fetch|ECONNREFUSED|Failed to fetch/i.test(apiErr.message));
+      if (!isBackendUnreachable) {
         throw apiErr;
       }
+      // Fall through to hardcoded demo accounts when backend/proxy is down
     }
 
     const account = HARDCODED_ACCOUNTS[loginIdentifier];
