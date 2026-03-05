@@ -731,208 +731,134 @@ export default function CalendarPage() {
       d.setDate(startOfWeek.getDate() + i);
       return d;
     });
+    const gridHeightPx = (TIME_GRID_END_HOUR - TIME_GRID_START_HOUR) * TIME_GRID_ROW_HEIGHT_PX;
+    const startMin = TIME_GRID_START_HOUR * 60;
+    const hourLabels = Array.from(
+      { length: TIME_GRID_END_HOUR - TIME_GRID_START_HOUR },
+      (_, i) => `${String(TIME_GRID_START_HOUR + i).padStart(2, '0')}:00`
+    );
 
     return (
       <div className="space-y-4">
-        <div className="bg-white rounded-lg shadow-md overflow-x-auto overflow-y-hidden">
-          <div className="min-w-[800px]">
-            {/* Header row: 56px time column + 7 equal day columns so borders align with time grid below */}
+        {/* 與學生介面一致：打橫 7 欄時間格（手機可左右捲動） */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+          <div className="min-w-[600px]">
             <div
-              className="grid border-b bg-gray-50"
-              style={{ gridTemplateColumns: '56px repeat(7, minmax(0, 1fr))' }}
+              className="grid border-b bg-gray-50 mb-0"
+              style={{ gridTemplateColumns: '48px repeat(7, minmax(0, 1fr))' }}
             >
               <div className="border-r p-2 text-xs font-medium text-gray-500 bg-gray-50/80" />
               {weekDays.map((day) => {
-                const holidayName = getHolidayName(day);
                 const isToday = day.toDateString() === new Date().toDateString();
-                const dayEvents = getDayEventsForTimeGrid(day);
-                const hasOverlap = dayEvents.length > 0 && Math.max(...dayEvents.map((e) => e.totalColumns)) > 1;
+                const holidayName = getHolidayName(day);
                 return (
                   <div
                     key={day.toISOString()}
                     className={`p-2 text-center border-r last:border-r-0 ${isToday ? 'bg-primary-lighter' : ''}`}
                   >
-                    <div className="text-sm font-medium text-gray-600">
-                      {day.toLocaleDateString(getLocale(), { weekday: 'short' })}
+                    <div className="text-xs font-medium text-gray-600">
+                      {day.toLocaleDateString(getLocale(), { weekday: 'long' })}
                     </div>
-                    <div className={`text-lg font-semibold mt-0.5 ${isToday ? 'text-primary' : 'text-gray-900'}`}>
+                    <div className={`text-sm font-semibold mt-0.5 ${isToday ? 'text-primary' : 'text-gray-900'}`}>
                       {day.getDate()}
                     </div>
                     {holidayName && (
-                      <div className="text-xs text-gray-400 italic truncate" title={holidayName}>
+                      <div className="text-xs text-gray-400 italic truncate mt-0.5" title={holidayName}>
                         {holidayName}
-                      </div>
-                    )}
-                    {hasOverlap && (
-                      <div className="text-[10px] text-gray-400 mt-0.5" title={t('calendar.scrollForOverlap', 'Scroll right for same-time classes')}>
-                        →
                       </div>
                     )}
                   </div>
                 );
               })}
             </div>
-            {(() => {
-              const gridHeightPx = (TIME_GRID_END_HOUR - TIME_GRID_START_HOUR) * TIME_GRID_ROW_HEIGHT_PX;
-              const startMin = TIME_GRID_START_HOUR * 60;
-              const hourLabels = Array.from(
-                { length: TIME_GRID_END_HOUR - TIME_GRID_START_HOUR },
-                (_, i) => `${String(TIME_GRID_START_HOUR + i).padStart(2, '0')}:00`
-              );
-              return (
-                <div
-                  className="grid border-b"
-                  style={{
-                    gridTemplateColumns: '56px repeat(7, minmax(0, 1fr))',
-                    minHeight: gridHeightPx,
-                  }}
-                >
-                  <div className="border-r bg-gray-50/80">
-                    {hourLabels.map((label) => (
-                      <div
-                        key={label}
-                        className="text-xs text-gray-500 pr-1 text-right border-t border-gray-100 first:border-t-0"
-                        style={{ height: TIME_GRID_ROW_HEIGHT_PX }}
-                      >
-                        {label}
-                      </div>
-                    ))}
+            <div
+              className="grid border-b"
+              style={{
+                gridTemplateColumns: '48px repeat(7, minmax(0, 1fr))',
+                minHeight: gridHeightPx,
+              }}
+            >
+              <div className="border-r bg-gray-50/80">
+                {hourLabels.map((label) => (
+                  <div
+                    key={label}
+                    className="text-xs text-gray-500 pr-1 text-right border-t border-gray-100 first:border-t-0"
+                    style={{ height: TIME_GRID_ROW_HEIGHT_PX }}
+                  >
+                    {label}
                   </div>
-                  {weekDays.map((day) => {
-                    const isToday = day.toDateString() === new Date().toDateString();
-                    const dayEvents = getDayEventsForTimeGrid(day);
-                    const maxColumns = dayEvents.length > 0
-                      ? Math.max(...dayEvents.map((e) => e.totalColumns))
-                      : 1;
-                    const useHorizontalScroll = maxColumns > 1 && !isNarrowScreen;
-                    const contentMinWidth = useHorizontalScroll ? maxColumns * WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX : '100%';
-                    return (
-                      <div
-                        key={day.toISOString()}
-                        className={`border-r last:border-r-0 relative ${isToday ? 'bg-primary-lighter/20' : 'bg-white'}`}
-                        style={{ minHeight: gridHeightPx }}
-                      >
-                        <div className="absolute inset-0 overflow-x-auto overflow-y-hidden">
-                          <div
-                            className="relative h-full"
-                            style={{
-                              minWidth: contentMinWidth,
-                              minHeight: gridHeightPx,
-                            }}
-                          >
-                        {isNarrowScreen
-                          ? getSlotBlocks(dayEvents, day).map((block) => {
-                              if (block.type === 'single') {
-                                const { lesson, _postponedFrom, startMinutes, endMinutes } = block.ev;
-                                const locationColors = getLocationColors(lesson.location);
-                                const suggested = isLessonSuggested(lesson);
-                                const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                                const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                                return (
-                                  <button
-                                    key={lesson.id}
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                                    className={`absolute left-1 right-1 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
-                                    style={{
-                                      top: topPx + 2,
-                                      height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
-                                      backgroundColor: locationColors.lighter,
-                                      borderLeft: `4px solid ${locationColors.primary}`,
-                                    }}
-                                    title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
-                                  >
-                                    <div className="p-1 h-full flex flex-col justify-center min-h-0 min-w-0 overflow-hidden">
-                                      <span className="text-xs font-semibold text-gray-900 truncate">{lesson.name || (t('calendar.unnamedClass') || '課程')}</span>
-                                      <span className="text-[10px] text-gray-600">{formatTime(new Date(lesson.start_time))}</span>
-                                    </div>
-                                  </button>
-                                );
-                              }
-                              const topPx = ((block.startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                              const heightPx = ((block.endMinutes - block.startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                              return (
-                                <button
-                                  key={`group-${day.toISOString()}-${block.startMinutes}`}
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSlotPicker({ lessons: block.events.map((ev) => ev.lesson), timeLabel: block.timeLabel });
-                                  }}
-                                  className="absolute left-1 right-1 flex items-center gap-1 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
-                                  style={{
-                                    top: topPx + 2,
-                                    height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
-                                  }}
-                                  aria-label={t('calendar.sameTimeTapToPick', { count: block.events.length })}
-                                >
-                                  <Layers className="h-4 w-4 shrink-0 text-primary ml-1" aria-hidden />
-                                  <div className="p-1 flex-1 min-w-0 overflow-hidden">
-                                    <span className="text-[10px] font-semibold text-gray-900 block truncate">
-                                      {block.timeLabel} · {block.events.length} {t('calendar.classes', 'classes')}
-                                    </span>
-                                    <span className="text-[9px] text-gray-600">{t('calendar.tapToPick', 'Tap to pick')}</span>
-                                  </div>
-                                </button>
-                              );
-                            })
-                          : dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
+                ))}
+              </div>
+              {weekDays.map((day) => {
+                const isToday = day.toDateString() === new Date().toDateString();
+                const dayEvents = getDayEventsForTimeGrid(day);
+                return (
+                  <div
+                    key={day.toISOString()}
+                    className={`border-r last:border-r-0 relative ${isToday ? 'bg-primary-lighter/20' : ''}`}
+                    style={{ minHeight: gridHeightPx }}
+                  >
+                    <div className="absolute inset-0">
+                      {getSlotBlocks(dayEvents, day).map((block) => {
+                        if (block.type === 'single') {
+                          const { lesson, _postponedFrom, startMinutes, endMinutes } = block.ev;
                           const locationColors = getLocationColors(lesson.location);
                           const suggested = isLessonSuggested(lesson);
                           const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                           const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                          const isOverlap = totalColumns > 1;
-                          const stackVertically = isNarrowScreen && isOverlap;
-                          const blockWidth = isOverlap && !stackVertically ? WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX : undefined;
-                          const blockLeftPct = !isOverlap && totalColumns > 0 ? (columnIndex / totalColumns) * 100 : undefined;
-                          const blockLeftPx = isOverlap && !stackVertically ? columnIndex * WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX : undefined;
-                          const widthPct = !isOverlap && totalColumns > 0 ? 100 / totalColumns : 100;
-                          const gap = isOverlap && !stackVertically ? 2 : 2;
-                          const leftAdj = blockLeftPct != null ? blockLeftPct + (gap / totalColumns) * columnIndex : undefined;
-                          const widthAdj = blockLeftPct != null ? widthPct - gap : undefined;
-                          const stackTopPx = stackVertically ? topPx + columnIndex * (WEEK_VIEW_EVENT_MIN_HEIGHT_PX + 4) : undefined;
                           return (
                             <button
                               key={lesson.id}
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                              className={`absolute text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
-                                style={{
-                                  top: (stackVertically ? stackTopPx : topPx + 2) ?? topPx + 2,
-                                  height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
-                                  ...(stackVertically
-                                    ? { left: 2, right: 2, width: 'calc(100% - 4px)' }
-                                    : isOverlap
-                                    ? {
-                                        left: blockLeftPx,
-                                        width: (blockWidth ?? 0) - 4,
-                                        minWidth: (blockWidth ?? 0) - 4,
-                                      }
-                                    : {
-                                        left: `${leftAdj ?? 0}%`,
-                                        width: `${widthAdj ?? 100}%`,
-                                      }),
-                                  backgroundColor: locationColors.lighter,
-                                  borderLeft: `4px solid ${locationColors.primary}`,
-                                }}
+                              className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden text-white text-xs p-1 transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-white/50' : 'opacity-80'}`}
+                              style={{
+                                top: topPx + 2,
+                                height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
+                                backgroundColor: locationColors.primary,
+                              }}
                               title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
                             >
-                              <div className="p-1.5 h-full flex flex-col justify-center gap-0.5 min-h-0 min-w-0 overflow-hidden">
-                                <span className={`text-xs font-semibold text-gray-900 min-h-[1.25em] block ${(isOverlap && !stackVertically) ? 'break-words line-clamp-2 leading-tight' : 'truncate min-w-0'}`} title={lesson.name}>{lesson.name || (t('calendar.unnamedClass') || '課程')}</span>
-                                <span className="text-[10px] text-gray-600 shrink-0">{formatTime(new Date(lesson.start_time))}</span>
-                              </div>
+                              <span className="truncate block">{formatTime(new Date(lesson.start_time))}</span>
+                              <span className="truncate block font-medium">{lesson.name || (t('calendar.unnamedClass') || '課程')}</span>
                             </button>
                           );
-                        })}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+                        }
+                        const topPx = ((block.startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                        const heightPx = ((block.endMinutes - block.startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                        return (
+                          <button
+                            key={`group-${day.toISOString()}-${block.startMinutes}`}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSlotPicker({ lessons: block.events.map((ev) => ev.lesson), timeLabel: block.timeLabel });
+                            }}
+                            className="absolute left-0.5 right-0.5 flex items-center gap-1 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
+                            style={{
+                              top: topPx + 2,
+                              height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
+                            }}
+                            aria-label={t('calendar.sameTimeTapToPick', { count: block.events.length })}
+                          >
+                            <Layers className="h-4 w-4 shrink-0 text-primary ml-1" aria-hidden />
+                            <div className="p-1 flex-1 min-w-0 overflow-hidden">
+                              <span className="text-[10px] font-semibold text-gray-900 block truncate">
+                                {block.timeLabel} · {block.events.length} {t('calendar.classes', 'classes')}
+                              </span>
+                              <span className="text-[9px] text-gray-600">{t('calendar.tapToPick', 'Tap to pick')}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        </div>
         </div>
       </div>
     );
@@ -997,7 +923,7 @@ export default function CalendarPage() {
                         key={lesson.id}
                         role="button"
                         tabIndex={0}
-                        className={`text-xs py-1 px-1.5 text-white rounded cursor-pointer transition-colors truncate ${suggested ? '' : 'opacity-70'}`}
+                        className={`text-[10px] leading-tight py-0.5 px-1 rounded text-white min-w-0 break-words line-clamp-4 cursor-pointer transition-colors ${suggested ? '' : 'opacity-70'}`}
                         style={{
                           backgroundColor: locationColors.primary,
                         }}
@@ -1010,7 +936,7 @@ export default function CalendarPage() {
                         onClick={() => handleLessonClick(lesson)}
                         title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}${titleExtra}`}
                       >
-                        {formatTime(new Date(lesson.start_time))} {lesson.name}
+                        {lesson.name}
                       </div>
                     );
                   })}
@@ -1470,10 +1396,11 @@ export default function CalendarPage() {
               <div className="px-4 py-3 text-sm text-gray-500 mb-2">
                 {slotPicker.timeLabel} · {slotPicker.lessons.length} {t('calendar.classes', 'classes')}
               </div>
-              <ul className="max-h-[60vh] overflow-y-auto pb-6">
+              <ul className="max-h-[60vh] overflow-y-auto p-4 space-y-1.5 pb-6">
                 {slotPicker.lessons.map((lesson) => {
                   const locationColors = getLocationColors(lesson.location);
                   const suggested = isLessonSuggested(lesson);
+                  const timeLabel = `${formatTime(new Date(lesson.start_time))} – ${formatTime(new Date(lesson.end_time))}`;
                   return (
                     <li key={lesson.id}>
                       <button
@@ -1482,20 +1409,12 @@ export default function CalendarPage() {
                           setSlotPicker(null);
                           handleLessonClick(lesson);
                         }}
-                        className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-colors border-l-4 ${
-                          suggested ? 'hover:bg-gray-50' : 'opacity-85 hover:bg-gray-50'
-                        }`}
-                        style={{ borderLeftColor: locationColors.primary }}
+                        className={`w-full text-left rounded-lg px-3 py-2 text-white text-sm flex items-center gap-2 transition-opacity ${suggested ? 'hover:opacity-90' : 'opacity-85 hover:opacity-90'}`}
+                        style={{ backgroundColor: locationColors.primary }}
+                        title={`${lesson.name} · ${lesson.instructor} · ${timeLabel}`}
                       >
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-gray-900 truncate">{lesson.name}</p>
-                          <p className="text-sm text-gray-600 truncate">
-                            {t(`home.locations.${lesson.location}`)} · {lesson.instructor}
-                          </p>
-                          <p className="text-xs text-gray-500 mt-0.5">
-                            {formatTime(new Date(lesson.start_time))} – {formatTime(new Date(lesson.end_time))}
-                          </p>
-                        </div>
+                        <span className="font-medium shrink-0">{timeLabel}</span>
+                        <span className="truncate font-medium">{lesson.name}</span>
                       </button>
                     </li>
                   );

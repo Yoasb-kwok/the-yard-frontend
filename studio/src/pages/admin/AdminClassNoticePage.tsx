@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { Send, Users, MessageSquare } from 'lucide-react';
+import { Send, Users, MessageSquare, Maximize2 } from 'lucide-react';
 import { api } from '../../lib/api';
+import { getClassNoticePopupEnabled, setClassNoticePopupEnabled } from '../../lib/classNoticePopupSetting';
 
 interface ClassOption {
   id: number;
@@ -20,6 +21,11 @@ export default function AdminClassNoticePage() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
+  const [popupEnabled, setPopupEnabled] = useState(true);
+
+  useEffect(() => {
+    setPopupEnabled(getClassNoticePopupEnabled());
+  }, []);
 
   useEffect(() => {
     api.get<{ success?: boolean; data?: ClassOption[] }>('/admin/classes')
@@ -65,6 +71,35 @@ export default function AdminClassNoticePage() {
         <p className="text-gray-600 text-sm">
           {t('admin.classNotice.description', '發送通知給該班已報讀學生（如惡劣天氣停課）。只發給該班學生。')}
         </p>
+
+        {/* 彈窗開關 */}
+        <div className="bg-white rounded-lg shadow-md p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Maximize2 className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-gray-700">
+              {t('admin.classNotice.popupToggle', '學生登入時彈出全班通知')}
+            </span>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={popupEnabled}
+            onClick={() => {
+              const next = !popupEnabled;
+              setClassNoticePopupEnabled(next);
+              setPopupEnabled(next);
+            }}
+            className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+              popupEnabled ? 'bg-primary' : 'bg-gray-200'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition ${
+                popupEnabled ? 'translate-x-5' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
           <div>

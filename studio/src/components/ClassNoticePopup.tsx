@@ -1,11 +1,14 @@
 /**
  * Shows a popup modal for class notices (全班通知) when the student has unread notices.
+ * Only runs for students; when they log in, fetches notices for classes they're enrolled in.
  * Dismissed notice IDs are stored in localStorage so we don't show again.
  */
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MessageSquare, X } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
+import { getClassNoticePopupEnabled } from '../lib/classNoticePopupSetting';
 
 const STORAGE_KEY = 'classNoticeDismissed';
 
@@ -35,19 +38,46 @@ function addDismissedId(id: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
 }
 
+/** Demo notice when API is unavailable (e.g. no backend) so the popup can be tested. */
+function getDemoClassNotices(): ClassNoticeItem[] {
+  return [
+    {
+      id: 'demo-class-notice-1',
+      class_id: 0,
+      class_name: '兒童芭蕾 A',
+      message: '本週六因場地維修，原定 10:00 課堂改為 14:00 上課，請準時出席。',
+      created_at: new Date().toISOString(),
+    },
+  ];
+}
+
 export default function ClassNoticePopup() {
   const { t } = useTranslation();
+  const { profile } = useAuth();
   const [notices, setNotices] = useState<ClassNoticeItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    if (!profile || profile.role !== 'student') {
+      setLoading(false);
+      return;
+    }
+    if (!getClassNoticePopupEnabled()) {
+      setLoading(false);
+      return;
+    }
     api.get<{ success?: boolean; data?: ClassNoticeItem[] }>('/student/class-notices')
       .then((res) => {
         const data = (res as any).data;
         if (!Array.isArray(data)) {
-          setNotices([]);
+          const demo = getDemoClassNotices();
+          const dismissed = getDismissedIds();
+          const unseen = demo.filter((n) => !dismissed.includes(String(n.id)));
+          setNotices(unseen);
+          setOpen(unseen.length > 0);
+          setCurrentIndex(0);
           return;
         }
         const dismissed = getDismissedIds();
@@ -56,9 +86,16 @@ export default function ClassNoticePopup() {
         setOpen(unseen.length > 0);
         setCurrentIndex(0);
       })
-      .catch(() => setNotices([]))
+      .catch(() => {
+        const demo = getDemoClassNotices();
+        const dismissed = getDismissedIds();
+        const unseen = demo.filter((n) => !dismissed.includes(String(n.id)));
+        setNotices(unseen);
+        setOpen(unseen.length > 0);
+        setCurrentIndex(0);
+      })
       .finally(() => setLoading(false));
-  }, []);
+  }, [profile]);
 
   const current = notices[currentIndex];
   const hasNext = currentIndex < notices.length - 1;

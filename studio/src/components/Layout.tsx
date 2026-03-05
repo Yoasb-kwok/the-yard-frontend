@@ -557,8 +557,8 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </footer>
 
-      {/* 學生端：全班通知彈出（有選擇該課程的學生進入介面時自動顯示） */}
-      {!isAdmin && user && <ClassNoticePopup />}
+      {/* 學生端：全班通知彈出（修讀該班的學生登入後自動顯示，僅學生身份） */}
+      {user && profile && profile.role === 'student' && <ClassNoticePopup />}
     </div>
   );
 }

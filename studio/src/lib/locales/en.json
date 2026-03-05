@@ -1082,7 +1082,8 @@
       "message": "Message",
       "messagePlaceholder": "e.g. Due to bad weather, this Saturday 10:00 class is cancelled. Make-up date TBC.",
       "send": "Send class notice",
-      "sent": "Sent to enrolled students"
+      "sent": "Sent to enrolled students",
+      "popupToggle": "Show class notice popup when students log in"
     },
     "news": {
       "navTitle": "Latest News",
