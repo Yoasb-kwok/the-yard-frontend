@@ -88,6 +88,13 @@ async function compressImageToDataUrl(file: File): Promise<string> {
 
 const FALLBACK_UPCOMING_CLASSES: EnrolledClass[] = getFallbackUpcomingClasses();
 
+type ViewType = 'month' | 'week' | 'day';
+
+/** Time grid for week/day: 8:00–22:00, 30-min slots */
+const TIME_GRID_START_HOUR = 8;
+const TIME_GRID_END_HOUR = 22;
+const TIME_GRID_ROW_HEIGHT_PX = 48;
+
 /** One color per course for calendar (same idea as admin location colors). */
 const LESSON_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
@@ -238,6 +245,99 @@ function ApplicationModal({ isOpen, onClose, type, enrollment, onSubmit }: Appli
   );
 }
 
+/** One day's lessons for the popout: full data for course info, leave, map */
+type DayLessonItem = { enrollment: EnrolledClass; lessonIndex: number; lessonDate: Date; color: string };
+
+interface DayDetailModalProps {
+  isOpen: boolean;
+  day: Date | null;
+  items: DayLessonItem[];
+  getLocale: () => string;
+  onClose: () => void;
+  onRequestLeave: (enrollment: EnrolledClass, lessonIndex: number, lessonDate: Date) => void;
+}
+
+function DayDetailModal({ isOpen, day, items, getLocale, onClose, onRequestLeave }: DayDetailModalProps) {
+  const { t } = useTranslation();
+  const contentRef = useRef<HTMLDivElement>(null);
+  useModalA11y(isOpen, onClose, contentRef);
+  if (!isOpen || !day) return null;
+  const locale = getLocale();
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div ref={contentRef} className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden flex flex-col" role="dialog" aria-modal="true" aria-labelledby="day-detail-title">
+        <div className="flex justify-between items-center p-4 md:p-5 border-b border-gray-200">
+          <h3 id="day-detail-title" className="text-lg font-semibold text-gray-900">
+            {day.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          </h3>
+          <button type="button" onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100" aria-label={t('common.close')}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-4 md:p-5 space-y-4">
+          {items.length === 0 ? (
+            <p className="text-gray-500 text-center py-6">{t('schedule.noUpcomingClasses')}</p>
+          ) : (
+            items.map(({ enrollment, lessonIndex, lessonDate, color }) => {
+              const classStart = new Date(enrollment.class.start_time);
+              const classEnd = new Date(enrollment.class.end_time);
+              const durationMs = classEnd.getTime() - classStart.getTime();
+              const endDate = new Date(lessonDate.getTime() + durationMs);
+              const locInfo = getLocationInfo(enrollment.class.location);
+              const fromApi = enrollment.leave_requests?.find((r) => r.lesson_index === lessonIndex);
+              const leaveReq = fromApi
+                ? { type: fromApi.leave_type as 'personal' | 'sick', status: fromApi.status as 'pending' | 'approved' | 'rejected' }
+                : null;
+              const canRequestLeave = !leaveReq || leaveReq.status === 'rejected';
+              return (
+                <div key={`${enrollment.id}-${lessonIndex}`} className="border border-gray-200 rounded-lg p-4" style={{ borderLeftWidth: 4, borderLeftColor: color }}>
+                  <h4 className="font-semibold text-gray-900">{enrollment.class.name}</h4>
+                  {enrollment.class.program_code && (
+                    <span className="inline-block text-xs font-medium text-primary bg-primary-lighter px-2 py-0.5 rounded mt-1">{enrollment.class.program_code}</span>
+                  )}
+                  <p className="text-sm text-gray-600 mt-1">{enrollment.class.instructor}</p>
+                  <p className="text-sm text-gray-700 mt-0.5">
+                    {lessonDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })} – {endDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </p>
+                  {locInfo && (
+                    <div className="mt-2 text-sm text-gray-600">
+                      <p className="font-medium text-gray-700">{locInfo.name}</p>
+                      <p className="text-gray-600">{locInfo.address}</p>
+                      <a href={locInfo.mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-primary font-medium hover:underline">
+                        <MapPin className="h-4 w-4" />
+                        {t('schedule.openMap', '打開地圖')}
+                      </a>
+                    </div>
+                  )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {leaveReq ? (
+                      <span className={`text-xs font-medium px-2 py-1 rounded ${leaveReq.status === 'approved' ? 'bg-green-100 text-green-800' : leaveReq.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
+                        {leaveReq.type === 'sick' ? t('schedule.applySickLeave') : t('schedule.personalLeave')}: {t(`schedule.status.${leaveReq.status}`)}
+                      </span>
+                    ) : null}
+                    {canRequestLeave && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onRequestLeave(enrollment, lessonIndex, lessonDate);
+                        }}
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        {t('schedule.requestLeave')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SchedulePage() {
   const { profile } = useAuth();
   const { t, i18n } = useTranslation();
@@ -245,11 +345,13 @@ export default function SchedulePage() {
   const [enrollments, setEnrollments] = useState<EnrolledClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date());
+  const [view, setView] = useState<ViewType>('month');
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(() => new Date());
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [applicationModal, setApplicationModal] = useState<{ isOpen: boolean; type: 'extension' | 'sickLeave' | null; enrollment: EnrolledClass | null }>({ isOpen: false, type: null, enrollment: null });
   const [lessonLeaveRequests, setLessonLeaveRequests] = useState<Record<string, Record<number, LessonLeaveRequest>>>({});
   const [leaveLessonModal, setLeaveLessonModal] = useState<{ enrollment: EnrolledClass; lessonIndex: number; lessonDate: Date } | null>(null);
+  const [dayDetailModalDate, setDayDetailModalDate] = useState<Date | null>(null);
   const [lessonLeaveSuccess, setLessonLeaveSuccess] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -328,25 +430,49 @@ export default function SchedulePage() {
     return Math.round((attended / lessonsHeldSoFar) * 100);
   }, [myEnrollments, lessonDatesByEnrollment]);
 
-  /** 下一堂：最早嘅未來課堂（用於提醒卡） */
-  const nextLesson = useMemo(() => {
-    const now = Date.now();
-    let earliest: { date: Date; enrollment: EnrolledClass; lessonIndex: number } | null = null;
-    lessonDatesByEnrollment.forEach((dates, idx) => {
-      const e = myEnrollments[idx];
-      if (!e) return;
-      dates.forEach((d, i) => {
-        if (d.getTime() > now) {
-          if (!earliest || d.getTime() < earliest.date.getTime()) {
-            earliest = { date: d, enrollment: e, lessonIndex: i };
-          }
-        }
+  const getLocale = (): string => ({ 'en': 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' }[i18n.language] || 'en-US');
+
+  const formatTime = (date: Date): string =>
+    date.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false });
+
+  const getStartOfWeek = (date: Date): Date => {
+    const d = new Date(date);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day);
+    return d;
+  };
+  const getEndOfWeek = (date: Date): Date => {
+    const start = getStartOfWeek(date);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return end;
+  };
+
+  /** Flatten all lesson occurrences for week/day time grid: start, end, enrollment, lessonIndex, color */
+  const scheduleEvents = useMemo(() => {
+    const out: Array<{ start: Date; end: Date; enrollment: EnrolledClass; lessonIndex: number; color: string }> = [];
+    myEnrollments.forEach((e, idx) => {
+      const dates = lessonDatesByEnrollment[idx] ?? [];
+      const classStart = new Date(e.class.start_time);
+      const classEnd = new Date(e.class.end_time);
+      const durationMs = classEnd.getTime() - classStart.getTime();
+      const color = LESSON_COLORS[idx % LESSON_COLORS.length];
+      dates.forEach((lessonDate, lessonIndex) => {
+        const start = new Date(lessonDate);
+        const end = new Date(lessonDate.getTime() + durationMs);
+        out.push({ start, end, enrollment: e, lessonIndex, color });
       });
     });
-    return earliest;
+    return out.sort((a, b) => a.start.getTime() - b.start.getTime());
   }, [myEnrollments, lessonDatesByEnrollment]);
 
-  const getLocale = (): string => ({ 'en': 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' }[i18n.language] || 'en-US');
+  /** Events for a single day (for day view) */
+  const eventsForDay = (day: Date) => {
+    const y = day.getFullYear(), m = day.getMonth(), d = day.getDate();
+    return scheduleEvents.filter(
+      (ev) => ev.start.getFullYear() === y && ev.start.getMonth() === m && ev.start.getDate() === d
+    );
+  };
 
   const handleApplicationSubmit = async (enrollmentId: string, type: 'extension' | 'sickLeave', reason: string, _documentFile?: File | null) => {
     setSubmitError(null);
@@ -407,8 +533,8 @@ export default function SchedulePage() {
     }
   };
 
-  const year = calendarMonth.getFullYear();
-  const month = calendarMonth.getMonth();
+  const year = currentCalendarDate.getFullYear();
+  const month = currentCalendarDate.getMonth();
 
   const getDaysInMonth = (date: Date): Date[] => {
     const y = date.getFullYear();
@@ -432,7 +558,7 @@ export default function SchedulePage() {
     return days;
   };
 
-  const calendarDays = getDaysInMonth(calendarMonth);
+  const calendarDays = getDaysInMonth(currentCalendarDate);
   const weekDayLabels = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(2024, 0, 7 + i);
     return d.toLocaleDateString(getLocale(), { weekday: 'short' });
@@ -467,6 +593,25 @@ export default function SchedulePage() {
     return result;
   };
 
+  /** Full lesson items for a date (for day-detail popout). */
+  const getLessonItemsForDate = (day: Date): DayLessonItem[] => {
+    const y = day.getFullYear();
+    const m = day.getMonth();
+    const d = day.getDate();
+    const out: DayLessonItem[] = [];
+    lessonDatesByEnrollment.forEach((dates, idx) => {
+      const enrollment = myEnrollments[idx];
+      if (!enrollment) return;
+      const color = LESSON_COLORS[idx % LESSON_COLORS.length];
+      dates.forEach((lessonDate, lessonIndex) => {
+        if (lessonDate.getFullYear() === y && lessonDate.getMonth() === m && lessonDate.getDate() === d) {
+          out.push({ enrollment, lessonIndex, lessonDate, color });
+        }
+      });
+    });
+    return out.sort((a, b) => a.lessonDate.getTime() - b.lessonDate.getTime());
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -477,7 +622,8 @@ export default function SchedulePage() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-10">
+        {/* Page header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <CalendarIcon className="h-8 w-8 text-primary" />
@@ -492,6 +638,7 @@ export default function SchedulePage() {
           </Link>
         </div>
 
+        {/* Global messages */}
         {error && (
           <LoadErrorBanner
             message={error}
@@ -501,59 +648,43 @@ export default function SchedulePage() {
             }}
           />
         )}
-        {lessonLeaveSuccess && <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md">{lessonLeaveSuccess}</div>}
-        {submitError && <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md">{submitError}</div>}
+        {lessonLeaveSuccess && <div className="rounded-xl border border-green-200 bg-green-50 text-green-800 px-4 py-3">{lessonLeaveSuccess}</div>}
+        {submitError && <div className="rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3">{submitError}</div>}
 
-        {/* 下一堂：課堂提醒 */}
-        {nextLesson && (
-          <div className={`rounded-lg border-2 p-4 md:p-5 ${nextLesson.date.getTime() - Date.now() <= 24 * 60 * 60 * 1000 ? 'border-amber-400 bg-amber-50' : 'border-primary/30 bg-primary-lighter/30'}`}>
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500 mb-1">{nextLesson.date.getTime() - Date.now() <= 24 * 60 * 60 * 1000 ? t('schedule.comingWithin24h', '即將上課（24 小時內）') : t('schedule.nextLesson', '下一堂')}</p>
-                <p className="text-lg font-bold text-gray-900">
-                  {nextLesson.date.toLocaleDateString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric' })} {nextLesson.date.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })} · {nextLesson.enrollment.class.name}
-                </p>
-                {(() => {
-                  const locInfo = getLocationInfo(nextLesson.enrollment.class.location);
-                  if (!locInfo) return null;
-                  return (
-                    <div className="mt-2 text-sm text-gray-600">
-                      <p className="font-medium text-gray-700">{locInfo.name}</p>
-                      <p className="text-gray-600">{locInfo.address}</p>
-                      <a href={locInfo.mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-1 text-primary font-medium hover:underline">
-                        <MapPin className="h-4 w-4" />
-                        {t('schedule.openMap', '打開地圖')}
-                      </a>
-                    </div>
-                  );
-                })()}
-              </div>
+        {/* Calendar (month / week / day) — 下一堂、接下來所有課程 已改在左側欄顯示 */}
+        <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" aria-labelledby="schedule-calendar-heading">
+          <div id="schedule-calendar-heading" className="px-4 md:px-6 py-3 bg-gray-50 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5 text-primary" />
+              {t('schedule.calendarTitle')}
+            </h2>
+          </div>
+          <div className="p-4 md:p-6">
+          {/* View switcher: Month | Week | Day — visible on phone and desktop */}
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
+              <button type="button" onClick={() => setView('month')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${view === 'month' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>{t('calendar.month')}</button>
+              <button type="button" onClick={() => setView('week')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${view === 'week' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>{t('calendar.week')}</button>
+              <button type="button" onClick={() => setView('day')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${view === 'day' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>{t('calendar.day')}</button>
             </div>
           </div>
-        )}
-
-        {/* Calendar - same format as admin ClassesPage month view */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden p-4 md:p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-primary" />
-            {t('schedule.calendarTitle')}
-          </h2>
           <div className="flex items-center justify-between mb-4">
-            <button type="button" onClick={() => setCalendarMonth(new Date(year, month - 1))} className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+            <button type="button" onClick={() => { const d = new Date(currentCalendarDate); if (view === 'month') d.setMonth(d.getMonth() - 1); else if (view === 'week') d.setDate(d.getDate() - 7); else d.setDate(d.getDate() - 1); setCurrentCalendarDate(d); }} className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors" aria-label={t('common.previous')}>
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <span className="font-semibold text-gray-900">
-              {calendarMonth.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' })}
+            <span className="font-semibold text-gray-900 text-center min-w-[160px]">
+              {view === 'month' ? currentCalendarDate.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' }) : view === 'week' ? `${getStartOfWeek(currentCalendarDate).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' })} – ${getEndOfWeek(currentCalendarDate).toLocaleDateString(getLocale(), { month: 'short', day: 'numeric' })}` : currentCalendarDate.toLocaleDateString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric' })}
             </span>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCalendarMonth(new Date())} className="px-4 py-2 text-sm font-medium text-primary hover:bg-primary-lighter rounded-md">
-                {t('admin.classes.today')}
-              </button>
-              <button type="button" onClick={() => setCalendarMonth(new Date(year, month + 1))} className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
+            <button type="button" onClick={() => { const d = new Date(currentCalendarDate); if (view === 'month') d.setMonth(d.getMonth() + 1); else if (view === 'week') d.setDate(d.getDate() + 7); else d.setDate(d.getDate() + 1); setCurrentCalendarDate(d); }} className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors" aria-label={t('common.next')}>
+              <ChevronRight className="h-5 w-5" />
+            </button>
           </div>
+          <div className="flex justify-center mb-2">
+            <button type="button" onClick={() => setCurrentCalendarDate(new Date())} className="px-4 py-2 text-sm font-medium text-primary hover:bg-primary-lighter rounded-md">{t('admin.classes.today')}</button>
+          </div>
+
+          {view === 'month' && (
+          <>
           <div className="grid grid-cols-7 border-b mb-2">
             {weekDayLabels.map((label, idx) => (
               <div key={idx} className="p-2 text-center bg-gray-50 font-medium text-gray-700 border-r last:border-r-0">
@@ -564,15 +695,19 @@ export default function SchedulePage() {
           <div className="grid grid-cols-7">
             {calendarDays.map((day, idx) => {
               const isToday = day.toDateString() === new Date().toDateString();
-              const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+              const isCurrentMonth = day.getMonth() === currentCalendarDate.getMonth();
               const holidayName = getHolidayName(day);
               const lessons = getLessonsForDate(day);
               return (
                 <div
                   key={idx}
+                  role={lessons.length > 0 ? 'button' : undefined}
+                  tabIndex={lessons.length > 0 ? 0 : undefined}
+                  onClick={lessons.length > 0 ? () => setDayDetailModalDate(day) : undefined}
+                  onKeyDown={lessons.length > 0 ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDayDetailModalDate(day); } } : undefined}
                   className={`min-h-[80px] border-r border-b last:border-r-0 p-2 transition-colors ${
                     isToday ? 'bg-primary-lighter' : ''
-                  } ${!isCurrentMonth ? 'bg-gray-50' : ''} hover:bg-gray-50/80`}
+                  } ${!isCurrentMonth ? 'bg-gray-50' : ''} ${lessons.length > 0 ? 'cursor-pointer hover:bg-gray-100' : 'hover:bg-gray-50/80'}`}
                 >
                   <div className={`text-sm font-medium mb-1 ${
                     isToday ? 'text-primary font-bold' : isCurrentMonth ? 'text-gray-900' : 'text-gray-400'
@@ -588,15 +723,15 @@ export default function SchedulePage() {
                     {lessons.slice(0, 2).map((item, i) => (
                       <div
                         key={i}
-                        className="text-xs p-1 rounded truncate text-white"
+                        className="text-[10px] leading-tight py-0.5 px-1 rounded text-white min-w-0 break-words line-clamp-4"
                         style={{ backgroundColor: item.color }}
                         title={`${item.time} ${item.name}`}
                       >
-                        {item.time} {item.name}
+                        {item.name}
                       </div>
                     ))}
                     {lessons.length > 2 && (
-                      <div className="text-xs text-gray-600 font-medium truncate">+{lessons.length - 2}</div>
+                      <div className="text-[10px] text-gray-600 font-medium">+{lessons.length - 2}</div>
                     )}
                   </div>
                 </div>
@@ -605,6 +740,7 @@ export default function SchedulePage() {
           </div>
           <p className="text-xs text-gray-500 mt-2">{t('schedule.calendarHint')}</p>
           <p className="text-xs text-gray-600 mt-1">{t('schedule.calendarLegend')}</p>
+          <p className="text-xs text-primary/80 mt-1">{t('schedule.calendarClickHint')}</p>
           {myEnrollments.length > 0 && (
             <div className="flex flex-wrap gap-3 mt-2 text-xs">
               {myEnrollments.map((e, idx) => (
@@ -615,175 +751,176 @@ export default function SchedulePage() {
               ))}
             </div>
           )}
-        </div>
+          </>
+          )}
 
-        {/* 課程時間表：第1堂～最後一堂 (4/8/16)，僅顯示此小朋友已報讀，撞假期已順延 */}
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">{t('schedule.lessonSchedule')}</h2>
-          <p className="text-sm text-gray-600 mb-4">{t('schedule.lessonScheduleHint')}</p>
-          <div className="space-y-6">
-            {myEnrollments.map((e, idx) => {
-              const dates = lessonDatesByEnrollment[idx] ?? [];
-              const total = e.total_lessons ?? 8;
-              return (
-                <div key={e.id} className="border border-gray-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">{e.class.name}{e.class.program_code ? ` (${e.class.program_code})` : ''}</h3>
-                  <p className="text-sm text-gray-600 mb-3">{e.class.instructor} · {t('schedule.totalLessons', { count: total })}</p>
-                  {(() => {
-                    const locInfo = getLocationInfo(e.class.location);
-                    if (!locInfo) return null;
-                    return (
-                      <div className="mb-3 text-sm text-gray-600">
-                        <p className="font-medium text-gray-700">{locInfo.name}</p>
-                        <p className="text-gray-600">{locInfo.address}</p>
-                        <a href={locInfo.mapsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 mt-0.5 text-primary font-medium hover:underline">
-                          <MapPin className="h-4 w-4" />
-                          {t('schedule.openMap', '打開地圖')}
-                        </a>
+          {view === 'week' && (() => {
+            const startOfWeek = getStartOfWeek(currentCalendarDate);
+            const weekDays = Array.from({ length: 7 }, (_, i) => { const d = new Date(startOfWeek); d.setDate(startOfWeek.getDate() + i); return d; });
+            const gridHeightPx = (TIME_GRID_END_HOUR - TIME_GRID_START_HOUR) * TIME_GRID_ROW_HEIGHT_PX;
+            const startMin = TIME_GRID_START_HOUR * 60;
+            const hourLabels = Array.from({ length: TIME_GRID_END_HOUR - TIME_GRID_START_HOUR }, (_, i) => `${String(TIME_GRID_START_HOUR + i).padStart(2, '0')}:00`);
+            return (
+              <>
+              {/* Phone: vertical list of days — no horizontal scroll */}
+              <div className="md:hidden space-y-3">
+                {weekDays.map((day) => {
+                  const isToday = day.toDateString() === new Date().toDateString();
+                  const evs = eventsForDay(day);
+                  const holidayName = getHolidayName(day);
+                  return (
+                    <div key={day.toISOString()} className={`rounded-lg border overflow-hidden ${isToday ? 'border-primary bg-primary-lighter/20' : 'border-gray-200 bg-white'}`}>
+                      <div className={`px-3 py-2 text-sm font-semibold ${isToday ? 'text-primary bg-primary-lighter/40' : 'bg-gray-50 text-gray-900'}`}>
+                        {day.toLocaleDateString(getLocale(), { weekday: 'long' })}
+                        {holidayName && <span className="ml-2 text-xs font-normal text-gray-500 italic">{holidayName}</span>}
                       </div>
-                    );
-                  })()}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                    {dates.map((d, i) => {
-                      const fromApi = e.leave_requests?.find((r) => r.lesson_index === i);
-                      const leaveReq = fromApi
-                        ? { type: fromApi.leave_type as 'personal' | 'sick', status: fromApi.status as 'pending' | 'approved' | 'rejected' }
-                        : lessonLeaveRequests[e.id]?.[i];
-                      const canRequestLeave = !leaveReq || leaveReq.status === 'rejected';
+                      <div className="p-2 space-y-1.5 min-h-[48px]">
+                        {evs.length === 0 ? (
+                          <p className="text-xs text-gray-400 py-2 text-center">{t('schedule.noClassesToday')}</p>
+                        ) : (
+                          evs.map((ev) => {
+                            const approvedLeave = ev.enrollment.leave_requests?.find((r) => r.lesson_index === ev.lessonIndex && r.status === 'approved');
+                            const name = approvedLeave ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}` : ev.enrollment.class.name;
+                            return (
+                              <button key={`${ev.enrollment.id}-${ev.lessonIndex}`} type="button" onClick={() => setDayDetailModalDate(new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate()))} className="w-full text-left rounded-lg px-3 py-2 text-white text-sm flex items-center gap-2" style={{ backgroundColor: ev.color }} title={`${formatTime(ev.start)} – ${formatTime(ev.end)} ${name}`}>
+                                <span className="font-medium shrink-0">{formatTime(ev.start)} – {formatTime(ev.end)}</span>
+                                <span className="truncate font-medium">{name}</span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop: 7-column time grid */}
+              <div className="hidden md:block overflow-x-auto">
+                <div className="min-w-[600px]">
+                  {/* Week header: day name + date */}
+                  <div className="grid border-b bg-gray-50 mb-0" style={{ gridTemplateColumns: '48px repeat(7, minmax(0, 1fr))' }}>
+                    <div className="border-r p-2 text-xs font-medium text-gray-500" />
+                    {weekDays.map((day) => {
+                      const isToday = day.toDateString() === new Date().toDateString();
                       return (
-                        <div key={i} className="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-medium text-primary">{t('schedule.lessonN', { n: i + 1 })}</span>
-                            {leaveReq && (
-                              <span className={`text-xs font-medium px-2 py-0.5 rounded ${leaveReq.status === 'approved' ? 'bg-green-100 text-green-800' : leaveReq.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-                                {leaveReq.type === 'sick' ? t('schedule.applySickLeave') : t('schedule.personalLeave')}: {t(`schedule.status.${leaveReq.status}`)}
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-gray-700 block mt-0.5">{d.toLocaleDateString(getLocale(), { month: 'short', day: 'numeric', weekday: 'short' })} {d.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
-                          {canRequestLeave && (
-                            <button
-                              type="button"
-                              onClick={() => setLeaveLessonModal({ enrollment: e, lessonIndex: i, lessonDate: d })}
-                              className="mt-2 text-xs font-medium text-primary hover:underline"
-                            >
-                              {t('schedule.requestLeave')}
-                            </button>
-                          )}
+                        <div key={day.toISOString()} className={`p-2 text-center border-r last:border-r-0 ${isToday ? 'bg-primary-lighter' : ''}`}>
+                          <div className="text-xs font-medium text-gray-600">{day.toLocaleDateString(getLocale(), { weekday: 'long' })}</div>
+                          <div className={`text-sm font-semibold mt-0.5 ${isToday ? 'text-primary' : 'text-gray-900'}`}>{day.getDate()}</div>
                         </div>
                       );
                     })}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-          {myEnrollments.length === 0 && <p className="text-gray-500 text-sm">{t('schedule.noUpcomingClasses')}</p>}
-        </div>
-
-        {/* Attendance rate */}
-        {attendanceRate != null && (
-          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">{t('schedule.attendanceRate')}</h2>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-bold text-primary">{attendanceRate}%</span>
-              <span className="text-gray-600">{t('schedule.thisMonthAttendance')}</span>
-            </div>
-          </div>
-        )}
-
-        {/* 補堂／調堂記錄：demo 資料，之後可接 API */}
-        {myEnrollments.length > 0 && (
-          <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              {t('schedule.makeupRecord', '已補堂記錄')}
-            </h2>
-            <p className="text-sm text-gray-600 mb-3">{t('schedule.makeupRemainingCount', { count: 2 }, '剩餘 2 次補堂')}</p>
-            <ul className="space-y-2 text-sm text-gray-700">
-              <li>兒童芭蕾 A {t('schedule.lessonN', { n: 3 })}（2月20日 請假）→ 已安排補堂 2月25日</li>
-            </ul>
-          </div>
-        )}
-
-        {/* All upcoming courses */}
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('schedule.allUpcomingCourses')}</h2>
-          {myEnrollments.length === 0 && !error ? (
-            <EmptyState
-              message={t('schedule.noUpcomingClasses')}
-              icon={<CalendarIcon className="h-16 w-16 text-gray-400" />}
-            />
-          ) : (
-            <div className="space-y-4">
-              {myEnrollments.map((e) => {
-                const isDropdownOpen = openDropdown === e.id;
-                const showActions = e.status === 'enrolled' && (!e.extension_application || !e.sick_leave_application);
-                return (
-                  <div key={e.id} className="border border-gray-100 rounded-lg p-4 md:p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{e.class.name}</h3>
-                        {e.class.program_code && <span className="inline-block text-xs font-medium text-primary bg-primary-lighter px-2 py-0.5 rounded mb-2">{e.class.program_code}</span>}
-                        <p className="text-gray-600 mb-1">{e.class.instructor}</p>
-                        <p className="text-sm text-gray-500">{formatDateTime(e.class.start_time, getLocale())} – {formatDateTime(e.class.end_time, getLocale())}</p>
-                        {(() => {
-                          const locInfo = getLocationInfo(e.class.location);
-                          if (locInfo) {
+                <div className="grid border-b" style={{ gridTemplateColumns: '48px repeat(7, minmax(0, 1fr))', minHeight: gridHeightPx }}>
+                  <div className="border-r bg-gray-50/80">
+                    {hourLabels.map((label) => (
+                      <div key={label} className="text-xs text-gray-500 pr-1 text-right border-t border-gray-100 first:border-t-0" style={{ height: TIME_GRID_ROW_HEIGHT_PX }}>{label}</div>
+                    ))}
+                  </div>
+                  {weekDays.map((day) => {
+                    const isToday = day.toDateString() === new Date().toDateString();
+                    const evs = eventsForDay(day);
+                    return (
+                      <div key={day.toISOString()} className={`border-r last:border-r-0 relative ${isToday ? 'bg-primary-lighter/20' : ''}`} style={{ minHeight: gridHeightPx }}>
+                        <div className="absolute inset-0">
+                          {evs.map((ev) => {
+                            const startMinEv = ev.start.getHours() * 60 + ev.start.getMinutes();
+                            const endMinEv = ev.end.getHours() * 60 + ev.end.getMinutes();
+                            const topPx = ((startMinEv - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                            const heightPx = ((endMinEv - startMinEv) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                            const approvedLeave = ev.enrollment.leave_requests?.find((r) => r.lesson_index === ev.lessonIndex && r.status === 'approved');
+                            const name = approvedLeave ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}` : ev.enrollment.class.name;
                             return (
-                              <p className="text-sm text-gray-600 mt-1">
-                                {locInfo.name} · <a href={locInfo.mapsUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-0.5"><MapPin className="h-3.5 w-3.5" />{t('schedule.openMap', '打開地圖')}</a>
-                              </p>
+                              <button key={`${ev.enrollment.id}-${ev.lessonIndex}`} type="button" onClick={() => setDayDetailModalDate(new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate()))} className="absolute left-0.5 right-0.5 text-left rounded overflow-hidden text-white text-xs p-1" style={{ top: topPx + 2, height: Math.max(heightPx - 4, 24), backgroundColor: ev.color }} title={`${formatTime(ev.start)} ${name}`}>
+                                <span className="truncate block">{formatTime(ev.start)}</span>
+                                <span className="truncate block font-medium">{name}</span>
+                              </button>
                             );
-                          }
-                          return null;
-                        })()}
-                        {e.attended_lessons != null && e.total_lessons != null && (
-                          <p className="text-sm text-primary font-medium mt-2">{t('schedule.learningProgress', { current: e.attended_lessons, total: e.total_lessons })}</p>
-                        )}
-                        {e.extension_application && (
-                          <span className={`inline-block mt-2 text-xs font-medium px-2 py-1 rounded ${e.extension_application.status === 'approved' ? 'bg-green-100 text-green-800' : e.extension_application.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {t('schedule.applyExtension')}: {e.extension_application.status === 'approved' ? t('schedule.status.approved') : e.extension_application.status === 'rejected' ? t('schedule.status.rejected') : t('schedule.status.pending')}
-                          </span>
-                        )}
-                        {e.sick_leave_application && (
-                          <span className={`inline-block mt-2 ml-2 text-xs font-medium px-2 py-1 rounded ${e.sick_leave_application.status === 'approved' ? 'bg-green-100 text-green-800' : e.sick_leave_application.status === 'rejected' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800'}`}>
-                            {t('schedule.applySickLeave')}: {e.sick_leave_application.status === 'approved' ? t('schedule.status.approved') : e.sick_leave_application.status === 'rejected' ? t('schedule.status.rejected') : t('schedule.status.pending')}
-                          </span>
-                        )}
-                      </div>
-                      {showActions && (
-                        <div className="relative">
-                          <button type="button" onClick={() => setOpenDropdown(isDropdownOpen ? null : e.id)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                            <MoreVertical className="h-5 w-5" />
-                          </button>
-                          {isDropdownOpen && (
-                            <>
-                              <div className="fixed inset-0 z-10" onClick={() => setOpenDropdown(null)} />
-                              <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg py-1 z-20 border">
-                                {!e.extension_application && (
-                                  <button type="button" onClick={() => { setApplicationModal({ isOpen: true, type: 'extension', enrollment: e }); setOpenDropdown(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                                  <Clock className="h-4 w-4" />{t('schedule.applyExtension')}
-                                </button>
-                                )}
-                                {!e.sick_leave_application && (
-                                  <button type="button" onClick={() => { setApplicationModal({ isOpen: true, type: 'sickLeave', enrollment: e }); setOpenDropdown(null); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2">
-                                  <FileText className="h-4 w-4" />{t('schedule.applySickLeave')}
-                                </button>
-                                )}
-                              </div>
-                            </>
-                          )}
+                          })}
                         </div>
-                      )}
-                      {!showActions && <Clock className="h-5 w-5 text-gray-400 flex-shrink-0" />}
+                      </div>
+                    );
+                  })}
+                </div>
+                </div>
+              </div>
+                <p className="text-xs text-gray-500 mt-2">{t('schedule.calendarHint')}</p>
+              </>
+            );
+          })()}
+
+          {view === 'day' && (() => {
+            const dayEvs = eventsForDay(currentCalendarDate);
+            const gridHeightPx = (TIME_GRID_END_HOUR - TIME_GRID_START_HOUR) * TIME_GRID_ROW_HEIGHT_PX;
+            const startMin = TIME_GRID_START_HOUR * 60;
+            const hourLabels = Array.from({ length: TIME_GRID_END_HOUR - TIME_GRID_START_HOUR }, (_, i) => `${String(TIME_GRID_START_HOUR + i).padStart(2, '0')}:00`);
+            const holidayName = getHolidayName(currentCalendarDate);
+            return (
+              <div>
+                {holidayName && <p className="text-sm text-gray-500 italic mb-2">{holidayName}</p>}
+                {dayEvs.length === 0 ? (
+                  <p className="text-gray-500 py-8 text-center">{t('schedule.noUpcomingClasses')}</p>
+                ) : (
+                  <div className="flex border rounded-lg overflow-hidden">
+                    <div className="w-14 flex-shrink-0 border-r bg-gray-50/80">
+                      {hourLabels.map((label) => (
+                        <div key={label} className="text-xs text-gray-500 pr-1 text-right border-t border-gray-100 first:border-t-0" style={{ height: TIME_GRID_ROW_HEIGHT_PX }}>{label}</div>
+                      ))}
+                    </div>
+                    <div className="flex-1 relative min-h-[400px]" style={{ minHeight: gridHeightPx }}>
+                      {dayEvs.map((ev) => {
+                        const startMinEv = ev.start.getHours() * 60 + ev.start.getMinutes();
+                        const endMinEv = ev.end.getHours() * 60 + ev.end.getMinutes();
+                        const topPx = ((startMinEv - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                        const heightPx = ((endMinEv - startMinEv) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                        const approvedLeave = ev.enrollment.leave_requests?.find((r) => r.lesson_index === ev.lessonIndex && r.status === 'approved');
+                        const name = approvedLeave ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}` : ev.enrollment.class.name;
+                        return (
+                          <button key={`${ev.enrollment.id}-${ev.lessonIndex}`} type="button" onClick={() => setDayDetailModalDate(new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate()))} className="absolute left-2 right-2 text-left rounded-lg overflow-hidden shadow-sm border border-gray-200 p-2" style={{ top: topPx + 4, height: Math.max(heightPx - 8, 40), backgroundColor: ev.color, color: '#fff' }} title={`${formatTime(ev.start)} – ${formatTime(ev.end)} ${name}`}>
+                            <div className="font-semibold truncate">{name}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
         </div>
+        </section>
+
+        {/* Section 4: Attendance rate */}
+        {attendanceRate != null && (
+          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" aria-labelledby="attendance-heading">
+            <div id="attendance-heading" className="px-4 md:px-6 py-3 bg-gray-50 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">{t('schedule.attendanceRate')}</h2>
+            </div>
+            <div className="p-4 md:p-6">
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-bold text-primary">{attendanceRate}%</span>
+                <span className="text-gray-600">{t('schedule.thisMonthAttendance')}</span>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Section 5: Makeup record */}
+        {myEnrollments.length > 0 && (
+          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" aria-labelledby="makeup-heading">
+            <div id="makeup-heading" className="px-4 md:px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-gray-900">{t('schedule.makeupRecord', '已補堂記錄')}</h2>
+            </div>
+            <div className="p-4 md:p-6">
+              <p className="text-sm text-gray-600 mb-3">{t('schedule.makeupRemainingCount', { count: 2 }, '剩餘 2 次補堂')}</p>
+              <ul className="space-y-2 text-sm text-gray-700">
+                <li>兒童芭蕾 A {t('schedule.lessonN', { n: 3 })}（2月20日 請假）→ 已安排補堂 2月25日</li>
+              </ul>
+            </div>
+          </section>
+        )}
+
       </div>
 
       {applicationModal.isOpen && applicationModal.enrollment && applicationModal.type && (
@@ -806,6 +943,18 @@ export default function SchedulePage() {
           onSubmit={handleLessonLeaveSubmit}
         />
       )}
+
+      <DayDetailModal
+        isOpen={!!dayDetailModalDate}
+        day={dayDetailModalDate}
+        items={dayDetailModalDate ? getLessonItemsForDate(dayDetailModalDate) : []}
+        getLocale={getLocale}
+        onClose={() => setDayDetailModalDate(null)}
+        onRequestLeave={(enrollment, lessonIndex, lessonDate) => {
+          setDayDetailModalDate(null);
+          setLeaveLessonModal({ enrollment, lessonIndex, lessonDate });
+        }}
+      />
     </Layout>
   );
 }

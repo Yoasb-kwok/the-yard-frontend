@@ -54,17 +54,17 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [userMenuOpen]);
 
-  // Student: show only Schedule + Profile when on schedule/profile; only Dashboard + Payment when on dashboard/payment-history
-  const studentNavItemsScheduleProfile = [
-    { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
-    { path: '/profile', icon: User, label: t('nav.profile') },
-  ];
+  // Student: 儀表板／付款記錄／訊息中心 只在 Dashboard 區顯示；點選子女（課程表、我的資料）時只顯示 我的課程表、我的資料 + 最新通知
+  const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history' || location.pathname === '/notifications';
   const studentNavItemsDashboard = [
     { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
     { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
     { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
   ];
-  const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history' || location.pathname === '/notifications';
+  const studentNavItemsScheduleProfile = [
+    { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
+    { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },
+  ];
   const studentNavItems = isOnDashboardSection ? studentNavItemsDashboard : studentNavItemsScheduleProfile;
 
   const adminNavItems = [
@@ -407,7 +407,7 @@ export default function Layout({ children }: LayoutProps) {
               );
             })}
           </nav>
-          {/* Only show child's course schedule when on Schedule/Profile section, not on Dashboard */}
+          {/* 最新通知（下一堂 + 接下來所有課程）只在課程表／我的資料時顯示，不在 Dashboard 區顯示 */}
           {!isAdmin && !isOnDashboardSection && <StudentSidebarSchedule />}
         </aside>
 
@@ -458,6 +458,7 @@ export default function Layout({ children }: LayoutProps) {
                   );
                 })}
               </nav>
+              {!isAdmin && !isOnDashboardSection && <StudentSidebarSchedule />}
             </aside>
           </>
         )}

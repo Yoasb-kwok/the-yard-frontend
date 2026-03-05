@@ -1,7 +1,8 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <link rel="icon" type="image/png" href="/images/the-yard-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>The Yard</title>
@@ -10,6 +11,11 @@
     <meta property="og:image" content="/images/the-yard-logo.png" />
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="/images/the-yard-logo.png">
+    <!-- iOS Simulator / Safari: ensure Chinese (CJK) renders with system fonts -->
+    <style>
+      html { -webkit-text-size-adjust: 100%; }
+      body { font-family: "PingFang TC", "PingFang SC", "Hiragino Sans CNS", "Hiragino Sans GB", -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", "Microsoft YaHei", sans-serif; }
+    </style>
 </head>
   <body>
     <div id="root"></div>
