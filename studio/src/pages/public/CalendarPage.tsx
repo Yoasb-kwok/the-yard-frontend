@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams, Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat, Info } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat, Info, Layers } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAgeTagFromDateOfBirth, getDateStringFromStartTime, formatProgramCodeDisplay, getNextNonHolidayDateWithSet } from '../../lib/utils';
@@ -55,23 +55,25 @@ export default function CalendarPage() {
   const { getHolidayName, holidayDatesSet } = useHolidays();
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
-  const [view, setView] = useState<ViewType>(viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam) ? viewParam : 'month');
-  const [currentDate, setCurrentDate] = useState(() => {
-    const d = new Date();
-    d.setFullYear(2026);
-    d.setMonth(1); // February
-    return d;
+  const [view, setView] = useState<ViewType>(() => {
+    if (viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam)) return viewParam;
+    if (typeof window !== 'undefined' && window.innerWidth < 768) return 'day';
+    return 'week';
   });
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lessonsLoading, setLessonsLoading] = useState(false);
   const [lessonsError, setLessonsError] = useState<string | null>(null);
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
+  const [slotPicker, setSlotPicker] = useState<{ lessons: Lesson[]; timeLabel: string } | null>(null);
   const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
   const [isNarrowScreen, setIsNarrowScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const lessonModalRef = useRef<HTMLDivElement>(null);
+  const slotPickerRef = useRef<HTMLDivElement>(null);
   useModalA11y(showLessonModal && !!selectedLesson, () => { setShowLessonModal(false); setSelectedLesson(null); }, lessonModalRef);
+  useModalA11y(!!slotPicker, () => setSlotPicker(null), slotPickerRef);
 
   useEffect(() => {
     const onResize = () => setIsNarrowScreen(window.innerWidth < 768);
@@ -117,13 +119,8 @@ export default function CalendarPage() {
     const viewParam = searchParams.get('view') as ViewType | null;
     if (viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam)) {
       const isMobile = window.innerWidth < 768; // md breakpoint
-      // On mobile, only allow day and threeDay views
-      if (isMobile && (viewParam === 'week' || viewParam === 'month')) {
-        setView('day');
-        setSearchParams({ view: 'day' });
-      } 
-      // On desktop, don't allow threeDay view
-      else if (!isMobile && viewParam === 'threeDay') {
+      // On desktop, threeDay is not in the main tabs; redirect to day
+      if (!isMobile && viewParam === 'threeDay') {
         setView('day');
         setSearchParams({ view: 'day' });
       } else {
@@ -132,17 +129,11 @@ export default function CalendarPage() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Handle window resize - switch views based on screen size
+  // Handle window resize - only switch threeDay to day when going to desktop
   useEffect(() => {
     const handleResize = () => {
       const isMobile = window.innerWidth < 768; // md breakpoint
-      // On mobile, switch from week/month to day
-      if (isMobile && (view === 'week' || view === 'month')) {
-        setView('day');
-        setSearchParams({ view: 'day' });
-      }
-      // On desktop, switch from threeDay to day
-      else if (!isMobile && view === 'threeDay') {
+      if (!isMobile && view === 'threeDay') {
         setView('day');
         setSearchParams({ view: 'day' });
       }
@@ -321,6 +312,48 @@ export default function CalendarPage() {
     return withColumns;
   };
 
+  type DayGridEvent = { lesson: Lesson; _postponedFrom?: string; startMinutes: number; endMinutes: number; columnIndex: number; totalColumns: number };
+
+  /** On mobile: group same-start-time events into single "slot" so we show one block + tap to pick. */
+  const getSlotBlocks = (
+    dayEvents: DayGridEvent[],
+    day: Date
+  ): Array<
+    | { type: 'single'; ev: DayGridEvent }
+    | { type: 'group'; timeLabel: string; events: DayGridEvent[]; startMinutes: number; endMinutes: number }
+  > => {
+    const byStart = new Map<number, DayGridEvent[]>();
+    for (const ev of dayEvents) {
+      const k = ev.startMinutes;
+      if (!byStart.has(k)) byStart.set(k, []);
+      byStart.get(k)!.push(ev);
+    }
+    const blocks: Array<
+      | { type: 'single'; ev: DayGridEvent }
+      | { type: 'group'; timeLabel: string; events: DayGridEvent[]; startMinutes: number; endMinutes: number }
+    > = [];
+    const sortedStarts = Array.from(byStart.keys()).sort((a, b) => a - b);
+    for (const startMin of sortedStarts) {
+      const evs = byStart.get(startMin)!;
+      const timeLabel = (() => {
+        const d = new Date(day.getFullYear(), day.getMonth(), day.getDate(), Math.floor(startMin / 60), startMin % 60);
+        return formatTime(d);
+      })();
+      if (evs.length === 1) {
+        blocks.push({ type: 'single', ev: evs[0] });
+      } else {
+        blocks.push({
+          type: 'group',
+          timeLabel,
+          events: evs,
+          startMinutes: evs[0].startMinutes,
+          endMinutes: Math.max(...evs.map((e) => e.endMinutes)),
+        });
+      }
+    }
+    return blocks;
+  };
+
   // Get level tag styling
   const getLevelTag = (level: CourseLevel) => {
     const levelConfig = {
@@ -448,16 +481,17 @@ export default function CalendarPage() {
     setCurrentDate(new Date());
   };
 
+  const calendarLocations: { value: LocationFilter; label: string }[] = [
+    { value: 'all', label: t('calendar.allLocations') },
+    { value: 'sanpokong', label: t('home.locations.sanpokong') },
+    { value: 'causewaybay', label: t('home.locations.causewaybay') },
+    { value: 'fotan', label: t('home.locations.fotan') },
+    { value: 'sheungshui', label: t('home.locations.sheungshui') },
+  ];
+
   const renderDayView = () => {
     const dayLessons = getLessonsForDate(currentDate);
     const holidayName = getHolidayName(currentDate);
-    const locations: { value: LocationFilter; label: string }[] = [
-      { value: 'all', label: t('calendar.allLocations') },
-      { value: 'sanpokong', label: t('home.locations.sanpokong') },
-      { value: 'causewaybay', label: t('home.locations.causewaybay') },
-      { value: 'fotan', label: t('home.locations.fotan') },
-      { value: 'sheungshui', label: t('home.locations.sheungshui') },
-    ];
 
     return (
       <div className="space-y-4">
@@ -469,39 +503,6 @@ export default function CalendarPage() {
             </div>
           </div>
         )}
-        {/* Location Filter */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <Filter className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {locations.map((loc) => {
-              const isActive = locationFilter === loc.value;
-              const colors = loc.value === 'all' 
-                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
-                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
-              
-              return (
-                <button
-                  key={loc.value}
-                  onClick={() => setLocationFilter(loc.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  style={isActive ? {
-                    backgroundColor: colors.primary,
-                  } : {}}
-                >
-                  {loc.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         {dayLessons.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-6">
             <p className="text-gray-600 text-center py-8">{t('calendar.noLessons')}</p>
@@ -533,7 +534,60 @@ export default function CalendarPage() {
                     className="flex-1 relative min-w-0"
                     style={{ minHeight: gridHeightPx }}
                   >
-                    {dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
+                    {isNarrowScreen
+                      ? getSlotBlocks(dayEvents, currentDate).map((block) => {
+                          if (block.type === 'single') {
+                            const { lesson, _postponedFrom, startMinutes, endMinutes } = block.ev;
+                            const locationColors = getLocationColors(lesson.location);
+                            const suggested = isLessonSuggested(lesson);
+                            const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                            const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                            return (
+                              <button
+                                key={lesson.id}
+                                type="button"
+                                onClick={() => handleLessonClick(lesson)}
+                                className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                                style={{
+                                  top: topPx + 2,
+                                  height: Math.max(heightPx - 4, 24),
+                                  backgroundColor: locationColors.lighter,
+                                  borderLeft: `4px solid ${locationColors.primary}`,
+                                }}
+                                title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                              >
+                                <div className="p-1.5 h-full overflow-hidden flex flex-col justify-center">
+                                  <span className="text-sm font-semibold text-gray-900 truncate">{lesson.name}</span>
+                                  <span className="text-xs text-gray-600 truncate">{formatTime(new Date(lesson.start_time))}</span>
+                                </div>
+                              </button>
+                            );
+                          }
+                          const topPx = ((block.startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                          const heightPx = ((block.endMinutes - block.startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                          return (
+                            <button
+                              key={`group-${block.startMinutes}`}
+                              type="button"
+                              onClick={() => setSlotPicker({ lessons: block.events.map((e) => e.lesson), timeLabel: block.timeLabel })}
+                              className="absolute left-0.5 right-0.5 flex items-center gap-2 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
+                              style={{
+                                top: topPx + 2,
+                                height: Math.max(heightPx - 4, 40),
+                              }}
+                              aria-label={t('calendar.sameTimeTapToPick', { count: block.events.length })}
+                            >
+                              <Layers className="h-5 w-5 shrink-0 text-primary ml-1.5" aria-hidden />
+                              <div className="p-1.5 flex-1 min-w-0 overflow-hidden">
+                                <span className="text-sm font-semibold text-gray-900 block truncate">
+                                  {block.timeLabel} · {block.events.length} {t('calendar.classes', 'classes')}
+                                </span>
+                                <span className="text-xs text-gray-600">{t('calendar.tapToPick', 'Tap to pick one')}</span>
+                              </div>
+                            </button>
+                          );
+                        })
+                      : dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
                       const locationColors = getLocationColors(lesson.location);
                       const suggested = isLessonSuggested(lesson);
                       const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
@@ -587,49 +641,9 @@ export default function CalendarPage() {
       d.setDate(currentDate.getDate() + i);
       return d;
     });
-    const locations: { value: LocationFilter; label: string }[] = [
-      { value: 'all', label: t('calendar.allLocations') },
-      { value: 'sanpokong', label: t('home.locations.sanpokong') },
-      { value: 'causewaybay', label: t('home.locations.causewaybay') },
-      { value: 'fotan', label: t('home.locations.fotan') },
-      { value: 'sheungshui', label: t('home.locations.sheungshui') },
-    ];
 
     return (
       <div className="space-y-4">
-        {/* Location Filter */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <Filter className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {locations.map((loc) => {
-              const isActive = locationFilter === loc.value;
-              const colors = loc.value === 'all' 
-                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
-                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
-              
-              return (
-                <button
-                  key={loc.value}
-                  onClick={() => setLocationFilter(loc.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  style={isActive ? {
-                    backgroundColor: colors.primary,
-                  } : {}}
-                >
-                  {loc.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-3 border-b">
             {threeDays.map((day, idx) => {
@@ -717,49 +731,9 @@ export default function CalendarPage() {
       d.setDate(startOfWeek.getDate() + i);
       return d;
     });
-    const locations: { value: LocationFilter; label: string }[] = [
-      { value: 'all', label: t('calendar.allLocations') },
-      { value: 'sanpokong', label: t('home.locations.sanpokong') },
-      { value: 'causewaybay', label: t('home.locations.causewaybay') },
-      { value: 'fotan', label: t('home.locations.fotan') },
-      { value: 'sheungshui', label: t('home.locations.sheungshui') },
-    ];
 
     return (
       <div className="space-y-4">
-        {/* Location Filter */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <Filter className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {locations.map((loc) => {
-              const isActive = locationFilter === loc.value;
-              const colors = loc.value === 'all' 
-                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
-                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
-              
-              return (
-                <button
-                  key={loc.value}
-                  onClick={() => setLocationFilter(loc.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  style={isActive ? {
-                    backgroundColor: colors.primary,
-                  } : {}}
-                >
-                  {loc.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="bg-white rounded-lg shadow-md overflow-x-auto overflow-y-hidden">
           <div className="min-w-[800px]">
             {/* Header row: 56px time column + 7 equal day columns so borders align with time grid below */}
@@ -771,6 +745,8 @@ export default function CalendarPage() {
               {weekDays.map((day) => {
                 const holidayName = getHolidayName(day);
                 const isToday = day.toDateString() === new Date().toDateString();
+                const dayEvents = getDayEventsForTimeGrid(day);
+                const hasOverlap = dayEvents.length > 0 && Math.max(...dayEvents.map((e) => e.totalColumns)) > 1;
                 return (
                   <div
                     key={day.toISOString()}
@@ -785,6 +761,11 @@ export default function CalendarPage() {
                     {holidayName && (
                       <div className="text-xs text-gray-400 italic truncate" title={holidayName}>
                         {holidayName}
+                      </div>
+                    )}
+                    {hasOverlap && (
+                      <div className="text-[10px] text-gray-400 mt-0.5" title={t('calendar.scrollForOverlap', 'Scroll right for same-time classes')}>
+                        →
                       </div>
                     )}
                   </div>
@@ -839,7 +820,63 @@ export default function CalendarPage() {
                               minHeight: gridHeightPx,
                             }}
                           >
-                        {dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
+                        {isNarrowScreen
+                          ? getSlotBlocks(dayEvents, day).map((block) => {
+                              if (block.type === 'single') {
+                                const { lesson, _postponedFrom, startMinutes, endMinutes } = block.ev;
+                                const locationColors = getLocationColors(lesson.location);
+                                const suggested = isLessonSuggested(lesson);
+                                const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                                const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                                return (
+                                  <button
+                                    key={lesson.id}
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
+                                    className={`absolute left-1 right-1 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                                    style={{
+                                      top: topPx + 2,
+                                      height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
+                                      backgroundColor: locationColors.lighter,
+                                      borderLeft: `4px solid ${locationColors.primary}`,
+                                    }}
+                                    title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                                  >
+                                    <div className="p-1 h-full flex flex-col justify-center min-h-0 min-w-0 overflow-hidden">
+                                      <span className="text-xs font-semibold text-gray-900 truncate">{lesson.name || (t('calendar.unnamedClass') || '課程')}</span>
+                                      <span className="text-[10px] text-gray-600">{formatTime(new Date(lesson.start_time))}</span>
+                                    </div>
+                                  </button>
+                                );
+                              }
+                              const topPx = ((block.startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                              const heightPx = ((block.endMinutes - block.startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                              return (
+                                <button
+                                  key={`group-${day.toISOString()}-${block.startMinutes}`}
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSlotPicker({ lessons: block.events.map((ev) => ev.lesson), timeLabel: block.timeLabel });
+                                  }}
+                                  className="absolute left-1 right-1 flex items-center gap-1 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
+                                  style={{
+                                    top: topPx + 2,
+                                    height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
+                                  }}
+                                  aria-label={t('calendar.sameTimeTapToPick', { count: block.events.length })}
+                                >
+                                  <Layers className="h-4 w-4 shrink-0 text-primary ml-1" aria-hidden />
+                                  <div className="p-1 flex-1 min-w-0 overflow-hidden">
+                                    <span className="text-[10px] font-semibold text-gray-900 block truncate">
+                                      {block.timeLabel} · {block.events.length} {t('calendar.classes', 'classes')}
+                                    </span>
+                                    <span className="text-[9px] text-gray-600">{t('calendar.tapToPick', 'Tap to pick')}</span>
+                                  </div>
+                                </button>
+                              );
+                            })
+                          : dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
                           const locationColors = getLocationColors(lesson.location);
                           const suggested = isLessonSuggested(lesson);
                           const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
@@ -910,49 +947,8 @@ export default function CalendarPage() {
       return date.toLocaleDateString(getLocale(), { weekday: 'short' });
     });
 
-    const locations: { value: LocationFilter; label: string }[] = [
-      { value: 'all', label: t('calendar.allLocations') },
-      { value: 'sanpokong', label: t('home.locations.sanpokong') },
-      { value: 'causewaybay', label: t('home.locations.causewaybay') },
-      { value: 'fotan', label: t('home.locations.fotan') },
-      { value: 'sheungshui', label: t('home.locations.sheungshui') },
-    ];
-
     return (
       <div className="space-y-4">
-        {/* Location Filter */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <Filter className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">{t('calendar.filterByLocation')}</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {locations.map((loc) => {
-              const isActive = locationFilter === loc.value;
-              const colors = loc.value === 'all' 
-                ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
-                : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
-              
-              return (
-                <button
-                  key={loc.value}
-                  onClick={() => setLocationFilter(loc.value)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  style={isActive ? {
-                    backgroundColor: colors.primary,
-                  } : {}}
-                >
-                  {loc.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
         <div className="grid grid-cols-7 border-b">
           {weekDays.map((day, idx) => (
@@ -990,7 +986,7 @@ export default function CalendarPage() {
                   </div>
                 )}
                 <div className="space-y-1">
-                  {dayLessons.slice(0, 3).map(({ lesson, _postponedFrom }) => {
+                  {dayLessons.slice(0, 4).map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
                     const suggested = isLessonSuggested(lesson);
                     const titleExtra = _postponedFrom
@@ -1018,7 +1014,7 @@ export default function CalendarPage() {
                       </div>
                     );
                   })}
-                  {dayLessons.length > 3 && (
+                  {dayLessons.length > 4 && (
                     <button
                       type="button"
                       onClick={(e) => {
@@ -1029,7 +1025,7 @@ export default function CalendarPage() {
                       className="text-xs text-primary font-medium hover:underline cursor-pointer mt-0.5 w-full text-left"
                       title={t('calendar.viewAllOnDay', { count: dayLessons.length })}
                     >
-                      +{dayLessons.length - 3} more
+                      +{dayLessons.length - 4} {t('calendar.moreOnDay', 'more')}
                     </button>
                   )}
                 </div>
@@ -1051,7 +1047,34 @@ export default function CalendarPage() {
           
           {/* View Switcher and Navigation */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Primary: 月 / 週 (Month | Week), then Day */}
+              <button
+                onClick={() => {
+                  setView('month');
+                  setSearchParams({ view: 'month' });
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'month'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('calendar.month')}
+              </button>
+              <button
+                onClick={() => {
+                  setView('week');
+                  setSearchParams({ view: 'week' });
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'week'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('calendar.week')}
+              </button>
               <button
                 onClick={() => {
                   setView('day');
@@ -1065,7 +1088,7 @@ export default function CalendarPage() {
               >
                 {t('calendar.day')}
               </button>
-              {/* Show 3 Days only on mobile */}
+              {/* 3 Days only on mobile */}
               <button
                 onClick={() => {
                   setView('threeDay');
@@ -1078,33 +1101,6 @@ export default function CalendarPage() {
                 }`}
               >
                 {t('calendar.threeDay')}
-              </button>
-              {/* Hide week and month on mobile */}
-              <button
-                onClick={() => {
-                  setView('week');
-                  setSearchParams({ view: 'week' });
-                }}
-                className={`hidden md:block px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'week'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {t('calendar.week')}
-              </button>
-              <button
-                onClick={() => {
-                  setView('month');
-                  setSearchParams({ view: 'month' });
-                }}
-                className={`hidden md:block px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'month'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {t('calendar.month')}
               </button>
             </div>
 
@@ -1169,6 +1165,29 @@ export default function CalendarPage() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Location filter — one place for all views (週/月/日) */}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Filter className="h-4 w-4 text-gray-500 shrink-0" aria-hidden />
+          {calendarLocations.map((loc) => {
+            const isActive = locationFilter === loc.value;
+            const colors = loc.value === 'all'
+              ? { primary: theme.colors.primary, dark: theme.colors.primaryDark }
+              : getLocationColors(loc.value as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui');
+            return (
+              <button
+                key={loc.value}
+                onClick={() => setLocationFilter(loc.value)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  isActive ? 'text-white shadow' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                style={isActive ? { backgroundColor: colors.primary } : {}}
+              >
+                {loc.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Calendar View */}
@@ -1411,6 +1430,77 @@ export default function CalendarPage() {
                   </div>
                 );
               })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Same-time slot picker (mobile-friendly): tap to choose which class to view */}
+      {slotPicker && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-end justify-center min-h-screen pt-4 pb-0 px-4 sm:items-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500/75 transition-opacity"
+              onClick={() => setSlotPicker(null)}
+              aria-hidden
+            />
+            <div
+              ref={slotPickerRef}
+              className="relative w-full max-w-lg bg-white rounded-t-2xl sm:rounded-xl shadow-xl overflow-hidden animate-in slide-in-from-bottom duration-200 sm:animate-none"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t('calendar.sameTimePickClass', 'Pick a class')}
+            >
+              <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="h-5 w-5 text-primary" aria-hidden />
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    {t('calendar.sameTimeTitle', 'Same time – pick a class')}
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSlotPicker(null)}
+                  className="p-2 text-gray-500 hover:text-gray-700 rounded-full hover:bg-gray-100"
+                  aria-label={t('common.close')}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="px-4 py-3 text-sm text-gray-500 mb-2">
+                {slotPicker.timeLabel} · {slotPicker.lessons.length} {t('calendar.classes', 'classes')}
+              </div>
+              <ul className="max-h-[60vh] overflow-y-auto pb-6">
+                {slotPicker.lessons.map((lesson) => {
+                  const locationColors = getLocationColors(lesson.location);
+                  const suggested = isLessonSuggested(lesson);
+                  return (
+                    <li key={lesson.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSlotPicker(null);
+                          handleLessonClick(lesson);
+                        }}
+                        className={`w-full text-left px-4 py-3 flex items-center gap-3 rounded-lg transition-colors border-l-4 ${
+                          suggested ? 'hover:bg-gray-50' : 'opacity-85 hover:bg-gray-50'
+                        }`}
+                        style={{ borderLeftColor: locationColors.primary }}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 truncate">{lesson.name}</p>
+                          <p className="text-sm text-gray-600 truncate">
+                            {t(`home.locations.${lesson.location}`)} · {lesson.instructor}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {formatTime(new Date(lesson.start_time))} – {formatTime(new Date(lesson.end_time))}
+                          </p>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           </div>
         </div>

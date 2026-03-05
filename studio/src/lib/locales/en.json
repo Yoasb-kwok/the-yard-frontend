@@ -94,6 +94,7 @@
     "title": "Transform Your Practice",
     "subtitle": "Event venue, Dance choreography service, Stage production, Yayakids Dance Academy, Corporate/ private workshops or team building courses",
     "bookTrial": "Book Trial Lesson",
+    "trialApplication": "Trial Application",
     "signIn": "Sign In",
     "todaysClasses": "Today's Classes",
     "newStudentShortTerm": "New Student & Short-term Courses",
@@ -1361,10 +1362,18 @@
     "preview": "View details",
     "bookTrial": "Book Trial",
     "viewAllOnDay": "View all {{count}} classes on this day",
+    "moreOnDay": "more",
+    "scrollForOverlap": "Scroll right for same-time classes",
     "postponedFromHoliday": "Postponed from {{date}} (holiday)",
     "suggested": "Suggested",
     "all": "All",
-    "notSuggested": "Not recommended for your level/age"
+    "notSuggested": "Not recommended for your level/age",
+    "classes": "classes",
+    "tapToPick": "Tap to pick one",
+    "sameTimeTitle": "Same time – pick a class",
+    "sameTimePickClass": "Pick a class",
+    "sameTimeTapToPick": "{{count}} classes at same time – tap to pick one",
+    "unnamedClass": "Class"
   },
   "courses": {
     "title": "Course Introduction",

@@ -94,6 +94,7 @@
     "title": "改变您的练习",
     "subtitle": "场地租用，舞蹈编排，舞台制作，Yayakids儿童舞蹈学院，私人或​企业圑队训练",
     "bookTrial": "预约试课",
+    "trialApplication": "试堂申请",
     "signIn": "登录",
     "todaysClasses": "今日课程",
     "newStudentShortTerm": "新生课堂 及短期课程",
@@ -1320,10 +1321,18 @@
     "preview": "课程详情",
     "bookTrial": "预约试课",
     "viewAllOnDay": "查看当日全部 {{count}} 堂",
+    "moreOnDay": "更多",
+    "scrollForOverlap": "同时间多堂可向右滚动",
     "postponedFromHoliday": "原 {{date}}（假期）顺延",
     "suggested": "建议",
     "all": "全部",
-    "notSuggested": "非建议（级别/年龄不符）"
+    "notSuggested": "非建议（级别/年龄不符）",
+    "classes": "堂",
+    "tapToPick": "点击选择",
+    "sameTimeTitle": "同时间多堂 – 请选择一堂",
+    "sameTimePickClass": "选择课程",
+    "sameTimeTapToPick": "同时间 {{count}} 堂 – 点击选择",
+    "unnamedClass": "课程"
   },
   "courses": {
     "title": "课程介绍",

@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
-import { getStoredNewsPosts } from '../../lib/newsStorage';
+import { getStoredNewsPosts, getDemoNewsPosts } from '../../lib/newsStorage';
 import { api } from '../../lib/api';
-import scheduleImage from '../../assets/images/schedule.jpg';
 
 interface NewsPost {
   id: string;
@@ -14,38 +13,6 @@ interface NewsPost {
   image_url: string | null;
   published_at: string;
 }
-
-// Fallback when admin has not added any news (demo)
-const DUMMY_NEWS_POSTS: NewsPost[] = [
-  {
-    id: '1',
-    title: 'New Class Schedule Available',
-    content: 'We are excited to announce our new class schedule for the upcoming month. Check out our expanded offerings including early morning sessions and weekend workshops.',
-    image_url: scheduleImage,
-    published_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '2',
-    title: 'Welcome Our New Instructor',
-    content: 'Please join us in welcoming Sarah Johnson to our team! Sarah brings over 10 years of experience in yoga and pilates instruction. She will be leading our new evening stretch classes.',
-    image_url: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=1200&h=800&fit=crop&q=80',
-    published_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '3',
-    title: 'Holiday Special Promotion',
-    content: 'This holiday season, we are offering special discounts on token packages. Purchase a Premium Pack and get 20% off! Limited time offer, valid until the end of the month.',
-    image_url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1200&h=800&fit=crop&q=80',
-    published_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: '4',
-    title: 'Spring Term Enrollment Open',
-    content: 'Enrollment for our spring term is now open. Secure your place in ballet, street dance, and children\'s movement classes. Early bird discount available until next Friday.',
-    image_url: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=1200&h=800&fit=crop&q=80',
-    published_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
 
 export default function NewsPage() {
   const { t, i18n } = useTranslation();
@@ -72,12 +39,8 @@ export default function NewsPage() {
     if (stored.length > 0) {
       setPosts(stored.map(({ created_at: _, ...p }) => p));
     } else {
-      const translatedPosts = DUMMY_NEWS_POSTS.map((post) => ({
-        ...post,
-        title: t(`news.posts.${post.id}.title`),
-        content: t(`news.posts.${post.id}.content`),
-      }));
-      setPosts(translatedPosts);
+      const demo = getDemoNewsPosts(i18n.language);
+      setPosts(demo.map(({ created_at: _, ...p }) => p));
     }
     setLoading(false);
   }
