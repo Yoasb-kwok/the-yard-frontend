@@ -11,6 +11,8 @@ export interface StoredNewsPost {
   image_url: string | null;
   published_at: string; // ISO
   created_at: string;   // ISO
+  /** If true, show this post in a pop-up when user visits the site. */
+  show_as_popup?: boolean;
 }
 
 const STORAGE_KEY = 'the_yard_news_posts';
@@ -112,6 +114,12 @@ function setStored(posts: StoredNewsPost[]): void {
   }
 }
 
+/** Get news posts that are marked to show as pop-up (sorted by published_at desc). */
+export function getPopupNewsPosts(): StoredNewsPost[] {
+  const posts = getStored().filter((p) => p.show_as_popup === true);
+  return [...posts].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+}
+
 /** Get all news posts saved by admin. */
 export function getStoredNewsPosts(): StoredNewsPost[] {
   return getStored();
@@ -124,7 +132,7 @@ export function saveStoredNewsPosts(posts: StoredNewsPost[]): void {
 
 /** Create a new post (generate id and created_at). */
 export function createStoredNewsPost(
-  input: { title: string; content: string; image_url: string | null; published_at: string }
+  input: { title: string; content: string; image_url: string | null; published_at: string; show_as_popup?: boolean }
 ): StoredNewsPost {
   const id = `n-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const now = new Date().toISOString();
@@ -135,13 +143,14 @@ export function createStoredNewsPost(
     image_url: input.image_url || null,
     published_at: input.published_at || now,
     created_at: now,
+    show_as_popup: input.show_as_popup ?? false,
   };
 }
 
 /** Update existing post by id. */
 export function updateStoredNewsPost(
   id: string,
-  updates: Partial<Pick<StoredNewsPost, 'title' | 'content' | 'image_url' | 'published_at'>>
+  updates: Partial<Pick<StoredNewsPost, 'title' | 'content' | 'image_url' | 'published_at' | 'show_as_popup'>>
 ): boolean {
   const posts = getStored();
   const idx = posts.findIndex((p) => p.id === id);

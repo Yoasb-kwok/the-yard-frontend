@@ -1101,8 +1101,10 @@
       "contentPlaceholder": "輸入消息內容…",
       "imageLabel": "封面圖片",
       "imageHint": "Demo 會將圖片存於瀏覽器本地，建議使用 JPG/PNG。",
-      "publishedAtLabel": "發佈日期",
-      "confirmDelete": "確定刪除此則消息？"
+    "publishedAtLabel": "發佈日期",
+    "showAsPopup": "作為進入頁面彈窗顯示",
+    "popupBadge": "彈窗",
+    "confirmDelete": "確定刪除此則消息？"
     },
     "reports": {
       "title": "報表",

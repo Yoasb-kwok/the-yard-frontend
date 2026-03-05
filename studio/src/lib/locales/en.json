@@ -1099,6 +1099,8 @@
       "imageLabel": "Cover image",
       "imageHint": "Demo stores images in browser; JPG/PNG recommended.",
       "publishedAtLabel": "Publish date",
+      "showAsPopup": "Show as pop-up when user visits site",
+      "popupBadge": "Pop-up",
       "confirmDelete": "Delete this news post?"
     },
     "reports": {

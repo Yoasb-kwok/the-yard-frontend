@@ -1062,6 +1062,8 @@
       "imageLabel": "封面图片",
       "imageHint": "Demo 会将图片存于浏览器本地，建议使用 JPG/PNG。",
       "publishedAtLabel": "发布日期",
+      "showAsPopup": "作为进入页面弹窗显示",
+      "popupBadge": "弹窗",
       "confirmDelete": "确定删除此则消息？"
     },
     "reports": {

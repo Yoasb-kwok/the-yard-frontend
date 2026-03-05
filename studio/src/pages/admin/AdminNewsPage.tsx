@@ -15,7 +15,7 @@ import { Plus, Edit, Trash2, Newspaper, Image as ImageIcon } from 'lucide-react'
 import { useModalA11y } from '../../lib/useModalA11y';
 
 /** Normalize API or stored post to list item shape (published_at may be ISO or date-only) */
-function toPostItem(p: { id: string; title: string; content: string; image_url: string | null; published_at: string; created_at?: string }): StoredNewsPost {
+function toPostItem(p: { id: string; title: string; content: string; image_url: string | null; published_at: string; created_at?: string; show_as_popup?: boolean }): StoredNewsPost {
   return {
     id: String(p.id),
     title: p.title || '',
@@ -23,6 +23,7 @@ function toPostItem(p: { id: string; title: string; content: string; image_url: 
     image_url: p.image_url || null,
     published_at: p.published_at || new Date().toISOString(),
     created_at: p.created_at || p.published_at || new Date().toISOString(),
+    show_as_popup: p.show_as_popup ?? false,
   };
 }
 
@@ -46,6 +47,7 @@ export default function AdminNewsPage() {
     content: '',
     image_url: null as string | null,
     published_at: new Date().toISOString().slice(0, 10),
+    show_as_popup: false,
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
@@ -79,6 +81,7 @@ export default function AdminNewsPage() {
       content: '',
       image_url: null,
       published_at: new Date().toISOString().slice(0, 10),
+      show_as_popup: false,
     });
     setImageFile(null);
     setShowModal(true);
@@ -91,6 +94,7 @@ export default function AdminNewsPage() {
       content: post.content,
       image_url: post.image_url,
       published_at: post.published_at.slice(0, 10),
+      show_as_popup: post.show_as_popup ?? false,
     });
     setImageFile(null);
     setShowModal(true);
@@ -124,7 +128,7 @@ export default function AdminNewsPage() {
     if (!form.title.trim()) return;
     setSaving(true);
     const published_at = form.published_at ? `${form.published_at}T12:00:00.000Z` : new Date().toISOString();
-    const body = { title: form.title.trim(), content: form.content.trim(), image_url: form.image_url, published_at };
+    const body = { title: form.title.trim(), content: form.content.trim(), image_url: form.image_url, published_at, show_as_popup: form.show_as_popup };
     try {
       try {
         if (editingPost) {
@@ -146,7 +150,7 @@ export default function AdminNewsPage() {
         // Fallback to localStorage when API fails
       }
       if (editingPost) {
-        updateStoredNewsPost(editingPost.id, { title: body.title, content: body.content, image_url: body.image_url, published_at });
+        updateStoredNewsPost(editingPost.id, { title: body.title, content: body.content, image_url: body.image_url, published_at, show_as_popup: body.show_as_popup });
       } else {
         const created = createStoredNewsPost(body);
         const next = [...getStoredNewsPosts()];
@@ -235,6 +239,11 @@ export default function AdminNewsPage() {
                     <h2 className="font-semibold text-gray-900 truncate">{post.title}</h2>
                     <p className="text-sm text-gray-500">
                       {formatDate(post.published_at, locale)}
+                      {post.show_as_popup && (
+                        <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
+                          {t('admin.news.popupBadge', '彈窗')}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -344,6 +353,18 @@ export default function AdminNewsPage() {
                       onChange={(e) => setForm((f) => ({ ...f, published_at: e.target.value }))}
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
                     />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="news-show-as-popup"
+                      checked={form.show_as_popup}
+                      onChange={(e) => setForm((f) => ({ ...f, show_as_popup: e.target.checked }))}
+                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                    <label htmlFor="news-show-as-popup" className="text-sm font-medium text-gray-700">
+                      {t('admin.news.showAsPopup', '作為進入頁面彈窗顯示')}
+                    </label>
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <button
