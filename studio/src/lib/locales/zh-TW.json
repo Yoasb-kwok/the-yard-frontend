@@ -849,6 +849,12 @@
       "substituteShort": "代課",
       "level": "課程級別",
       "ageTag": "年齡組",
+      "ageRange": "適合年齡",
+      "lowestAge": "最低年齡",
+      "oldestAge": "最高年齡",
+      "ageTagLabel": "標籤",
+      "yearsOld": "歲",
+      "ageRangeHint": "最低年齡不可大於最高年齡",
       "entryLevel": "入門級",
       "intermediateLevel": "中級",
       "advancedLevel": "高級",
@@ -1368,7 +1374,8 @@
     "ageTag": {
       "5-8": "5-8歲",
       "9-12": "9-12歲",
-      "13-16": "13-16歲"
+      "13-16": "13-16歲",
+      "yearsOld": "歲"
     },
     "preview": "課程詳情",
     "bookTrial": "預約試堂",
@@ -1390,7 +1397,14 @@
     "title": "課程介紹",
     "subtitle": "按年齡組別瀏覽課程，歡迎預約試堂。",
     "bookTrial": "預約試堂",
-    "viewCalendar": "查看月曆可報名時段"
+    "viewCalendar": "查看月曆可報名時段",
+    "searchPlaceholder": "搜尋課程名稱、代碼或簡介…",
+    "sortBy": "排序方式",
+    "sortByAgeGroup": "年齡組別",
+    "sortByLevel": "課程難度",
+    "sortByName": "課程名稱",
+    "sortByWeekday": "星期幾",
+    "noResults": "沒有符合的課程，請試試其他關鍵字或排序。"
   },
   "instructors": {
     "title": "導師介紹",

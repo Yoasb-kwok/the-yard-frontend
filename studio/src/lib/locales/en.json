@@ -848,6 +848,12 @@
       "substituteShort": "Sub",
       "level": "Course Level",
       "ageTag": "Age Group",
+      "ageRange": "Suitable age",
+      "lowestAge": "Lowest age",
+      "oldestAge": "Oldest age",
+      "ageTagLabel": "Tag",
+      "yearsOld": " yrs",
+      "ageRangeHint": "Lowest age cannot be greater than oldest age",
       "entryLevel": "Entry Level",
       "intermediateLevel": "Intermediate Level",
       "advancedLevel": "Advanced Level",
@@ -1365,7 +1371,8 @@
     "ageTag": {
       "5-8": "Ages 5-8",
       "9-12": "Ages 9-12",
-      "13-16": "Ages 13-16"
+      "13-16": "Ages 13-16",
+      "yearsOld": " yrs"
     },
     "preview": "View details",
     "bookTrial": "Book Trial",
@@ -1387,7 +1394,14 @@
     "title": "Course Introduction",
     "subtitle": "Browse courses by age group. Trial classes are available.",
     "bookTrial": "Book Trial",
-    "viewCalendar": "View calendar for available slots"
+    "viewCalendar": "View calendar for available slots",
+    "searchPlaceholder": "Search by course name, code or description…",
+    "sortBy": "Sort by",
+    "sortByAgeGroup": "Age group",
+    "sortByLevel": "Course level",
+    "sortByName": "Course name",
+    "sortByWeekday": "Day of week",
+    "noResults": "No courses match. Try different keywords or sort."
   },
   "instructors": {
     "title": "Our Instructors",

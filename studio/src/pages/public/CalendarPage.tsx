@@ -27,7 +27,7 @@ interface Lesson {
   /** Lesson number in the course (1, 2, 3…). Shown as L01, L02. */
   lesson_number?: number | null;
   level: CourseLevel;
-  age_tag: AgeTag;
+  age_tag: string;
   /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
   weekday: number;
   /** Total lessons in the course (4, 8, or 16 – 每週一次). */
@@ -180,7 +180,7 @@ export default function CalendarPage() {
             program_code: programCode,
             lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
             level: (cls.level || 'entry') as CourseLevel,
-            age_tag: (cls.age_group || '9-12') as AgeTag,
+            age_tag: cls.age_group || '9-12',
             weekday: startTime.getDay(),
             total_lessons: clampTotal(total) as 4 | 8 | 16,
           };
@@ -373,9 +373,9 @@ export default function CalendarPage() {
     return levelConfig[level];
   };
 
-  // Get age tag styling
-  const getAgeTag = (ageTag: AgeTag) => {
-    const ageConfig = {
+  // Get age tag styling (supports preset 5-8, 9-12, 13-16 or any "X-Y" range from admin)
+  const getAgeTag = (ageTag: string) => {
+    const ageConfig: Record<string, { label: string; className: string }> = {
       '5-8': {
         label: t('calendar.ageTag.5-8'),
         className: 'bg-teal-100 text-teal-800 border-teal-200',
@@ -389,7 +389,11 @@ export default function CalendarPage() {
         className: 'bg-indigo-100 text-indigo-800 border-indigo-200',
       },
     };
-    return ageConfig[ageTag];
+    if (ageTag && ageConfig[ageTag]) return ageConfig[ageTag];
+    return {
+      label: ageTag ? `${ageTag}${t('calendar.ageTag.yearsOld', '歲')}` : '',
+      className: 'bg-gray-100 text-gray-800 border-gray-200',
+    };
   };
 
 

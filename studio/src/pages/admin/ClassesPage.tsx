@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
-import { formatDateTime, shouldPostponeClassWithHolidays, formatProgramCodeDisplay } from '../../lib/utils';
+import { formatDateTime, shouldPostponeClassWithHolidays, formatProgramCodeDisplay, parseAgeRange, ageRangeToTag } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
-import { type CourseLevel, type AgeTag, useAuth } from '../../contexts/AuthContext';
+import { type CourseLevel, useAuth } from '../../contexts/AuthContext';
 import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
 
 interface Class {
@@ -27,7 +27,7 @@ interface Class {
   is_cancelled: boolean;
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   level?: CourseLevel;
-  age_tag?: AgeTag;
+  age_tag?: string;
   /** 若因假期順延，原訂日期 (YYYY-MM-DD) */
   postponed_from?: string | null;
 }
@@ -90,6 +90,8 @@ function getFallbackEnrollments(classId: string, enrolledCount: number): Enrollm
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
+const AGE_OPTIONS = Array.from({ length: 26 }, (_, i) => i); // 0–25
+
 export default function ClassesPage() {
   const { t, i18n } = useTranslation();
   const { profile } = useAuth();
@@ -117,7 +119,8 @@ export default function ClassesPage() {
     is_internal: false,
     location: 'sanpokong' as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui',
     level: 'entry' as CourseLevel,
-    age_tag: '5-8' as AgeTag,
+    lowest_age: 5,
+    oldest_age: 8,
     repeat_weekly: false,
     total_lessons: 8,
   });
@@ -459,7 +462,8 @@ export default function ClassesPage() {
       is_internal: classItem.is_internal,
       location: classItem.location || 'sanpokong',
       level: classItem.level || 'entry',
-      age_tag: classItem.age_tag || '5-8',
+      lowest_age: parseAgeRange(classItem.age_tag).lowest,
+      oldest_age: parseAgeRange(classItem.age_tag).oldest,
       repeat_weekly: false,
       total_lessons: 8,
     });
@@ -481,7 +485,8 @@ export default function ClassesPage() {
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
-      age_tag: '5-8',
+      lowest_age: 5,
+      oldest_age: 8,
       repeat_weekly: false,
       total_lessons: 8,
     });
@@ -490,7 +495,10 @@ export default function ClassesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
+    if (form.lowest_age > form.oldest_age) {
+      alert(t('admin.classes.ageRangeHint', '最低年齡不可大於最高年齡'));
+      return;
+    }
     // If editing, update the existing class(es)
     if (editingClass) {
       const isNumericId = (id: string | number) => /^[1-9][0-9]*$/.test(String(id));
@@ -531,7 +539,7 @@ export default function ClassesPage() {
               is_internal: form.is_internal ? 1 : 0,
               location: form.location,
               level: form.level,
-              age_group: form.age_tag,
+              age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
             };
             
             return api.patch(`/admin/classes/${c.id}`, updateData);
@@ -557,7 +565,7 @@ export default function ClassesPage() {
             is_internal: form.is_internal ? 1 : 0,
             location: form.location,
             level: form.level,
-            age_group: form.age_tag,
+            age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
           };
           
           const response = await api.patch(`/admin/classes/${editingClass.id}`, updateData);
@@ -578,7 +586,7 @@ export default function ClassesPage() {
               is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
               location: response.data.location,
               level: response.data.level,
-              age_tag: response.data.age_group as AgeTag,
+              age_tag: (response.data.age_group as string) ?? '5-8',
             };
             
             setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
@@ -604,7 +612,8 @@ export default function ClassesPage() {
           is_internal: false,
           location: 'sanpokong',
           level: 'entry',
-          age_tag: '5-8',
+          lowest_age: 5,
+          oldest_age: 8,
           repeat_weekly: false,
           total_lessons: 8,
         });
@@ -641,7 +650,7 @@ export default function ClassesPage() {
           location: form.location,
           program_code: form.class_code || undefined,
           level: form.level,
-          age_group: form.age_tag,
+          age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
           is_internal: form.is_internal ? 1 : 0,
         });
         const data = res.data ?? [];
@@ -661,7 +670,7 @@ export default function ClassesPage() {
             is_cancelled: c.is_cancelled === 1,
             location: c.location,
             level: (c.level as CourseLevel) || 'entry',
-            age_tag: (c.age_group as AgeTag) || '5-8',
+            age_tag: (c.age_group as string) ?? '5-8',
           });
         }
         newClasses.push(...createdClasses);
@@ -681,7 +690,8 @@ export default function ClassesPage() {
           is_internal: false,
           location: 'sanpokong',
           level: 'entry',
-          age_tag: '5-8',
+          lowest_age: 5,
+          oldest_age: 8,
           repeat_weekly: false,
           total_lessons: 8,
         });
@@ -722,7 +732,7 @@ export default function ClassesPage() {
         location: form.location,
         program_code: form.class_code,
         level: form.level,
-        age_group: form.age_tag,
+        age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
         is_internal: form.is_internal ? 1 : 0,
         repeat_weekly: 0,
       };
@@ -745,7 +755,7 @@ export default function ClassesPage() {
             is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
             location: response.data.location,
             level: response.data.level,
-            age_tag: response.data.age_group as AgeTag,
+            age_tag: (response.data.age_group as string) ?? '5-8',
           };
           newClasses.push(createdClass);
         } else {
@@ -779,7 +789,8 @@ export default function ClassesPage() {
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
-      age_tag: '5-8',
+      lowest_age: 5,
+      oldest_age: 8,
       repeat_weekly: false,
       total_lessons: 8,
     });
@@ -1924,17 +1935,38 @@ export default function ClassesPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.ageTag')}</label>
-                <select
-                  required
-                  value={form.age_tag}
-                  onChange={(e) => setForm({ ...form, age_tag: e.target.value as AgeTag })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="5-8">{t('calendar.ageTag.5-8')}</option>
-                  <option value="9-12">{t('calendar.ageTag.9-12')}</option>
-                  <option value="13-16">{t('calendar.ageTag.13-16')}</option>
-                </select>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.ageRange', '適合年齡')}</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    required
+                    value={form.lowest_age}
+                    onChange={(e) => setForm({ ...form, lowest_age: Number(e.target.value), oldest_age: Math.max(form.oldest_age, Number(e.target.value)) })}
+                    className="w-24 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    aria-label={t('admin.classes.lowestAge', '最低年齡')}
+                  >
+                    {AGE_OPTIONS.map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-500">–</span>
+                  <select
+                    required
+                    value={form.oldest_age}
+                    onChange={(e) => setForm({ ...form, oldest_age: Number(e.target.value) })}
+                    className="w-24 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    aria-label={t('admin.classes.oldestAge', '最高年齡')}
+                  >
+                    {AGE_OPTIONS.filter((n) => n >= form.lowest_age).map((n) => (
+                      <option key={n} value={n}>{n}</option>
+                    ))}
+                  </select>
+                  <span className="text-sm text-gray-600">
+                    {t('admin.classes.ageTagLabel', '標籤')}: {ageRangeToTag(form.lowest_age, form.oldest_age)}{t('admin.classes.yearsOld', '歲')}
+                  </span>
+                </div>
+                {form.lowest_age > form.oldest_age && (
+                  <p className="text-xs text-amber-600 mt-1">{t('admin.classes.ageRangeHint', '最低年齡不可大於最高年齡')}</p>
+                )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.firstLessonDate')}</label>

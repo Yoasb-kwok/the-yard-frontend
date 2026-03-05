@@ -1,5 +1,22 @@
 import type { AgeTag } from '../contexts/AuthContext';
 
+/** Parse "X-Y" age tag to lowest/oldest. Defaults to 5-8 if invalid. */
+export function parseAgeRange(ageTag: string | undefined): { lowest: number; oldest: number } {
+  if (!ageTag || typeof ageTag !== 'string') return { lowest: 5, oldest: 8 };
+  const m = ageTag.match(/^(\d+)-(\d+)$/);
+  if (!m) return { lowest: 5, oldest: 8 };
+  const low = Math.max(0, Math.min(99, parseInt(m[1], 10)));
+  const high = Math.max(0, Math.min(99, parseInt(m[2], 10)));
+  return { lowest: low, oldest: Math.max(low, high) };
+}
+
+/** Build age tag string from lowest and oldest age. */
+export function ageRangeToTag(lowest: number, oldest: number): string {
+  const l = Math.max(0, Math.min(99, Math.floor(Number(lowest))));
+  const h = Math.max(0, Math.min(99, Math.floor(Number(oldest))));
+  return `${l}-${Math.max(l, h)}`;
+}
+
 /**
  * Derive age group from date of birth using (today - DOB).
  * Returns '5-8' | '9-12' | '13-16' if age falls in range, otherwise null.
