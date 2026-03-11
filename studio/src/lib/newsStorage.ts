@@ -74,6 +74,46 @@ const DEMO_NEWS_ENTRIES: Array<{
       'en': { title: 'Yayakids Kids Dance — New Term Starting', content: 'Yayakids Dance Academy new term is starting soon. Classes include creative movement, ballet basics and street dance for ages 3–12. Small groups.\n\nBook a trial before committing. See the calendar or contact us for details.' },
     },
   },
+  {
+    id: 'demo-6',
+    daysAgo: 15,
+    image_url: null,
+    content: {
+      'zh-TW': { title: '三月週末親子舞蹈工作坊', content: '歡迎家長與小朋友一起參加週末親子舞蹈工作坊，透過簡單律動增進親子互動。名額有限，請提早報名。' },
+      'zh-CN': { title: '三月周末亲子舞蹈工作坊', content: '欢迎家长与小朋友一起参加周末亲子舞蹈工作坊，透过简单律动增进亲子互动。名额有限，请提早报名。' },
+      'en': { title: 'March Weekend Parent-Child Dance Workshop', content: 'Join our weekend parent-child dance workshop. Simple movements for bonding. Limited places — book early.' },
+    },
+  },
+  {
+    id: 'demo-7',
+    daysAgo: 18,
+    image_url: null,
+    content: {
+      'zh-TW': { title: '街舞 Battle 交流賽 報名開始', content: '本中心將舉辦街舞交流賽，歡迎學員與外界舞者報名。設有少年組與成人組，詳情請見最新公告。' },
+      'zh-CN': { title: '街舞 Battle 交流赛 报名开始', content: '本中心将举办街舞交流赛，欢迎学员与外界舞者报名。设有少年组与成人组，详情请见最新公告。' },
+      'en': { title: 'Street Dance Battle — Registration Open', content: 'We are hosting a street dance battle. Open to students and external dancers. Junior and adult categories. See announcements for details.' },
+    },
+  },
+  {
+    id: 'demo-8',
+    daysAgo: 21,
+    image_url: null,
+    content: {
+      'zh-TW': { title: '清明連假課程安排通知', content: '清明連假期間部分課程時間將調整，請學員留意課表更新並以系統通知為準。' },
+      'zh-CN': { title: '清明连假课程安排通知', content: '清明连假期间部分课程时间将调整，请学员留意课表更新并以系统通知为准。' },
+      'en': { title: 'Holiday Schedule Update', content: 'Some class times will change during the holiday period. Please check the updated schedule and system notifications.' },
+    },
+  },
+  {
+    id: 'demo-9',
+    daysAgo: 25,
+    image_url: null,
+    content: {
+      'zh-TW': { title: '成人芭蕾體驗班 四月開班', content: '專為成人設計的芭蕾體驗班，無基礎可參加。每週一堂，為期四週。歡迎預約試堂。' },
+      'zh-CN': { title: '成人芭蕾体验班 四月开班', content: '专为成人设计的芭蕾体验班，无基础可参加。每周一堂，为期四周。欢迎预约试堂。' },
+      'en': { title: 'Adult Ballet Taster — Starting April', content: 'Ballet taster for adults, no experience needed. One class per week for four weeks. Book a trial to join.' },
+    },
+  },
 ];
 
 function getDemoNewsPostsForLocale(locale: string): StoredNewsPost[] {

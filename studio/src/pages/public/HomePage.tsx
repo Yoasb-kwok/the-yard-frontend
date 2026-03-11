@@ -66,7 +66,8 @@ export default function HomePage() {
     try {
       const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news');
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setLatestNews(res.data.slice(0, 3).map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));
+        const sorted = [...res.data].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+        setLatestNews(sorted.slice(0, 4).map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));
         return;
       }
     } catch {
@@ -74,10 +75,11 @@ export default function HomePage() {
     }
     const stored = getStoredNewsPosts();
     if (stored.length > 0) {
-      setLatestNews(stored.slice(0, 3).map(({ created_at: _, ...p }) => p));
+      const sorted = [...stored].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+      setLatestNews(sorted.slice(0, 4).map(({ created_at: _, ...p }) => p));
     } else {
       const demo = getDemoNewsPosts(i18n.language);
-      setLatestNews(demo.slice(0, 3).map(({ created_at: _, ...p }) => p));
+      setLatestNews(demo.slice(0, 4).map(({ created_at: _, ...p }) => p));
     }
   }
 
@@ -179,7 +181,7 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* 最新消息 - 與關於我們同風格：左圖右文，max-w-4xl */}
+        {/* 最新消息 - 左：第一則標題在上、圖在下；右：其他消息標題列表 */}
         {latestNews.length > 0 && (
           <div className="max-w-4xl mx-auto mt-14 sm:mt-20">
             <div className="flex items-center justify-between mb-8 sm:mb-10">
@@ -195,35 +197,43 @@ export default function HomePage() {
                 <ChevronRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
               </Link>
             </div>
-            <div className="space-y-14 sm:space-y-20">
-              {latestNews.map((post) => (
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-6 sm:gap-8">
+              {/* 左欄：第一則 - 標題左上、圖左下 */}
+              <div className="sm:col-span-2 flex flex-col gap-4">
                 <Link
-                  key={post.id}
-                  to={`/news/${post.id}`}
-                  className="flex flex-col gap-8 sm:gap-10 sm:flex-row sm:items-center group"
+                  key={latestNews[0].id}
+                  to={`/news/${latestNews[0].id}`}
+                  className="group flex flex-col flex-1 min-h-0"
                 >
-                  <div className="flex-shrink-0 sm:w-[44%]">
-                    <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200/80 aspect-[4/3] sm:aspect-[3/2] bg-gray-100">
-                      {post.image_url ? (
-                        <img src={post.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-200">
-                          <Newspaper className="h-16 w-16 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-500 mb-3">
-                      {formatDate(post.published_at, i18n.language === 'zh-TW' || i18n.language === 'zh-CN' ? 'zh-TW' : 'en-US')}
-                    </div>
-                    <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-3 group-hover:text-primary transition-colors line-clamp-2">
-                      {post.title}
-                    </h3>
-                    <p className="text-gray-600 leading-relaxed line-clamp-3">{post.content}</p>
+                  <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 group-hover:text-primary transition-colors line-clamp-2">
+                    {latestNews[0].title}
+                  </h3>
+                  <div className="flex-1 min-h-0 rounded-2xl overflow-hidden shadow-lg border border-gray-200/80 aspect-[4/3] sm:aspect-[3/2] bg-gray-100">
+                    {latestNews[0].image_url ? (
+                      <img src={latestNews[0].image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-200">
+                        <Newspaper className="h-16 w-16 text-gray-400" />
+                      </div>
+                    )}
                   </div>
                 </Link>
-              ))}
+              </div>
+              {/* 右欄：其他最新消息標題列表 */}
+              <div className="sm:col-span-3 flex flex-col gap-3">
+                {latestNews.slice(1).map((post) => (
+                  <Link
+                    key={post.id}
+                    to={`/news/${post.id}`}
+                    className="flex flex-col sm:flex-row sm:items-center gap-2 py-3 border-b border-gray-100 last:border-0 group"
+                  >
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 group-hover:text-primary transition-colors line-clamp-2 flex-1 min-w-0">
+                      {post.title}
+                    </h3>
+                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-primary flex-shrink-0 hidden sm:block" />
+                  </Link>
+                ))}
+              </div>
             </div>
           </div>
         )}
