@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Menu, X, Mail, Facebook, Instagram, ChevronDown, User, Calendar, Home, Newspaper, Package, Phone, LogOut, LayoutDashboard, Info, Check, BookOpen, GraduationCap } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useAuth } from '../contexts/AuthContext';
-const logoUrl = '/images/the-yard-logo.png';
+const logoUrl = '/images/(Final)Logo.png';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = ({ className }: { className?: string }) => (

@@ -7,7 +7,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
 import ClassNoticePopup from './ClassNoticePopup';
 import { useAdminPendingCounts } from '../lib/useAdminPendingCounts';
-const logoUrl = '/images/the-yard-logo.png';
+const logoUrl = '/images/(Final)Logo.png';
 
 // WhatsApp Icon Component
 const WhatsAppIcon = ({ className }: { className?: string }) => (

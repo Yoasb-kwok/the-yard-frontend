@@ -1341,6 +1341,11 @@
   },
   "calendar": {
     "title": "課程表",
+    "courseType": {
+      "regular": "恆常班",
+      "summer": "暑假班",
+      "short_term": "短期班"
+    },
     "day": "日",
     "trialSlotsHint": "以下時段均可試堂，點擊課程可預約試堂。",
     "trialAvailable": "可試堂",

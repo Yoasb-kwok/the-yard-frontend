@@ -1338,6 +1338,11 @@
   },
   "calendar": {
     "title": "Calendar",
+    "courseType": {
+      "regular": "Regular",
+      "summer": "Summer",
+      "short_term": "Short-term"
+    },
     "day": "Day",
     "trialSlotsHint": "All slots below are available for trial. Click a class to book a trial.",
     "trialAvailable": "Trial available",

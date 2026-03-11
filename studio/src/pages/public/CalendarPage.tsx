@@ -1190,7 +1190,7 @@ export default function CalendarPage() {
                       filterCategory === type ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
                     }`}
                   >
-                    {t(`courses.courseType.${type}`)}
+                    {t(`calendar.courseType.${type}`, t(`courses.courseType.${type}`))}
                   </button>
                 ))}
               </div>

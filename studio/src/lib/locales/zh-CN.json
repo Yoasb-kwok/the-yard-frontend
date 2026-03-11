@@ -1296,6 +1296,11 @@
   },
   "calendar": {
     "title": "课程表",
+    "courseType": {
+      "regular": "恒常班",
+      "summer": "暑假班",
+      "short_term": "短期班"
+    },
     "day": "日",
     "trialSlotsHint": "以下时段均可试课，点击课程可预约试课。",
     "trialAvailable": "可试课",
