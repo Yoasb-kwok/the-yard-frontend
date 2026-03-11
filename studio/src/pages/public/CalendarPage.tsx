@@ -13,6 +13,8 @@ import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { getFallbackCalendarLessons } from '../../lib/demoCourses';
 import { useModalA11y } from '../../lib/useModalA11y';
+import { LEVELS, AGE_TAGS, COURSE_TYPES } from '../../lib/coursesData';
+import type { CourseType } from '../../lib/coursesData';
 
 interface Lesson {
   id: string;
@@ -32,6 +34,8 @@ interface Lesson {
   weekday: number;
   /** Total lessons in the course (4, 8, or 16 – 每週一次). */
   total_lessons: 4 | 8 | 16;
+  /** 課程分類（日曆篩選用） */
+  course_type?: 'regular' | 'summer' | 'short_term';
 }
 
 type ViewType = 'day' | 'threeDay' | 'week' | 'month';
@@ -48,6 +52,36 @@ const TIME_GRID_ROW_HEIGHT_PX = 48;
 const WEEK_VIEW_EVENT_MIN_HEIGHT_PX = 48;
 /** 重疊時段內每個課程方塊的最小寬度（px），以便完整顯示課程名稱 */
 const WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX = 100;
+
+/** 依 view 與日期算出 GET /classes 的 from/to，與課程介紹試堂時段用同一 API 篩選 */
+function getCalendarRangeForView(date: Date, view: ViewType): { from: string; to: string } {
+  const d = new Date(date);
+  let from: Date;
+  let to: Date;
+  if (view === 'day') {
+    from = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    to = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  } else if (view === 'threeDay') {
+    from = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    to = new Date(d);
+    to.setDate(to.getDate() + 2);
+    to.setHours(23, 59, 59, 999);
+  } else if (view === 'week') {
+    const day = d.getDay();
+    const diff = d.getDate() - day;
+    const start = new Date(d.getFullYear(), d.getMonth(), diff, 0, 0, 0, 0);
+    from = start;
+    to = new Date(start);
+    to.setDate(to.getDate() + 6);
+    to.setHours(23, 59, 59, 999);
+  } else {
+    const year = d.getFullYear();
+    const month = d.getMonth();
+    from = new Date(year, month, 1, 0, 0, 0, 0);
+    to = new Date(year, month + 1, 0, 23, 59, 59, 999);
+  }
+  return { from: from.toISOString(), to: to.toISOString() };
+}
 
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
@@ -69,6 +103,9 @@ export default function CalendarPage() {
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [slotPicker, setSlotPicker] = useState<{ lessons: Lesson[]; timeLabel: string } | null>(null);
   const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
+  const [filterLevel, setFilterLevel] = useState<CourseLevel | null>(null);
+  const [filterAge, setFilterAge] = useState<string | null>(null);
+  const [filterCategory, setFilterCategory] = useState<CourseType | null>(null);
   const [isNarrowScreen, setIsNarrowScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const lessonModalRef = useRef<HTMLDivElement>(null);
   const slotPickerRef = useRef<HTMLDivElement>(null);
@@ -83,11 +120,18 @@ export default function CalendarPage() {
 
   const isStudent = user && profile?.role === 'student';
   const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
-  const displayLessons = !isStudent
+  const displayLessonsBase = !isStudent
     ? lessons
     : calendarFilterMode === 'suggested'
       ? lessons.filter((l) => l.level === profile?.level && l.age_tag === profileAgeTag)
       : lessons;
+  const displayLessons = useMemo(() => {
+    let list = displayLessonsBase;
+    if (filterLevel != null) list = list.filter((l) => l.level === filterLevel);
+    if (filterAge != null) list = list.filter((l) => l.age_tag === filterAge);
+    if (filterCategory != null) list = list.filter((l) => (l.course_type ?? 'regular') === filterCategory);
+    return list;
+  }, [displayLessonsBase, filterLevel, filterAge, filterCategory]);
   const isLessonSuggested = (lesson: Lesson): boolean =>
     !isStudent || ((!profile?.level || lesson.level === profile.level) && (!profileAgeTag || lesson.age_tag === profileAgeTag));
 
@@ -147,8 +191,9 @@ export default function CalendarPage() {
     setLessonsLoading(true);
     setLessonsError(null);
     try {
-      // Public 課程表: use public endpoint so unauthenticated users get DB data (same getClassesList as admin)
-      const response = await api.get<any[]>('/classes');
+      // 與課程介紹試堂時段同一 API：傳 from/to 讓後端回傳該時段班別，日曆與試堂資料一致
+      const range = getCalendarRangeForView(currentDate, view);
+      const response = await api.get<any[]>('/classes', { from: range.from, to: range.to });
       const rows = Array.isArray(response?.data) ? response.data : [];
       if (!response?.success) {
         setLessons(getFallbackCalendarLessons(currentDate));
@@ -180,9 +225,10 @@ export default function CalendarPage() {
             program_code: programCode,
             lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
             level: (cls.level || 'entry') as CourseLevel,
-            age_tag: cls.age_group || '9-12',
+            age_tag: cls.age_group || cls.age_tag || '9-12',
             weekday: startTime.getDay(),
             total_lessons: clampTotal(total) as 4 | 8 | 16,
+            course_type: (cls.course_type || 'regular') as Lesson['course_type'],
           };
         });
       setLessons(mapped.length > 0 ? mapped : getFallbackCalendarLessons(currentDate));
@@ -1095,6 +1141,62 @@ export default function CalendarPage() {
               </button>
             </div>
           )}
+
+          {/* 分類 tag：程度、年齡、課程分類 */}
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 shrink-0">{t('courses.filterByLevel', '程度')}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {LEVELS.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setFilterLevel((prev) => (prev === level ? null : level))}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      filterLevel === level ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                    }`}
+                  >
+                    {t(`calendar.level.${level}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 shrink-0">{t('courses.filterByAge', '年齡')}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {AGE_TAGS.map((age) => (
+                  <button
+                    key={age}
+                    type="button"
+                    onClick={() => setFilterAge((prev) => (prev === age ? null : age))}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      filterAge === age ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                    }`}
+                  >
+                    {getAgeTag(age).label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-gray-500 shrink-0">{t('courses.filterByCategory', '課程分類')}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {COURSE_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setFilterCategory((prev) => (prev === type ? null : type))}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      filterCategory === type ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                    }`}
+                  >
+                    {t(`courses.courseType.${type}`)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
         </div>
 
         {/* Location filter — one place for all views (週/月/日) */}

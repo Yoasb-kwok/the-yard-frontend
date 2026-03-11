@@ -101,6 +101,7 @@
     "newStudentShortTerm": "新生課堂 及短期課程",
     "bookingCourses": "預約課程",
     "bookingCoursesSubtitle": "預約試課或查看完整日曆。未來 14 天課程。",
+    "courseTableTitle": "課程表",
     "newStudentCourses": "新生課程",
     "newStudentCoursesSubtitle": "新生試課。以下可查看及預約。",
     "noClassesToday": "今日沒有安排課程",
@@ -872,7 +873,7 @@
       "viewAttendance": "查看出席名單",
       "location": "地點",
       "internalCourse": "內部課程（補課）",
-      "enrolled": "已報名",
+      "allowTrial": "可供試堂",
       "cancel": "取消",
       "restore": "恢復",
       "cancelled": "已取消",
@@ -1397,6 +1398,7 @@
     "title": "課程介紹",
     "subtitle": "按年齡組別瀏覽課程，歡迎預約試堂。",
     "bookTrial": "預約試堂",
+    "availableTrialSlots": "可供試堂時段",
     "viewCalendar": "查看月曆可報名時段",
     "searchPlaceholder": "搜尋課程名稱、代碼或簡介…",
     "sortBy": "排序方式",
@@ -1404,7 +1406,15 @@
     "sortByLevel": "課程難度",
     "sortByName": "課程名稱",
     "sortByWeekday": "星期幾",
-    "noResults": "沒有符合的課程，請試試其他關鍵字或排序。"
+    "noResults": "沒有符合的課程，請試試其他關鍵字或排序。",
+    "filterByLevel": "程度",
+    "filterByAge": "年齡",
+    "filterByCategory": "課程分類",
+    "courseType": {
+      "regular": "常規班",
+      "summer": "暑假班",
+      "short_term": "短期班"
+    }
   },
   "instructors": {
     "title": "導師介紹",

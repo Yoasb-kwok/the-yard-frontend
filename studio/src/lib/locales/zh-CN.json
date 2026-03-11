@@ -101,6 +101,7 @@
     "newStudentShortTerm": "新生课堂 及短期课程",
     "bookingCourses": "预约课程",
     "bookingCoursesSubtitle": "预约试课或查看完整日历。未来 14 天课程。",
+    "courseTableTitle": "课程表",
     "newStudentCourses": "新生课程",
     "newStudentCoursesSubtitle": "新生试课。以下可查看及预约。",
     "noClassesToday": "今日没有安排课程",
@@ -856,7 +857,7 @@
       "viewAttendance": "查看出席名单",
       "location": "地点",
       "internalCourse": "内部课程（补课）",
-      "enrolled": "已报名",
+      "allowTrial": "可供试堂",
       "cancel": "取消",
       "restore": "恢复",
       "cancelled": "已取消",
@@ -1352,6 +1353,7 @@
     "title": "课程介绍",
     "subtitle": "按年龄组别浏览课程，欢迎预约试课。",
     "bookTrial": "预约试课",
+    "availableTrialSlots": "可供试课时段",
     "viewCalendar": "查看月历可报名时段",
     "searchPlaceholder": "搜索课程名称、代码或简介…",
     "sortBy": "排序方式",
@@ -1359,7 +1361,15 @@
     "sortByLevel": "课程难度",
     "sortByName": "课程名称",
     "sortByWeekday": "星期几",
-    "noResults": "没有符合的课程，请试试其他关键字或排序。"
+    "noResults": "没有符合的课程，请试试其他关键字或排序。",
+    "filterByLevel": "程度",
+    "filterByAge": "年龄",
+    "filterByCategory": "课程分类",
+    "courseType": {
+      "regular": "常规班",
+      "summer": "暑假班",
+      "short_term": "短期班"
+    }
   },
   "instructors": {
     "title": "导师介绍",

@@ -64,7 +64,7 @@ export default function HomePage() {
 
   async function loadLatestNews() {
     try {
-      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news');
+            const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news', { limit: 4 });
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         const sorted = [...res.data].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
         setLatestNews(sorted.slice(0, 4).map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));

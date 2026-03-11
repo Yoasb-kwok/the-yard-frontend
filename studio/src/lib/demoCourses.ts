@@ -147,6 +147,8 @@ export interface DemoLessonForCalendar {
   age_tag: AgeTag;
   weekday: number;
   total_lessons: 4 | 8 | 16;
+  /** 課程分類：常規班、暑假班、短期班（日曆篩選用） */
+  course_type?: 'regular' | 'summer' | 'short_term';
 }
 
 export function getFallbackCalendarLessons(displayedDate?: Date): DemoLessonForCalendar[] {
@@ -182,6 +184,7 @@ export function getFallbackCalendarLessons(displayedDate?: Date): DemoLessonForC
         age_tag: p.age_tag,
         weekday: p.weekday,
         total_lessons: p.total_lessons,
+        course_type: 'regular',
       });
     }
   }
@@ -214,6 +217,7 @@ export function getFallbackCalendarLessons(displayedDate?: Date): DemoLessonForC
         age_tag: i % 2 === 0 ? '5-8' : '9-12',
         weekday: 0,
         total_lessons: 8,
+        course_type: 'regular',
       });
     }
   }
@@ -247,6 +251,7 @@ export function getFallbackCalendarLessons(displayedDate?: Date): DemoLessonForC
         age_tag: i % 3 === 0 ? '5-8' : i % 3 === 1 ? '9-12' : '13-16',
         weekday: 6,
         total_lessons: 8,
+        course_type: 'regular',
       });
     }
   }

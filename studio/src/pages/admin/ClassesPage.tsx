@@ -25,6 +25,8 @@ interface Class {
   enrolled_count: number;
   is_internal: boolean;
   is_cancelled: boolean;
+  /** 可供試堂（課程介紹「可供試堂時段」只顯示 allow_trial 的班別） */
+  allow_trial?: boolean;
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   level?: CourseLevel;
   age_tag?: string;
@@ -123,6 +125,7 @@ export default function ClassesPage() {
     oldest_age: 8,
     repeat_weekly: false,
     total_lessons: 8,
+    allow_trial: true,
   });
   const [expandedAttendanceClassId, setExpandedAttendanceClassId] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<{
@@ -204,6 +207,7 @@ export default function ClassesPage() {
           enrolled_count: cls.enrolled_count ?? 0,
           is_internal: cls.is_internal === 1 || cls.is_internal === true,
           is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
+          allow_trial: cls.allow_trial === 1 || cls.allow_trial === true,
           location: cls.location,
           level: cls.level,
           age_tag: cls.age_group ?? cls.age_tag,
@@ -466,6 +470,7 @@ export default function ClassesPage() {
       oldest_age: parseAgeRange(classItem.age_tag).oldest,
       repeat_weekly: false,
       total_lessons: 8,
+      allow_trial: classItem.allow_trial ?? true,
     });
     setShowModal(true);
   }
@@ -489,6 +494,7 @@ export default function ClassesPage() {
       oldest_age: 8,
       repeat_weekly: false,
       total_lessons: 8,
+      allow_trial: true,
     });
     setShowModal(true);
   }
@@ -537,6 +543,7 @@ export default function ClassesPage() {
               end_time: formatDateAsLocalDateTime(newClassEnd),
               capacity: form.capacity,
               is_internal: form.is_internal ? 1 : 0,
+              allow_trial: form.allow_trial ? 1 : 0,
               location: form.location,
               level: form.level,
               age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
@@ -563,6 +570,7 @@ export default function ClassesPage() {
             end_time: endISO,
             capacity: form.capacity,
             is_internal: form.is_internal ? 1 : 0,
+            allow_trial: form.allow_trial ? 1 : 0,
             location: form.location,
             level: form.level,
             age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
@@ -584,6 +592,7 @@ export default function ClassesPage() {
               enrolled_count: response.data.enrolled_count || 0,
               is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
               is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
+              allow_trial: response.data.allow_trial === 1 || response.data.allow_trial === true,
               location: response.data.location,
               level: response.data.level,
               age_tag: (response.data.age_group as string) ?? '5-8',
@@ -616,6 +625,7 @@ export default function ClassesPage() {
           oldest_age: 8,
           repeat_weekly: false,
           total_lessons: 8,
+          allow_trial: true,
         });
       } catch (error) {
         console.error('Error updating class:', error);
@@ -639,7 +649,7 @@ export default function ClassesPage() {
         const firstDate = form.date;
         const startTimeOfDay = form.start_time;
         const endTimeOfDay = form.end_time;
-        const res = await api.post<{ id: string; name: string; program_code?: string; instructor: string; start_time: string; end_time: string; capacity: number; enrolled_count: number; is_internal: number; is_cancelled: number; location?: string; level?: string; age_group?: string }[]>('admin/classes/recurring', {
+        const res = await api.post<{ id: string; name: string; program_code?: string; instructor: string; start_time: string; end_time: string; capacity: number; enrolled_count: number; is_internal: number; is_cancelled: number; allow_trial?: number; location?: string; level?: string; age_group?: string }[]>('admin/classes/recurring', {
           first_date: firstDate,
           start_time: startTimeOfDay,
           end_time: endTimeOfDay,
@@ -652,6 +662,7 @@ export default function ClassesPage() {
           level: form.level,
           age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
           is_internal: form.is_internal ? 1 : 0,
+          allow_trial: form.allow_trial ? 1 : 0,
         });
         const data = res.data ?? [];
         for (const c of data) {
@@ -668,6 +679,7 @@ export default function ClassesPage() {
             enrolled_count: c.enrolled_count || 0,
             is_internal: c.is_internal === 1,
             is_cancelled: c.is_cancelled === 1,
+            allow_trial: c.allow_trial === 1 || c.allow_trial === true,
             location: c.location,
             level: (c.level as CourseLevel) || 'entry',
             age_tag: (c.age_group as string) ?? '5-8',
@@ -694,6 +706,7 @@ export default function ClassesPage() {
           oldest_age: 8,
           repeat_weekly: false,
           total_lessons: 8,
+          allow_trial: true,
         });
         alert(t('admin.classes.recurringCourseCreated', { count: createdClasses.length }));
       } catch (err) {
@@ -734,6 +747,7 @@ export default function ClassesPage() {
         level: form.level,
         age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
         is_internal: form.is_internal ? 1 : 0,
+        allow_trial: form.allow_trial ? 1 : 0,
         repeat_weekly: 0,
       };
 
@@ -753,6 +767,7 @@ export default function ClassesPage() {
             enrolled_count: response.data.enrolled_count || 0,
             is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
             is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
+            allow_trial: response.data.allow_trial === 1 || response.data.allow_trial === true,
             location: response.data.location,
             level: response.data.level,
             age_tag: (response.data.age_group as string) ?? '5-8',
@@ -793,6 +808,7 @@ export default function ClassesPage() {
       oldest_age: 8,
       repeat_weekly: false,
       total_lessons: 8,
+      allow_trial: true,
     });
   }
 
@@ -818,6 +834,7 @@ export default function ClassesPage() {
           enrolled_count: response.data.enrolled_count || 0,
           is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
           is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
+          allow_trial: response.data.allow_trial === 1 || response.data.allow_trial === true,
           location: response.data.location,
           level: response.data.level,
           age_tag: response.data.age_group as AgeTag,
@@ -2105,6 +2122,18 @@ export default function ClassesPage() {
                 />
                 <label htmlFor="is_internal" className="ml-2 text-sm text-gray-700">
                   {t('admin.classes.internalCourse')}
+                </label>
+              </div>
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="allow_trial"
+                  checked={form.allow_trial}
+                  onChange={(e) => setForm({ ...form, allow_trial: e.target.checked })}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
+                />
+                <label htmlFor="allow_trial" className="ml-2 text-sm text-gray-700">
+                  {t('admin.classes.allowTrial')}
                 </label>
               </div>
             </form>

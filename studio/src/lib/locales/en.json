@@ -101,6 +101,7 @@
     "newStudentShortTerm": "New Student & Short-term Courses",
     "bookingCourses": "Booking Courses",
     "bookingCoursesSubtitle": "Book a trial or view the full calendar. Classes for the next 14 days.",
+    "courseTableTitle": "Course Schedule",
     "newStudentCourses": "New Student Courses",
     "newStudentCoursesSubtitle": "Trial lessons for new students. View and book below.",
     "noClassesToday": "No classes scheduled for today",
@@ -871,7 +872,7 @@
       "actions": "Actions",
       "viewAttendance": "View Attendance",
       "internalCourse": "Internal Course (補課)",
-      "enrolled": "Enrolled",
+      "allowTrial": "Available for trial",
       "cancel": "Cancel",
       "restore": "Restore",
       "cancelled": "Cancelled",
@@ -1394,6 +1395,7 @@
     "title": "Course Introduction",
     "subtitle": "Browse courses by age group. Trial classes are available.",
     "bookTrial": "Book Trial",
+    "availableTrialSlots": "Available trial slots",
     "viewCalendar": "View calendar for available slots",
     "searchPlaceholder": "Search by course name, code or description…",
     "sortBy": "Sort by",
@@ -1401,7 +1403,15 @@
     "sortByLevel": "Course level",
     "sortByName": "Course name",
     "sortByWeekday": "Day of week",
-    "noResults": "No courses match. Try different keywords or sort."
+    "noResults": "No courses match. Try different keywords or sort.",
+    "filterByLevel": "Level",
+    "filterByAge": "Age",
+    "filterByCategory": "Category",
+    "courseType": {
+      "regular": "Regular",
+      "summer": "Summer",
+      "short_term": "Short-term"
+    }
   },
   "instructors": {
     "title": "Our Instructors",
