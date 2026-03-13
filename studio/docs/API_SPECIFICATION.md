@@ -27,9 +27,9 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 
 | API name | Page | Type | Path | Parameters | Success return | Failure return | Remarks |
 |----------|------|------|------|------------|----------------|----------------|---------|
-| getNewsList | News | GET | /api/news | {<br>    "limit": 20,<br>    "offset": 0<br>} | {<br>    "success": true,<br>    "data": [<br>        {<br>            "id": 1,<br>            "title": "...",<br>            "content": "...",<br>            "image_url": "...",<br>            "published_at": "..."<br>        }<br>    ]<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Query: limit, offset. Published only |
+| getNewsList | News | GET | /api/news | {<br>    "limit": 20,<br>    "offset": 0,<br>    "lang": "zh-TW" \| "zh-CN" \| "en"<br>} | {<br>    "success": true,<br>    "data": [<br>        {<br>            "id": 1,<br>            "title": "...",<br>            "content": "...",<br>            "image_url": "...",<br>            "published_at": "..."<br>        }<br>    ]<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Query: limit, offset, **lang** (optional). Return title/content in requested language if backend supports i18n; else return default. Published only. |
 | | | | | | | | |
-| getNewsDetail | NewsDetail | GET | /api/news/:id | — | {<br>    "success": true,<br>    "data": {<br>        "id": 1,<br>        "title": "...",<br>        "content": "...",<br>        "image_url": "...",<br>        "published_at": "..."<br>    }<br>} | {<br>    "success": false,<br>    "msg": "Not found"<br>} | — |
+| getNewsDetail | NewsDetail | GET | /api/news/:id | **lang** (optional): "zh-TW" \| "zh-CN" \| "en" | {<br>    "success": true,<br>    "data": {<br>        "id": 1,<br>        "title": "...",<br>        "content": "...",<br>        "image_url": "...",<br>        "published_at": "..."<br>    }<br>} | {<br>    "success": false,<br>    "msg": "Not found"<br>} | Return title/content in requested language if backend supports i18n. |
 | | | | | | | | |
 | getTokenPackages | TokenPackage | GET | /api/token-packages | — | {<br>    "success": true,<br>    "data": [<br>        {<br>            "id": 1,<br>            "name": "...",<br>            "description": "...",<br>            "token_count": 10,<br>            "price": 900,<br>            "validity_days": 60<br>        }<br>    ]<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | is_active=1 only |
 | | | | | | | | |
@@ -163,3 +163,5 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 ## Notes
 
 - **getClasses (Public vs Admin):** They do **not** conflict. Public uses `GET /api/classes` (Calendar; no or optional auth). Admin uses `GET /api/admin/classes` (Classes, TokenAssignment; requires `is_admin`). Different paths and middleware; register both on the backend.
+
+- **News：單一語言輸入、前台多語顯示（可選翻譯）：** Admin 只需輸入一種語言（例如繁中），後端只存一組 `title`、`content`。當前台請求 `GET /api/news` 或 `GET /api/news/:id` 並帶上 `lang`（zh-TW | zh-CN | en）時，若 `lang` 與儲存語言相同則直接回傳；若不同，後端可選擇呼叫翻譯 API（如 LibreTranslate、Google Translate、DeepL）將 title/content 轉成目標語言後回傳，前台即可顯示對應語系。實作時可設定「儲存語言」（例如 zh-TW），僅在 `lang !== 儲存語言` 時才翻譯。

@@ -26,7 +26,8 @@ export default function NewsPage() {
   async function loadNews() {
     setLoading(true);
     try {
-      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news');
+      const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
+      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news', { lang });
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setPosts(res.data.map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));
         setLoading(false);

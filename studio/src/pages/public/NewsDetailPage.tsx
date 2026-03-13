@@ -5,6 +5,7 @@ import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
 import { ArrowLeft } from 'lucide-react';
 import { getStoredNewsPosts, getDemoNewsPosts } from '../../lib/newsStorage';
+import { api } from '../../lib/api';
 
 interface NewsPost {
   id: string;
@@ -25,15 +26,30 @@ export default function NewsDetailPage() {
   }, [id, t, i18n.language]);
 
   async function loadNewsDetail() {
-    await new Promise(resolve => setTimeout(resolve, 300));
+    if (!id) {
+      setPost(null);
+      setLoading(false);
+      return;
+    }
+    const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
+    try {
+      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }>(`/news/${id}`, { lang });
+      if (res.success && res.data) {
+        setPost(res.data);
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // API failed, use stored or demo
+    }
     const stored = getStoredNewsPosts();
-    const fromStored = id ? stored.find((p) => p.id === id) : null;
+    const fromStored = stored.find((p) => p.id === id);
     if (fromStored) {
       const { created_at: _, ...p } = fromStored;
       setPost(p);
     } else {
       const demo = getDemoNewsPosts(i18n.language);
-      const foundPost = id ? demo.find((p) => p.id === id) : null;
+      const foundPost = demo.find((p) => p.id === id);
       if (foundPost) {
         setPost({ id: foundPost.id, title: foundPost.title, content: foundPost.content, image_url: foundPost.image_url, published_at: foundPost.published_at });
       } else {

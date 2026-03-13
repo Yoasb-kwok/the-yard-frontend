@@ -36,7 +36,8 @@ export default function HomePage() {
 
   async function loadPopupNews() {
     try {
-      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string; show_as_popup?: boolean }[]>('/news');
+      const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
+      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string; show_as_popup?: boolean }[]>('/news', { lang });
       if (res.success && Array.isArray(res.data)) {
         const popup = res.data.filter((p) => (p as { show_as_popup?: boolean }).show_as_popup === true);
         if (popup.length > 0) {
@@ -64,7 +65,8 @@ export default function HomePage() {
 
   async function loadLatestNews() {
     try {
-            const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news', { limit: 4 });
+      const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
+      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news', { limit: 4, lang });
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         const sorted = [...res.data].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
         setLatestNews(sorted.slice(0, 4).map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));

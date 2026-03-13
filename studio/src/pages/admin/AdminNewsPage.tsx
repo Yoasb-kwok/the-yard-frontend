@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
@@ -52,6 +52,12 @@ export default function AdminNewsPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const modalContentRef = useRef<HTMLDivElement>(null);
+
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+    setEditingPost(null);
+    setImageFile(null);
+  }, []);
   useModalA11y(showModal, closeModal, modalContentRef);
 
   useEffect(() => {
@@ -98,12 +104,6 @@ export default function AdminNewsPage() {
     });
     setImageFile(null);
     setShowModal(true);
-  }
-
-  function closeModal() {
-    setShowModal(false);
-    setEditingPost(null);
-    setImageFile(null);
   }
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
