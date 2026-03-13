@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
@@ -14,6 +14,9 @@ import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
 interface Class {
   id: string;
   name: string;
+  name_zh_tw?: string;
+  name_zh_cn?: string;
+  name_en?: string;
   class_code: string;
   /** Lesson number in the course (1, 2, 3…). Displayed as L01, L02 behind program code. */
   lesson_number?: number | null;
@@ -32,6 +35,8 @@ interface Class {
   age_tag?: string;
   /** 若因假期順延，原訂日期 (YYYY-MM-DD) */
   postponed_from?: string | null;
+  /** 出席名單是否已確認 */
+  attendance_confirmed?: boolean;
 }
 
 interface Instructor {
@@ -94,6 +99,10 @@ type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
 const AGE_OPTIONS = Array.from({ length: 26 }, (_, i) => i); // 0–25
 
+function getClassDisplayName(c: Class): string {
+  return (c.name_zh_tw && c.name_zh_tw.trim()) || (c.name_zh_cn && c.name_zh_cn.trim()) || (c.name_en && c.name_en.trim()) || c.name || '';
+}
+
 export default function ClassesPage() {
   const { t, i18n } = useTranslation();
   const { profile } = useAuth();
@@ -109,8 +118,13 @@ export default function ClassesPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [view, setView] = useState<ViewType>('month');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
+  const [classNameFilter, setClassNameFilter] = useState<string>('');
+  const [monthFilter, setMonthFilter] = useState<string>(''); // YYYY-MM or ''
   const [form, setForm] = useState({
     name: '',
+    name_zh_tw: '',
+    name_zh_cn: '',
+    name_en: '',
     class_code: '',
     instructor: '',
     substitute_instructor: '',
@@ -196,7 +210,10 @@ export default function ClassesPage() {
       if (response.success && response.data) {
         const transformedClasses: Class[] = response.data.map((cls: any) => ({
           id: cls.id?.toString() ?? cls.id,
-          name: cls.name,
+          name: cls.name ?? '',
+          name_zh_tw: cls.name_zh_tw ?? cls.name,
+          name_zh_cn: cls.name_zh_cn,
+          name_en: cls.name_en,
           class_code: cls.program_code ?? cls.class_code ?? '',
           lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
           instructor: cls.instructor || '',
@@ -212,6 +229,7 @@ export default function ClassesPage() {
           level: cls.level,
           age_tag: cls.age_group ?? cls.age_tag,
           postponed_from: cls.postponed_from ?? null,
+          attendance_confirmed: cls.attendance_confirmed === 1 || cls.attendance_confirmed === true,
         }));
         setClasses(transformedClasses);
       } else {
@@ -249,7 +267,7 @@ export default function ClassesPage() {
   ): Promise<{ class: ClassWithAttendance; enrollments: Enrollment[] } | null> {
     const c = classes.find((x) => String(x.id) === String(classId));
     if (!c) return null;
-    const classWithAttendance: ClassWithAttendance = { ...c, id: String(c.id), attendance_confirmed: false };
+    const classWithAttendance: ClassWithAttendance = { ...c, id: String(c.id), attendance_confirmed: c.attendance_confirmed ?? false };
     try {
       const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
       const list = res.success && Array.isArray(res.data) ? res.data : [];
@@ -341,9 +359,16 @@ export default function ClassesPage() {
   }
 
   function toggleAttendanceConfirmation() {
-    setAttendanceData((prev) =>
-      prev ? { ...prev, class: { ...prev.class, attendance_confirmed: !prev.class.attendance_confirmed } } : prev
-    );
+    setAttendanceData((prev) => {
+      if (!prev) return prev;
+      const next = !prev.class.attendance_confirmed;
+      return { ...prev, class: { ...prev.class, attendance_confirmed: next } };
+    });
+    if (attendanceData?.class?.id != null) {
+      const classId = attendanceData.class.id;
+      const next = !attendanceData.class.attendance_confirmed;
+      setClasses((prev) => prev.map((c) => (String(c.id) === String(classId) ? { ...c, attendance_confirmed: next } : c)));
+    }
   }
 
   async function handleCancelClass(classId: string) {
@@ -456,6 +481,9 @@ export default function ClassesPage() {
     setEditAllRepeats(false);
     setForm({
       name: classItem.name,
+      name_zh_tw: classItem.name_zh_tw ?? classItem.name ?? '',
+      name_zh_cn: classItem.name_zh_cn ?? '',
+      name_en: classItem.name_en ?? '',
       class_code: classItem.class_code,
       instructor: classItem.instructor,
       substitute_instructor: classItem.substitute_instructor ?? '',
@@ -480,6 +508,9 @@ export default function ClassesPage() {
     const today = new Date().toISOString().slice(0, 10);
     setForm({
       name: '',
+      name_zh_tw: '',
+      name_zh_cn: '',
+      name_en: '',
       class_code: '',
       instructor: '',
       substitute_instructor: '',
@@ -501,6 +532,11 @@ export default function ClassesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
+    if (!nameForApi) {
+      alert(t('admin.classes.classNameRequired', '請至少填寫一種語言的課程名稱'));
+      return;
+    }
     if (form.lowest_age > form.oldest_age) {
       alert(t('admin.classes.ageRangeHint', '最低年齡不可大於最高年齡'));
       return;
@@ -534,8 +570,12 @@ export default function ClassesPage() {
             const newClassStart = new Date(classStart.getTime() + timeDiff);
             const newClassEnd = new Date(newClassStart.getTime() + duration);
             
+            const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
             const updateData = {
-              name: form.name,
+              name: nameForApi,
+              name_zh_tw: form.name_zh_tw.trim() || undefined,
+              name_zh_cn: form.name_zh_cn.trim() || undefined,
+              name_en: form.name_en.trim() || undefined,
               program_code: form.class_code,
               instructor: form.instructor,
               substitute_instructor: form.substitute_instructor || null,
@@ -561,8 +601,12 @@ export default function ClassesPage() {
           // Update single class via API (send local time so backend stores 11:00 as 11:00, not UTC)
           const startISO = toLocalDateTimeString(form.date, form.start_time);
           const endISO = toLocalDateTimeString(form.date, form.end_time);
+          const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
           const updateData = {
-            name: form.name,
+            name: nameForApi,
+            name_zh_tw: form.name_zh_tw.trim() || undefined,
+            name_zh_cn: form.name_zh_cn.trim() || undefined,
+            name_en: form.name_en.trim() || undefined,
             program_code: form.class_code,
             instructor: form.instructor,
             substitute_instructor: form.substitute_instructor || null,
@@ -582,7 +626,10 @@ export default function ClassesPage() {
             // Transform API response to match frontend Class interface
             const updatedClass: Class = {
               id: response.data.id.toString(),
-              name: response.data.name,
+              name: response.data.name ?? nameForApi,
+              name_zh_tw: response.data.name_zh_tw ?? (form.name_zh_tw.trim() || undefined),
+              name_zh_cn: response.data.name_zh_cn ?? (form.name_zh_cn.trim() || undefined),
+              name_en: response.data.name_en ?? (form.name_en.trim() || undefined),
               class_code: response.data.program_code || '',
               instructor: response.data.instructor || '',
               substitute_instructor: response.data.substitute_instructor || null,
@@ -611,6 +658,9 @@ export default function ClassesPage() {
         const today = new Date().toISOString().slice(0, 10);
         setForm({
           name: '',
+          name_zh_tw: '',
+          name_zh_cn: '',
+          name_en: '',
           class_code: '',
           instructor: '',
           substitute_instructor: '',
@@ -649,12 +699,16 @@ export default function ClassesPage() {
         const firstDate = form.date;
         const startTimeOfDay = form.start_time;
         const endTimeOfDay = form.end_time;
+        const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
         const res = await api.post<{ id: string; name: string; program_code?: string; instructor: string; start_time: string; end_time: string; capacity: number; enrolled_count: number; is_internal: number; is_cancelled: number; allow_trial?: number; location?: string; level?: string; age_group?: string }[]>('admin/classes/recurring', {
           first_date: firstDate,
           start_time: startTimeOfDay,
           end_time: endTimeOfDay,
           number_of_lessons: total,
-          name: form.name,
+          name: nameForApi,
+          name_zh_tw: form.name_zh_tw.trim() || undefined,
+          name_zh_cn: form.name_zh_cn.trim() || undefined,
+          name_en: form.name_en.trim() || undefined,
           instructor: form.instructor,
           capacity: form.capacity,
           location: form.location,
@@ -692,6 +746,9 @@ export default function ClassesPage() {
         const today = new Date().toISOString().slice(0, 10);
         setForm({
           name: '',
+          name_zh_tw: '',
+          name_zh_cn: '',
+          name_en: '',
           class_code: '',
           instructor: '',
           substitute_instructor: '',
@@ -735,8 +792,12 @@ export default function ClassesPage() {
       const adjustedEndTimeStr = `${String(adjustedEndDate.getHours()).padStart(2, '0')}:${String(adjustedEndDate.getMinutes()).padStart(2, '0')}`;
 
       // Send date + time-only to API (API combines and stores full datetime in DB)
+      const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
       const classData = {
-        name: form.name,
+        name: nameForApi,
+        name_zh_tw: form.name_zh_tw.trim() || undefined,
+        name_zh_cn: form.name_zh_cn.trim() || undefined,
+        name_en: form.name_en.trim() || undefined,
         instructor: form.instructor,
         date: adjustedDateStr,
         start_time: adjustedStartTimeStr,
@@ -930,6 +991,20 @@ export default function ClassesPage() {
       filtered = filtered.filter(classItem => classItem.location === locationFilter);
     }
 
+    // Filter by class name (display name)
+    if (classNameFilter) {
+      filtered = filtered.filter(classItem => (getClassDisplayName(classItem) || '').trim() === classNameFilter);
+    }
+
+    // Filter by month (YYYY-MM)
+    if (monthFilter) {
+      filtered = filtered.filter(classItem => {
+        const d = new Date(classItem.start_time);
+        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return ym === monthFilter;
+      });
+    }
+
     // Filter by selected date
     if (selectedDate) {
       filtered = filtered.filter(classItem => {
@@ -1088,8 +1163,13 @@ export default function ClassesPage() {
               >
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-xl font-semibold text-gray-900">{classItem.name}</h3>
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 className="text-xl font-semibold text-gray-900">{getClassDisplayName(classItem)}</h3>
+                      {!classItem.attendance_confirmed && (
+                        <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">
+                          {t('admin.classes.attendanceNotConfirmed')}
+                        </span>
+                      )}
                       {classItem.is_internal && (
                         <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
                           補課
@@ -1272,9 +1352,9 @@ export default function ClassesPage() {
                         e.stopPropagation();
                         openEditModal(classItem);
                       }}
-                      title={classItem.name}
+                      title={getClassDisplayName(classItem)}
                     >
-                      <div className="font-medium truncate">{classItem.name}</div>
+                      <div className="font-medium truncate">{getClassDisplayName(classItem)}</div>
                       {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                         <div className="text-xs mt-0.5 truncate opacity-90 font-medium">
                           {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
@@ -1378,9 +1458,9 @@ export default function ClassesPage() {
                           e.stopPropagation();
                           openEditModal(classItem);
                         }}
-                        title={classItem.name}
+                        title={getClassDisplayName(classItem)}
                       >
-                        <div className="font-medium truncate">{classItem.name}</div>
+                        <div className="font-medium truncate">{getClassDisplayName(classItem)}</div>
                         {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                           <div className="text-xs mt-0.5 truncate opacity-90 font-medium">
                             {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
@@ -1481,9 +1561,9 @@ export default function ClassesPage() {
                           e.stopPropagation();
                           openEditModal(classItem);
                         }}
-                        title={classItem.name}
+                        title={getClassDisplayName(classItem)}
                       >
-                        <span>{formatTime(new Date(classItem.start_time))} {classItem.name}</span>
+                        <span>{formatTime(new Date(classItem.start_time))} {getClassDisplayName(classItem)}</span>
                         {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                           <div className="truncate text-white/90 text-[10px] mt-0.5 font-medium">
                             {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
@@ -1516,6 +1596,45 @@ export default function ClassesPage() {
     );
   };
 
+  const filteredClasses = getFilteredClasses();
+
+  const distinctClassNames = useMemo(() => {
+    const names = new Set<string>();
+    classes.forEach(c => {
+      const n = (getClassDisplayName(c) || '').trim();
+      if (n) names.add(n);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [classes]);
+
+  const distinctLocations = useMemo((): LocationFilter[] => {
+    const locs = new Set<NonNullable<Class['location']>>();
+    classes.forEach(c => { if (c.location) locs.add(c.location); });
+    const order: LocationFilter[] = ['all', 'sanpokong', 'causewaybay', 'fotan', 'sheungshui'];
+    return order.filter(l => l === 'all' || locs.has(l));
+  }, [classes]);
+
+  const distinctMonths = useMemo(() => {
+    const set = new Set<string>();
+    classes.forEach(c => {
+      const d = new Date(c.start_time);
+      set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    });
+    return Array.from(set).sort().reverse(); // newest first
+  }, [classes]);
+
+  const formatMonthLabel = (ym: string): string => {
+    const [y, m] = ym.split('-');
+    const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+    return date.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
+  };
+
+  const sortedClasses = useMemo(() => {
+    const list = [...filteredClasses];
+    list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    return list;
+  }, [filteredClasses]);
+
   if (loading) {
     return (
       <Layout>
@@ -1525,8 +1644,6 @@ export default function ClassesPage() {
       </Layout>
     );
   }
-
-  const filteredClasses = getFilteredClasses();
 
   return (
     <Layout>
@@ -1542,33 +1659,6 @@ export default function ClassesPage() {
           </button>
         </div>
         <p className="text-sm text-gray-500">{t('admin.classes.recurringAvoidsHolidaysNote')}</p>
-
-        {/* Location Filter */}
-        <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <Filter className="h-5 w-5 text-gray-600" />
-            <h3 className="text-lg font-semibold text-gray-900">{t('admin.classes.filterByLocation')}</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(['all', 'sanpokong', 'causewaybay', 'fotan', 'sheungshui'] as LocationFilter[]).map((loc) => {
-              const isActive = locationFilter === loc;
-              
-              return (
-                <button
-                  key={loc}
-                  onClick={() => setLocationFilter(loc)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? 'bg-primary text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  {getLocationLabel(loc)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* Calendar View */}
         <div className="bg-white rounded-lg shadow-md p-6">
@@ -1683,8 +1773,65 @@ export default function ClassesPage() {
           {view === 'month' && renderMonthView()}
         </div>
 
+        {/* Filters: Class name & Location dropdowns (below calendar, options from existing data) */}
+        <div className="bg-white rounded-lg shadow-md p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <Filter className="h-5 w-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">{t('admin.classes.filters')}</h3>
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="filter-class-name" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {t('admin.classes.filterByClassName')}:
+              </label>
+              <select
+                id="filter-class-name"
+                value={classNameFilter}
+                onChange={(e) => setClassNameFilter(e.target.value)}
+                className="min-w-[12rem] px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-primary focus:border-primary"
+              >
+                <option value="">{t('admin.classes.allClassNames')}</option>
+                {distinctClassNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="filter-location" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {t('admin.classes.filterByLocation')}:
+              </label>
+              <select
+                id="filter-location"
+                value={locationFilter}
+                onChange={(e) => setLocationFilter(e.target.value as LocationFilter)}
+                className="min-w-[10rem] px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-primary focus:border-primary"
+              >
+                {distinctLocations.map((loc) => (
+                  <option key={loc} value={loc}>{getLocationLabel(loc)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="filter-month" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {t('admin.classes.filterByMonth')}:
+              </label>
+              <select
+                id="filter-month"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="min-w-[10rem] px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-primary focus:border-primary"
+              >
+                <option value="">{t('admin.classes.allMonths')}</option>
+                {distinctMonths.map((ym) => (
+                  <option key={ym} value={ym}>{formatMonthLabel(ym)}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
         {/* Selected Date Info and Clear Button */}
-        {(selectedDate || locationFilter !== 'all') && (
+        {(selectedDate || locationFilter !== 'all' || classNameFilter || monthFilter) && (
           <div className="flex justify-between items-center bg-primary-lighter p-4 rounded-lg">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
@@ -1692,18 +1839,36 @@ export default function ClassesPage() {
                   ? `${t('admin.classes.classesFor')} ${formatDateLong(selectedDate)}`
                   : t('admin.classes.allClasses')}
                 {locationFilter !== 'all' && ` ${t('admin.classes.at')} ${getLocationLabel(locationFilter)}`}
+                {classNameFilter && ` · ${classNameFilter}`}
+                {monthFilter && ` · ${formatMonthLabel(monthFilter)}`}
               </h3>
               <p className="text-sm text-gray-600">
                 {filteredClasses.length} {filteredClasses.length === 1 ? t('admin.classes.class') : t('admin.classes.classes')} {t('admin.classes.scheduled')}
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {classNameFilter && (
+                <button
+                  onClick={() => setClassNameFilter('')}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  {t('admin.classes.clearClassNameFilter')}
+                </button>
+              )}
               {locationFilter !== 'all' && (
                 <button
                   onClick={() => setLocationFilter('all')}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
                 >
                   {t('admin.classes.clearLocationFilter')}
+                </button>
+              )}
+              {monthFilter && (
+                <button
+                  onClick={() => setMonthFilter('')}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  {t('admin.classes.clearMonthFilter')}
                 </button>
               )}
               {selectedDate && (
@@ -1731,7 +1896,7 @@ export default function ClassesPage() {
               </p>
             </div>
           ) : (
-            filteredClasses.map((classItem) => (
+            sortedClasses.map((classItem) => (
             <div
               key={classItem.id}
               className={`bg-white rounded-lg shadow-md p-6 ${
@@ -1740,8 +1905,13 @@ export default function ClassesPage() {
             >
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-xl font-semibold text-gray-900">{classItem.name}</h3>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <h3 className="text-xl font-semibold text-gray-900">{getClassDisplayName(classItem)}</h3>
+                    {!classItem.attendance_confirmed && (
+                      <span className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">
+                        {t('admin.classes.attendanceNotConfirmed')}
+                      </span>
+                    )}
                     {classItem.is_internal && (
                       <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
                         補課
@@ -1885,14 +2055,35 @@ export default function ClassesPage() {
                 </div>
               )}
               <form onSubmit={handleSubmit} className="space-y-4" id="class-form">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.className')}</label>
+              <p className="text-xs text-gray-500">{t('admin.classes.classNameMultilangHint', '請輸入三種語言的課程名稱，前台將依使用者語言顯示。至少填寫一種。')}</p>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">繁體中文</label>
                 <input
                   type="text"
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  value={form.name_zh_tw}
+                  onChange={(e) => setForm({ ...form, name_zh_tw: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('admin.classes.classNamePlaceholder', '例如：兒童芭蕾 A')}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">简体中文</label>
+                <input
+                  type="text"
+                  value={form.name_zh_cn}
+                  onChange={(e) => setForm({ ...form, name_zh_cn: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="例如：儿童芭蕾 A"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">English</label>
+                <input
+                  type="text"
+                  value={form.name_en}
+                  onChange={(e) => setForm({ ...form, name_en: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder="e.g. Kids Ballet A"
                 />
               </div>
               <div>

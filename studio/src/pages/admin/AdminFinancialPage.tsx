@@ -13,9 +13,116 @@ import {
   type FinancialDashboardData,
 } from '../../lib/adminReportData';
 
+/** Order row from GET /api/admin/orders (purchase records). */
+interface OrderRow {
+  id?: string;
+  order_id?: string;
+  total?: number;
+  subtotal?: number;
+  discount?: number;
+  payment_status?: string;
+  payment_method?: string | null;
+  package_id?: string;
+  package_name?: string;
+  created_at?: string;
+  paid_at?: string | null;
+}
+
 function pctChange(current: number, previous: number): number {
   if (previous === 0) return current > 0 ? 100 : 0;
   return ((current - previous) / previous) * 100;
+}
+
+/** Get YYYY-MM for a date (order's paid_at or created_at). */
+function getMonthKey(isoOrDateStr: string | null | undefined): string | null {
+  if (!isoOrDateStr) return null;
+  const d = new Date(isoOrDateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function isPaid(status: string | undefined): boolean {
+  return status === 'paid' || status === 'not_required';
+}
+
+/** Build financial dashboard from purchase records (orders). Revenue = sum of total for paid orders. */
+function buildFinancialFromOrders(
+  orders: OrderRow[],
+  reportMonth: string
+): FinancialDashboardData {
+  const paid = orders.filter((o) => isPaid(o.payment_status));
+  const [y, m] = reportMonth.split('-').map(Number);
+  const thisMonthStart = new Date(y, m - 1, 1);
+  const thisMonthEnd = new Date(y, m, 0, 23, 59, 59);
+  const lastMonthStart = new Date(y, m - 2, 1);
+  const lastMonthEnd = new Date(y, m - 1, 0, 23, 59, 59);
+  const sameMonthLastYearStart = new Date(y - 1, m - 1, 1);
+  const sameMonthLastYearEnd = new Date(y - 1, m, 0, 23, 59, 59);
+
+  const inMonth = (d: Date, start: Date, end: Date) => d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
+  const toDate = (o: OrderRow) => (o.paid_at ? new Date(o.paid_at) : o.created_at ? new Date(o.created_at) : null);
+
+  let revenueThisMonth = 0;
+  let revenueLastMonth = 0;
+  let revenueSameMonthLastYear = 0;
+  let totalDiscountThisMonth = 0;
+  const byPackage: Record<string, number> = {};
+  const byPayment: Record<string, { total: number; count: number }> = {};
+  const byMonth: Record<string, number> = {};
+
+  for (const o of paid) {
+    const total = Number(o.total) || 0;
+    const discount = Number(o.discount) || 0;
+    const date = toDate(o);
+    if (!date) continue;
+    const monthKey = getMonthKey(date.toISOString());
+    if (monthKey) byMonth[monthKey] = (byMonth[monthKey] || 0) + total;
+
+    if (inMonth(date, thisMonthStart, thisMonthEnd)) {
+      revenueThisMonth += total;
+      totalDiscountThisMonth += discount;
+      const pkg = o.package_name || o.package_id || 'other';
+      byPackage[pkg] = (byPackage[pkg] || 0) + total;
+      const method = o.payment_method || 'other';
+      if (!byPayment[method]) byPayment[method] = { total: 0, count: 0 };
+      byPayment[method].total += total;
+      byPayment[method].count += 1;
+    } else if (inMonth(date, lastMonthStart, lastMonthEnd)) {
+      revenueLastMonth += total;
+    } else if (inMonth(date, sameMonthLastYearStart, sameMonthLastYearEnd)) {
+      revenueSameMonthLastYear += total;
+    }
+  }
+
+  const revenueByPackage = Object.entries(byPackage).map(([name, total]) => ({ name, total }));
+  const paymentMethodDistribution = Object.entries(byPayment).map(([method, v]) => ({
+    method,
+    total: v.total,
+    count: v.count,
+  }));
+
+  const trendMonths = reportMonthOptions()
+    .filter((opt) => opt.value <= reportMonth)
+    .slice(-12)
+    .map((opt) => opt.value);
+  const monthlyTrend = trendMonths.map((month) => ({
+    month,
+    revenue: byMonth[month] || 0,
+  }));
+
+  const revenueWithDiscount = revenueThisMonth + totalDiscountThisMonth;
+  const discountPercentage = revenueWithDiscount > 0 ? (totalDiscountThisMonth / revenueWithDiscount) * 100 : 0;
+
+  return {
+    revenueThisMonth,
+    revenueLastMonth,
+    revenueSameMonthLastYear,
+    totalDiscountThisMonth,
+    discountPercentage,
+    revenueByPackage,
+    paymentMethodDistribution,
+    monthlyTrend,
+  };
 }
 
 export default function AdminFinancialPage() {
@@ -28,11 +135,17 @@ export default function AdminFinancialPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<FinancialDashboardData>(`admin/financial-dashboard?demo=1${monthParam}`)
+    const [y, m] = reportMonth.split('-').map(Number);
+    const fromDate = new Date(y, m - 1 - 12, 1);
+    const toDate = new Date(y, m, 0);
+    const fromStr = fromDate.toISOString().slice(0, 10);
+    const toStr = toDate.toISOString().slice(0, 10);
+
+    api
+      .get<OrderRow[]>('/admin/orders', { from: fromStr, to: toStr })
       .then((res: any) => {
-        if (res?.success && res?.data) setFinancial(res.data);
-        else setFinancial(FALLBACK_FINANCIAL);
+        const list = Array.isArray(res?.data) ? res.data : [];
+        setFinancial(buildFinancialFromOrders(list, reportMonth));
       })
       .catch(() => setFinancial(FALLBACK_FINANCIAL))
       .finally(() => setLoading(false));

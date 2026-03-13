@@ -164,4 +164,4 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 
 - **getClasses (Public vs Admin):** They do **not** conflict. Public uses `GET /api/classes` (Calendar; no or optional auth). Admin uses `GET /api/admin/classes` (Classes, TokenAssignment; requires `is_admin`). Different paths and middleware; register both on the backend.
 
-- **News：單一語言輸入、前台多語顯示（可選翻譯）：** Admin 只需輸入一種語言（例如繁中），後端只存一組 `title`、`content`。當前台請求 `GET /api/news` 或 `GET /api/news/:id` 並帶上 `lang`（zh-TW | zh-CN | en）時，若 `lang` 與儲存語言相同則直接回傳；若不同，後端可選擇呼叫翻譯 API（如 LibreTranslate、Google Translate、DeepL）將 title/content 轉成目標語言後回傳，前台即可顯示對應語系。實作時可設定「儲存語言」（例如 zh-TW），僅在 `lang !== 儲存語言` 時才翻譯。
+- **News：三語輸入、前台依 lang 顯示：** Admin 在後台輸入三種語言（繁體中文、简体中文、English）的標題與內文。後端儲存 `title_zh_tw`、`title_zh_cn`、`title_en`、`content_zh_tw`、`content_zh_cn`、`content_en`（或等價欄位）。前台請求 `GET /api/news` 或 `GET /api/news/:id` 時帶上查詢參數 `lang`（zh-TW | zh-CN | en），後端依 `lang` 回傳對應的 title 與 content。無需翻譯 API；客戶端不支付額外翻譯費用。

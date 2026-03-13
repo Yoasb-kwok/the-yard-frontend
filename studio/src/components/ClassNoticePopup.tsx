@@ -17,7 +17,16 @@ export interface ClassNoticeItem {
   class_id: number;
   class_name: string;
   message: string;
+  message_zh_tw?: string;
+  message_zh_cn?: string;
+  message_en?: string;
   created_at: string | null;
+}
+
+function getMessageForLocale(item: ClassNoticeItem, lang: string): string {
+  const l = lang === 'zh-CN' ? 'zh-CN' : lang === 'en' || lang.startsWith('en') ? 'en' : 'zh-TW';
+  const text = l === 'zh-TW' ? item.message_zh_tw : l === 'zh-CN' ? item.message_zh_cn : item.message_en;
+  return (text && text.trim()) || item.message || '';
 }
 
 function getDismissedIds(): string[] {
@@ -52,7 +61,7 @@ function getDemoClassNotices(): ClassNoticeItem[] {
 }
 
 export default function ClassNoticePopup() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { profile } = useAuth();
   const [notices, setNotices] = useState<ClassNoticeItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +156,7 @@ export default function ClassNoticePopup() {
           </button>
         </div>
         <div className="px-5 py-4 overflow-y-auto flex-1">
-          <p className="text-gray-800 whitespace-pre-wrap">{current.message}</p>
+          <p className="text-gray-800 whitespace-pre-wrap">{getMessageForLocale(current, i18n.language)}</p>
           {current.created_at && (
             <p className="mt-3 text-xs text-gray-500">
               {new Date(current.created_at).toLocaleString()}

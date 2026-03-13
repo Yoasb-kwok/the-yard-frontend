@@ -58,6 +58,9 @@ export default function InstructorsPage() {
     name: '',
     profile_image_url: '',
     intro: '',
+    intro_zh_tw: '',
+    intro_zh_cn: '',
+    intro_en: '',
     awards: '', // newline-separated for input
     years_dancing: 0,
     teaching_experience: 0,
@@ -172,9 +175,13 @@ export default function InstructorsPage() {
       .split(/[\n,，]+/)
       .map((s) => s.trim())
       .filter(Boolean);
+    const introLegacy = form.intro_zh_tw.trim() || form.intro_zh_cn.trim() || form.intro_en.trim() || form.intro.trim();
     return {
       name,
-      intro: form.intro.trim(),
+      intro: introLegacy,
+      intro_zh_tw: form.intro_zh_tw.trim() || undefined,
+      intro_zh_cn: form.intro_zh_cn.trim() || undefined,
+      intro_en: form.intro_en.trim() || undefined,
       awards,
       years_dancing: Number(form.years_dancing) || 0,
       teaching_experience: Number(form.teaching_experience) || 0,
@@ -191,6 +198,9 @@ export default function InstructorsPage() {
       name: '',
       profile_image_url: '',
       intro: '',
+      intro_zh_tw: '',
+      intro_zh_cn: '',
+      intro_en: '',
       awards: '',
       years_dancing: 0,
       teaching_experience: 0,
@@ -213,6 +223,9 @@ export default function InstructorsPage() {
       name: instructor.name,
       profile_image_url: avatarSource || '',
       intro: profile?.intro ?? '',
+      intro_zh_tw: profile?.intro_zh_tw ?? profile?.intro ?? '',
+      intro_zh_cn: profile?.intro_zh_cn ?? '',
+      intro_en: profile?.intro_en ?? '',
       awards: Array.isArray(profile?.awards) ? profile.awards.join('\n') : '',
       years_dancing: profile?.years_dancing ?? 0,
       teaching_experience: profile?.teaching_experience ?? 0,
@@ -679,19 +692,40 @@ export default function InstructorsPage() {
                 />
               </div>
 
-              {/* 老師簡介 */}
+              {/* 老師簡介（三語） */}
               <div className="space-y-3 pt-2 border-t border-gray-200">
                 <p className="text-sm font-medium text-gray-700">{t('admin.instructors.introSection')}</p>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.intro')}</label>
+                <p className="text-xs text-gray-500">{t('admin.instructors.multilangHint', '請輸入三種語言的簡介，前台將依使用者語言顯示。')}</p>
+                <fieldset className="space-y-2 rounded border border-gray-200 p-3 bg-gray-50/50">
+                  <legend className="text-xs font-medium text-gray-700 px-1">繁體中文</legend>
                   <textarea
-                    value={form.intro}
-                    onChange={(e) => setForm({ ...form, intro: e.target.value })}
+                    value={form.intro_zh_tw}
+                    onChange={(e) => setForm({ ...form, intro_zh_tw: e.target.value })}
                     rows={2}
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     placeholder={t('admin.instructors.introPlaceholder')}
                   />
-                </div>
+                </fieldset>
+                <fieldset className="space-y-2 rounded border border-gray-200 p-3 bg-gray-50/50">
+                  <legend className="text-xs font-medium text-gray-700 px-1">简体中文</legend>
+                  <textarea
+                    value={form.intro_zh_cn}
+                    onChange={(e) => setForm({ ...form, intro_zh_cn: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    placeholder="输入导师简介…"
+                  />
+                </fieldset>
+                <fieldset className="space-y-2 rounded border border-gray-200 p-3 bg-gray-50/50">
+                  <legend className="text-xs font-medium text-gray-700 px-1">English</legend>
+                  <textarea
+                    value={form.intro_en}
+                    onChange={(e) => setForm({ ...form, intro_en: e.target.value })}
+                    rows={2}
+                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                    placeholder="Enter instructor intro…"
+                  />
+                </fieldset>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.awards')}</label>
                   <textarea
@@ -787,6 +821,9 @@ export default function InstructorsPage() {
                       name: '',
                       profile_image_url: '',
                       intro: '',
+                      intro_zh_tw: '',
+                      intro_zh_cn: '',
+                      intro_en: '',
                       awards: '',
                       years_dancing: 0,
                       teaching_experience: 0,

@@ -9,17 +9,42 @@ import {
   createStoredNewsPost,
   updateStoredNewsPost,
   deleteStoredNewsPost,
+  getPostDisplayTitle,
   type StoredNewsPost,
 } from '../../lib/newsStorage';
 import { Plus, Edit, Trash2, Newspaper, Image as ImageIcon } from 'lucide-react';
 import { useModalA11y } from '../../lib/useModalA11y';
 
-/** Normalize API or stored post to list item shape (published_at may be ISO or date-only) */
-function toPostItem(p: { id: string; title: string; content: string; image_url: string | null; published_at: string; created_at?: string; show_as_popup?: boolean }): StoredNewsPost {
+type ApiPost = {
+  id: string | number;
+  title?: string;
+  content?: string;
+  title_zh_tw?: string;
+  title_zh_cn?: string;
+  title_en?: string;
+  content_zh_tw?: string;
+  content_zh_cn?: string;
+  content_en?: string;
+  image_url: string | null;
+  published_at: string;
+  created_at?: string;
+  show_as_popup?: boolean;
+};
+
+/** Normalize API or stored post to list item shape (supports single title/content or 3-language fields). */
+function toPostItem(p: ApiPost): StoredNewsPost {
+  const legacyTitle = (p as { title?: string }).title ?? '';
+  const legacyContent = (p as { content?: string }).content ?? '';
   return {
     id: String(p.id),
-    title: p.title || '',
-    content: p.content || '',
+    title: legacyTitle,
+    content: legacyContent,
+    title_zh_tw: p.title_zh_tw ?? legacyTitle,
+    title_zh_cn: p.title_zh_cn,
+    title_en: p.title_en,
+    content_zh_tw: p.content_zh_tw ?? legacyContent,
+    content_zh_cn: p.content_zh_cn,
+    content_en: p.content_en,
     image_url: p.image_url || null,
     published_at: p.published_at || new Date().toISOString(),
     created_at: p.created_at || p.published_at || new Date().toISOString(),
@@ -43,8 +68,12 @@ export default function AdminNewsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingPost, setEditingPost] = useState<StoredNewsPost | null>(null);
   const [form, setForm] = useState({
-    title: '',
-    content: '',
+    title_zh_tw: '',
+    title_zh_cn: '',
+    title_en: '',
+    content_zh_tw: '',
+    content_zh_cn: '',
+    content_en: '',
     image_url: null as string | null,
     published_at: new Date().toISOString().slice(0, 10),
     show_as_popup: false,
@@ -83,8 +112,12 @@ export default function AdminNewsPage() {
   function openCreate() {
     setEditingPost(null);
     setForm({
-      title: '',
-      content: '',
+      title_zh_tw: '',
+      title_zh_cn: '',
+      title_en: '',
+      content_zh_tw: '',
+      content_zh_cn: '',
+      content_en: '',
       image_url: null,
       published_at: new Date().toISOString().slice(0, 10),
       show_as_popup: false,
@@ -96,8 +129,12 @@ export default function AdminNewsPage() {
   function openEdit(post: StoredNewsPost) {
     setEditingPost(post);
     setForm({
-      title: post.title,
-      content: post.content,
+      title_zh_tw: post.title_zh_tw ?? post.title ?? '',
+      title_zh_cn: post.title_zh_cn ?? '',
+      title_en: post.title_en ?? '',
+      content_zh_tw: post.content_zh_tw ?? post.content ?? '',
+      content_zh_cn: post.content_zh_cn ?? '',
+      content_en: post.content_en ?? '',
       image_url: post.image_url,
       published_at: post.published_at.slice(0, 10),
       show_as_popup: post.show_as_popup ?? false,
@@ -123,12 +160,25 @@ export default function AdminNewsPage() {
     setForm((f) => ({ ...f, image_url: null }));
   }
 
+  const hasAtLeastOneTitle =
+    form.title_zh_tw.trim() !== '' || form.title_zh_cn.trim() !== '' || form.title_en.trim() !== '';
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim()) return;
+    if (!hasAtLeastOneTitle) return;
     setSaving(true);
     const published_at = form.published_at ? `${form.published_at}T12:00:00.000Z` : new Date().toISOString();
-    const body = { title: form.title.trim(), content: form.content.trim(), image_url: form.image_url, published_at, show_as_popup: form.show_as_popup };
+    const body = {
+      title_zh_tw: form.title_zh_tw.trim() || undefined,
+      title_zh_cn: form.title_zh_cn.trim() || undefined,
+      title_en: form.title_en.trim() || undefined,
+      content_zh_tw: form.content_zh_tw.trim() || undefined,
+      content_zh_cn: form.content_zh_cn.trim() || undefined,
+      content_en: form.content_en.trim() || undefined,
+      image_url: form.image_url,
+      published_at,
+      show_as_popup: form.show_as_popup,
+    };
     try {
       try {
         if (editingPost) {
@@ -150,7 +200,7 @@ export default function AdminNewsPage() {
         // Fallback to localStorage when API fails
       }
       if (editingPost) {
-        updateStoredNewsPost(editingPost.id, { title: body.title, content: body.content, image_url: body.image_url, published_at, show_as_popup: body.show_as_popup });
+        updateStoredNewsPost(editingPost.id, { ...body });
       } else {
         const created = createStoredNewsPost(body);
         const next = [...getStoredNewsPosts()];
@@ -236,7 +286,7 @@ export default function AdminNewsPage() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h2 className="font-semibold text-gray-900 truncate">{post.title}</h2>
+                    <h2 className="font-semibold text-gray-900 truncate">{getPostDisplayTitle(post)}</h2>
                     <p className="text-sm text-gray-500">
                       {formatDate(post.published_at, locale)}
                       {post.show_as_popup && (
@@ -280,37 +330,87 @@ export default function AdminNewsPage() {
               onClick={closeModal}
               aria-hidden
             />
-            <div ref={modalContentRef} className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-news-modal-title">
+            <div ref={modalContentRef} className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true" aria-labelledby="admin-news-modal-title">
               <div className="p-6">
                 <h2 id="admin-news-modal-title" className="text-xl font-bold text-gray-900 mb-4">
                   {editingPost ? t('admin.news.edit', '編輯消息') : t('admin.news.add', '新增消息')}
                 </h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.news.titleLabel', '標題')} <span className="text-red-600">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={form.title}
-                      onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
-                      placeholder={t('admin.news.titlePlaceholder', '例如：新課程時間表已推出')}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.news.contentLabel', '內文')}
-                    </label>
-                    <textarea
-                      value={form.content}
-                      onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                      rows={5}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary resize-y"
-                      placeholder={t('admin.news.contentPlaceholder', '輸入消息內容…')}
-                    />
-                  </div>
+                <p className="text-sm text-gray-500 mb-4">
+                  {t('admin.news.multilangHint', '請輸入三種語言的標題與內文，前台將依使用者語言顯示對應內容。至少填寫一種語言的標題。')}
+                </p>
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* 繁體中文 */}
+                  <fieldset className="space-y-3 rounded-lg border border-gray-200 p-4 bg-gray-50/50">
+                    <legend className="text-sm font-semibold text-gray-800 px-1">繁體中文</legend>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.news.titleLabel', '標題')}</label>
+                      <input
+                        type="text"
+                        value={form.title_zh_tw}
+                        onChange={(e) => setForm((f) => ({ ...f, title_zh_tw: e.target.value }))}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                        placeholder={t('admin.news.titlePlaceholder', '例如：新課程時間表已推出')}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.news.contentLabel', '內文')}</label>
+                      <textarea
+                        value={form.content_zh_tw}
+                        onChange={(e) => setForm((f) => ({ ...f, content_zh_tw: e.target.value }))}
+                        rows={3}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary resize-y"
+                        placeholder={t('admin.news.contentPlaceholder', '輸入消息內容…')}
+                      />
+                    </div>
+                  </fieldset>
+                  {/* 简体中文 */}
+                  <fieldset className="space-y-3 rounded-lg border border-gray-200 p-4 bg-gray-50/50">
+                    <legend className="text-sm font-semibold text-gray-800 px-1">简体中文</legend>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.news.titleLabel', '標題')}</label>
+                      <input
+                        type="text"
+                        value={form.title_zh_cn}
+                        onChange={(e) => setForm((f) => ({ ...f, title_zh_cn: e.target.value }))}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                        placeholder="例如：新课程时间表已推出"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.news.contentLabel', '內文')}</label>
+                      <textarea
+                        value={form.content_zh_cn}
+                        onChange={(e) => setForm((f) => ({ ...f, content_zh_cn: e.target.value }))}
+                        rows={3}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary resize-y"
+                        placeholder="输入消息内容…"
+                      />
+                    </div>
+                  </fieldset>
+                  {/* English */}
+                  <fieldset className="space-y-3 rounded-lg border border-gray-200 p-4 bg-gray-50/50">
+                    <legend className="text-sm font-semibold text-gray-800 px-1">English</legend>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.news.titleLabel', '標題')}</label>
+                      <input
+                        type="text"
+                        value={form.title_en}
+                        onChange={(e) => setForm((f) => ({ ...f, title_en: e.target.value }))}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary"
+                        placeholder="e.g. New class schedule is out"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.news.contentLabel', '內文')}</label>
+                      <textarea
+                        value={form.content_en}
+                        onChange={(e) => setForm((f) => ({ ...f, content_en: e.target.value }))}
+                        rows={3}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-primary focus:border-primary resize-y"
+                        placeholder="Enter news content…"
+                      />
+                    </div>
+                  </fieldset>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       {t('admin.news.imageLabel', '封面圖片')}
@@ -376,7 +476,7 @@ export default function AdminNewsPage() {
                     </button>
                     <button
                       type="submit"
-                      disabled={saving || !form.title.trim()}
+                      disabled={saving || !hasAtLeastOneTitle}
                       className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {saving ? t('common.saving', '儲存中…') : (editingPost ? t('common.save', '儲存') : t('admin.news.add', '新增消息'))}

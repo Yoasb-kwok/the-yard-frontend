@@ -52,6 +52,7 @@ import RefundRecordsPage from './pages/admin/RefundRecordsPage';
 import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import AdminClassNoticePage from './pages/admin/AdminClassNoticePage';
+import AdminCourseIntroPage from './pages/admin/AdminCourseIntroPage';
 import AdminNewsPage from './pages/admin/AdminNewsPage';
 
 function App() {
@@ -324,6 +325,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <AdminNewsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/course-intro"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminCourseIntroPage />
               </ProtectedRoute>
             }
           />

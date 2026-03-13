@@ -4,8 +4,14 @@
  */
 export interface InstructorProfile {
   name: string;
-  /** Short intro / bio */
+  /** Short intro / bio (legacy single language) */
   intro: string;
+  /** Intro in 繁體中文 */
+  intro_zh_tw?: string;
+  /** Intro in 简体中文 */
+  intro_zh_cn?: string;
+  /** Intro in English */
+  intro_en?: string;
   /** Awards & achievements (e.g. 香港芭蕾舞學會金獎) */
   awards: string[];
   /** Years of dance experience (舞齡) */
@@ -172,6 +178,16 @@ export function getInstructorProfile(instructorName: string): InstructorProfile 
   const stored = getStoredProfiles()[trimmed];
   if (stored) return stored;
   return profileByName.get(trimmed) ?? undefined;
+}
+
+/** Get intro text for display by language (zh-TW | zh-CN | en). */
+export function getIntroForLocale(profile: InstructorProfile, lang: string): string {
+  const l = lang === 'zh-CN' ? 'zh-CN' : lang === 'en' || lang.startsWith('en') ? 'en' : 'zh-TW';
+  const text =
+    l === 'zh-TW' ? profile.intro_zh_tw?.trim()
+    : l === 'zh-CN' ? profile.intro_zh_cn?.trim()
+    : profile.intro_en?.trim();
+  return text || profile.intro?.trim() || '';
 }
 
 /** Save instructor profile (e.g. from Admin 導師 edit). Used for demo; backend can persist later. */

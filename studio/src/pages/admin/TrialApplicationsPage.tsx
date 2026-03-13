@@ -36,6 +36,41 @@ interface AdminClassOption {
   is_cancelled?: number;
 }
 
+/** 班別選項顯示：課堂名稱 · 逢星期X · HH:mm */
+function getClassOptionLabel(c: AdminClassOption, locale: string): string {
+  const name = c.name || '';
+  if (!c.start_time) return name;
+  const d = new Date(c.start_time);
+  const weekdays = locale.startsWith('zh') ? ['日', '一', '二', '三', '四', '五', '六'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const w = weekdays[d.getDay()];
+  const hour = d.getHours();
+  const min = d.getMinutes();
+  const timeStr = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+  const prefix = locale.startsWith('zh') ? '逢' : '';
+  return `${name} · ${prefix}${w} ${timeStr}`;
+}
+
+/** 依班別計算「尚未上完」的堂數與該堂上課日期（每週一堂）；供選項顯示「第N堂 · 日期」 */
+function getAvailableLessonsWithDates(cls: AdminClassOption | undefined): { n: number; date: Date }[] {
+  if (!cls?.start_time) return [];
+  const total = Math.max(1, Number(cls.total_lessons) || 8);
+  const firstLesson = new Date(cls.start_time).getTime();
+  const now = Date.now();
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  const result: { n: number; date: Date }[] = [];
+  for (let n = 1; n <= total; n++) {
+    const lessonTime = firstLesson + (n - 1) * oneWeek;
+    if (lessonTime > now) result.push({ n, date: new Date(lessonTime) });
+  }
+  return result;
+}
+
+/** 堂數選項的日期顯示（例：3月15日 / Mar 15） */
+function formatLessonDate(d: Date, locale: string): string {
+  if (locale.startsWith('zh')) return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+}
+
 const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
   {
     id: 'trial_1',
@@ -377,27 +412,32 @@ export default function TrialApplicationsPage() {
                                       setEditAssignedClassId((prev) => ({ ...prev, [app.id]: v }));
                                       const c = classes.find((x) => String(x.id) === v);
                                       setEditAssignedClass((prev) => ({ ...prev, [app.id]: c?.name ?? '' }));
+                                      const availableN = getAvailableLessonsWithDates(c).map((x) => x.n);
+                                      const currentLesson = editAssignedLessons[app.id];
+                                      if (typeof currentLesson === 'number' && !availableN.includes(currentLesson))
+                                        setEditAssignedLessons((prev) => ({ ...prev, [app.id]: '' }));
                                     }}
                                     className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                   >
                                     <option value="">{t('admin.trialApplications.assignClassPlaceholder')}</option>
                                     {classes.map((c) => (
                                       <option key={c.id} value={String(c.id)}>
-                                        {c.name}
-                                        {c.start_time ? ` (${new Date(c.start_time).toLocaleString(getLocale(), { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })})` : ''}
-                                        {c.total_lessons != null ? ` · ${c.total_lessons} ${t('admin.trialApplications.assignedLessons', '堂')}` : ''}
+                                        {getClassOptionLabel(c, getLocale())}
                                       </option>
                                     ))}
                                   </select>
                                   <select
                                     value={editAssignedLessons[app.id] ?? ''}
                                     onChange={(e) => setEditAssignedLessons((prev) => ({ ...prev, [app.id]: e.target.value === '' ? '' : Number(e.target.value) }))}
-                                    className="w-24 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
+                                    className="min-w-[11rem] border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                     title={t('admin.trialApplications.assignedLessons')}
+                                    disabled={!editAssignedClassId[app.id]}
                                   >
-                                    <option value="">{t('admin.trialApplications.assignedLessonsPlaceholder')}</option>
-                                    {[1, 2, 4, 6, 8].map((n) => (
-                                      <option key={n} value={n}>{n}</option>
+                                    <option value="">{editAssignedClassId[app.id] ? t('admin.trialApplications.assignedLessonsPlaceholder') : t('admin.trialApplications.selectClassFirst', '請先選擇班別')}</option>
+                                    {getAvailableLessonsWithDates(classes.find((c) => String(c.id) === editAssignedClassId[app.id])).map(({ n, date }) => (
+                                      <option key={n} value={n}>
+                                        {t('admin.trialApplications.lessonWithDate', '第{{n}}堂 · {{date}}', { n, date: formatLessonDate(date, getLocale()) })}
+                                      </option>
                                     ))}
                                   </select>
                                 </div>

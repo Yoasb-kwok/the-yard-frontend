@@ -235,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             sessionStorage.setItem(STORAGE_KEY_SERVER_ID, currentServerId);
           }
-          const res = await api.get<{ user: { id: string; email: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('user/me');
+          const res = await api.get<{ user: { id: string; email: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('auth/me');
           const userFromMe = (res as any).user ?? (res as any).data?.user;
           const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
           if ((res as any).requirePasswordChange !== undefined) {
@@ -411,7 +411,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch (_) {}
         const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? loginIdentifier };
         try {
-          const meRes = await api.get<{ user: { id: string; email: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('user/me');
+          const meRes = await api.get<{ user: { id: string; email: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('auth/me');
           const profilesFromMe = (meRes as any).profiles ?? (meRes as any).data?.profiles;
           if ((meRes as any).requirePasswordChange !== undefined) {
             setRequirePasswordChange((meRes as any).requirePasswordChange === true);
@@ -643,7 +643,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem('token');
     if (!token) return;
     try {
-      const res = await api.get<{ user: { id: string; email: string; mobile?: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('user/me');
+      const res = await api.get<{ user: { id: string; email: string; mobile?: string }; profiles: Profile[]; requirePasswordChange?: boolean }>('auth/me');
       const userFromMe = (res as any).user ?? (res as any).data?.user;
       const profilesFromMe = (res as any).profiles ?? (res as any).data?.profiles;
       if ((res as any).requirePasswordChange !== undefined) {

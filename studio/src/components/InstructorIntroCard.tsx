@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Award, BookOpen, GraduationCap, Music } from 'lucide-react';
-import { getInstructorProfile, type InstructorProfile } from '../lib/instructorProfiles';
+import { getInstructorProfile, getIntroForLocale, type InstructorProfile } from '../lib/instructorProfiles';
 
 export interface InstructorIntroCardProps {
   /** Display name of the instructor (e.g. from class.instructor) */
@@ -21,7 +21,7 @@ function getTutorImageUrl(name: string, size?: number): string {
 }
 
 export default function InstructorIntroCard({ instructorName, imageUrl, compact, featured, profile: profileOverride }: InstructorIntroCardProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const resolved = profileOverride !== undefined ? profileOverride : getInstructorProfile(instructorName);
   const profile = resolved ?? null;
   const img = imageUrl ?? resolved?.avatar_url ?? getTutorImageUrl(instructorName, featured ? 256 : undefined);
@@ -29,7 +29,7 @@ export default function InstructorIntroCard({ instructorName, imageUrl, compact,
   // Show nothing only when no profile at all (and not a draft from form)
   if (!profile) return null;
 
-  const intro = profile.intro?.trim() ?? '';
+  const intro = getIntroForLocale(profile, i18n.language) || profile.intro?.trim() || '';
   const awards = Array.isArray(profile.awards) ? profile.awards : [];
   const yearsDancing = profile.years_dancing ?? 0;
   const teachingExp = profile.teaching_experience ?? 0;

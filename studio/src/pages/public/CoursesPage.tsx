@@ -5,6 +5,7 @@ import PublicLayout from '../../components/PublicLayout';
 import { BookOpen, Calendar, MapPin, Search, ArrowDownWideNarrow, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
 import type { CourseLevel } from '../../contexts/AuthContext';
 import { ALL_COURSES, type CourseItem, type CourseType } from '../../lib/coursesData';
+import { applyCourseIntroOverrides } from '../../lib/courseIntroStorage';
 import { api } from '../../lib/api';
 
 export type { CourseItem, CourseType };
@@ -151,6 +152,12 @@ export default function CoursesPage() {
 
   const locale = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US';
 
+  /** Apply admin 3-lang overrides for 課堂介紹 */
+  const displayCourses = useMemo(
+    () => courses.map((c) => applyCourseIntroOverrides(c, i18n.language)),
+    [courses, i18n.language]
+  );
+
   const toggleTrialExpand = useCallback((courseId: string) => {
     setExpandedCourseId((prev) => (prev === courseId ? null : courseId));
   }, []);
@@ -158,30 +165,30 @@ export default function CoursesPage() {
   const filteredAndSorted = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     let list = q
-      ? courses.filter(
+      ? displayCourses.filter(
           (c) =>
             c.name.toLowerCase().includes(q) ||
             c.program_code.toLowerCase().includes(q) ||
             c.intro.toLowerCase().includes(q)
         )
-      : [...courses];
+      : [...displayCourses];
 
     list.sort((a, b) => {
       switch (sortBy) {
         case 'ageGroup':
-          return getAgeSortKey(a.age_tag) - getAgeSortKey(b.age_tag) || a.name.localeCompare(b.name);
+          return getAgeSortKey(a.age_tag) - getAgeSortKey(b.age_tag) || (a.name || '').localeCompare(b.name || '');
         case 'level':
-          return getLevelSortKey(a.level) - getLevelSortKey(b.level) || a.name.localeCompare(b.name);
+          return getLevelSortKey(a.level) - getLevelSortKey(b.level) || (a.name || '').localeCompare(b.name || '');
         case 'name':
-          return a.name.localeCompare(b.name);
+          return (a.name || '').localeCompare(b.name || '');
         case 'weekday':
-          return a.weekday - b.weekday || a.name.localeCompare(b.name);
+          return a.weekday - b.weekday || (a.name || '').localeCompare(b.name || '');
         default:
           return 0;
       }
     });
     return list;
-  }, [courses, searchQuery, sortBy]);
+  }, [displayCourses, searchQuery, sortBy]);
 
   const getAgeLabel = (age_tag: string) => {
     const key = `calendar.ageTag.${age_tag}`;
