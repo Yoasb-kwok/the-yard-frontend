@@ -86,68 +86,94 @@ export default function ReassignStudentsPage() {
   }, [view]);
 
   async function loadData() {
-    if (!classId) return;
+    if (!classId || classId === 'undefined') {
+      setLoading(false);
+      setCancelledClass(null);
+      return;
+    }
     setLoading(true);
     try {
-      // Cancelled class from API
-      const classRes = await api.get<any>(`/admin/classes/${classId}`);
-      if (classRes.success && classRes.data) {
-        const c = classRes.data;
-        const cancelled: Class = {
-          id: String(c.id),
-          name: c.name || '',
-          class_code: c.program_code || '',
-          instructor: c.instructor || '',
-          start_time: c.start_time,
-          end_time: c.end_time,
-          capacity: c.capacity ?? 0,
-          enrolled_count: c.enrolled_count ?? 0,
-          is_internal: c.is_internal === 1 || c.is_internal === true,
-          is_cancelled: c.is_cancelled === 1 || c.is_cancelled === true,
-          location: c.location,
-        };
-        setCancelledClass(cancelled);
-      } else {
-        setCancelledClass(null);
+      // Cancelled class from API (support both { data: object } and malformed responses)
+      let cancelled: Class | null = null;
+      try {
+        const classRes = await api.get<any>(`/admin/classes/${classId}`);
+        const raw = classRes?.data;
+        const c = Array.isArray(raw) ? raw[0] : raw;
+        if (c && typeof c === 'object' && (c.id != null || c.name != null)) {
+          const startTime = c.start_time && typeof c.start_time === 'string' ? c.start_time : new Date().toISOString();
+          const endTime = c.end_time && typeof c.end_time === 'string' ? c.end_time : new Date().toISOString();
+          cancelled = {
+            id: String(c.id ?? classId),
+            name: c.name || '',
+            class_code: c.program_code || '',
+            instructor: c.instructor || '',
+            start_time: startTime,
+            end_time: endTime,
+            capacity: c.capacity ?? 0,
+            enrolled_count: c.enrolled_count ?? 0,
+            is_internal: c.is_internal === 1 || c.is_internal === true,
+            is_cancelled: c.is_cancelled === 1 || c.is_cancelled === true,
+            location: c.location,
+          };
+        }
+      } catch (e) {
+        console.error('ReassignStudents fetch class:', e);
+      }
+      setCancelledClass(cancelled);
+
+      // Enrolled students from API (don't fail whole page if this fails)
+      try {
+        const enrollRes = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
+        const list = enrollRes?.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
+        const enrolledStudents: Enrollment[] = list
+          .filter((e: any) => (e?.status || '').toLowerCase() === 'enrolled')
+          .map((e: any) => ({
+            id: String(e?.id ?? ''),
+            class_id: classId,
+            user_id: e?.user_id ?? '',
+            user_name: e?.user_name ?? '',
+            user_mobile: e?.user_mobile ?? null,
+            status: 'enrolled' as const,
+            created_at: e?.created_at ?? '',
+          }));
+        setStudentsToReassign(enrolledStudents);
+        setSelectedStudentIds(new Set(enrolledStudents.map(s => s.id)));
+      } catch (e) {
+        console.error('ReassignStudents fetch enrollments:', e);
+        setStudentsToReassign([]);
+        setSelectedStudentIds(new Set());
       }
 
-      // Enrolled students from API
-      const enrollRes = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
-      const list = enrollRes.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
-      const enrolledStudents: Enrollment[] = list
-        .filter((e: any) => (e.status || '').toLowerCase() === 'enrolled')
-        .map((e: any) => ({
-          id: String(e.id),
-          class_id: classId,
-          user_id: e.user_id ?? '',
-          user_name: e.user_name ?? '',
-          user_mobile: e.user_mobile ?? null,
-          status: 'enrolled' as const,
-          created_at: e.created_at ?? '',
-        }));
-      setStudentsToReassign(enrolledStudents);
-      setSelectedStudentIds(new Set(enrolledStudents.map(s => s.id)));
-
-      // Available classes from API (exclude this class, not cancelled, future, has capacity)
-      const classesRes = await api.get<any[]>('/admin/classes');
-      const allClasses: Class[] = (classesRes.success && Array.isArray(classesRes.data) ? classesRes.data : []).map((c: any) => ({
-        id: String(c.id),
-        name: c.name || '',
-        class_code: c.program_code || '',
-        instructor: c.instructor || '',
-        start_time: c.start_time,
-        end_time: c.end_time,
-        capacity: c.capacity ?? 0,
-        enrolled_count: c.enrolled_count ?? 0,
-        is_internal: c.is_internal === 1 || c.is_internal === true,
-        is_cancelled: c.is_cancelled === 1 || c.is_cancelled === true,
-        location: c.location,
-      }));
-      const now = new Date();
-      const available = allClasses.filter(
-        c => c.id !== classId && !c.is_cancelled && new Date(c.start_time) >= now && c.enrolled_count < c.capacity
-      );
-      setClasses(available);
+      // Available classes from API
+      try {
+        const classesRes = await api.get<any[]>('/admin/classes');
+        const arr = classesRes?.success && Array.isArray(classesRes.data) ? classesRes.data : [];
+        const allClasses: Class[] = arr.map((c: any) => {
+          const st = c?.start_time && typeof c.start_time === 'string' ? c.start_time : new Date().toISOString();
+          const et = c?.end_time && typeof c.end_time === 'string' ? c.end_time : new Date().toISOString();
+          return {
+            id: String(c?.id ?? ''),
+            name: c?.name || '',
+            class_code: c?.program_code || '',
+            instructor: c?.instructor || '',
+            start_time: st,
+            end_time: et,
+            capacity: c?.capacity ?? 0,
+            enrolled_count: c?.enrolled_count ?? 0,
+            is_internal: c?.is_internal === 1 || c?.is_internal === true,
+            is_cancelled: c?.is_cancelled === 1 || c?.is_cancelled === true,
+            location: c?.location,
+          };
+        });
+        const now = new Date();
+        const available = allClasses.filter(
+          c => c.id && c.id !== classId && !c.is_cancelled && !isNaN(new Date(c.start_time).getTime()) && new Date(c.start_time) >= now && c.enrolled_count < c.capacity
+        );
+        setClasses(available);
+      } catch (e) {
+        console.error('ReassignStudents fetch classes:', e);
+        setClasses([]);
+      }
     } catch (err) {
       console.error('ReassignStudents loadData:', err);
       setCancelledClass(null);
@@ -742,8 +768,29 @@ export default function ReassignStudentsPage() {
   if (!cancelledClass) {
     return (
       <Layout>
-        <div className="p-6">
-          <p className="text-gray-600">{t('admin.attendance.classNotFound')}</p>
+        <div className="p-6 max-w-md mx-auto">
+          <button
+            onClick={() => navigate('/admin/classes')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900 mb-4"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span>{t('common.back')}</span>
+          </button>
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
+            <AlertTriangle className="h-6 w-6 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-amber-900">{t('admin.attendance.classNotFound')}</p>
+              <p className="text-sm text-amber-800 mt-1">
+                {classId ? t('admin.attendance.classNotFoundHint', '請返回課程列表，再從該課程的出席按堂進入「重新分配學生」。') : t('admin.attendance.invalidClassId', '無效的課程連結。')}
+              </p>
+              <button
+                onClick={() => navigate('/admin/classes')}
+                className="mt-3 px-4 py-2 rounded-md text-sm font-medium bg-amber-200 text-amber-900 hover:bg-amber-300"
+              >
+                {t('admin.classes.title', '課程')}
+              </button>
+            </div>
+          </div>
         </div>
       </Layout>
     );

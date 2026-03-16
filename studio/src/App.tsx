@@ -53,6 +53,7 @@ import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import AdminClassNoticePage from './pages/admin/AdminClassNoticePage';
 import AdminCourseIntroPage from './pages/admin/AdminCourseIntroPage';
+import AdminCourseSubscriptionPage from './pages/admin/AdminCourseSubscriptionPage';
 import AdminNewsPage from './pages/admin/AdminNewsPage';
 
 function App() {
@@ -253,6 +254,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <UserPurchaseHistoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/subscription-records"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminCourseSubscriptionPage />
               </ProtectedRoute>
             }
           />

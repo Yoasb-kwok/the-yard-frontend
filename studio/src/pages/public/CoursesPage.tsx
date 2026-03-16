@@ -212,6 +212,37 @@ export default function CoursesPage() {
             </p>
           </header>
 
+          {/* Demo: 晉升流程說明卡（之後可改成正式圖片／後端管理） */}
+          <section className="mb-8">
+            <div className="rounded-2xl border border-primary/10 bg-white shadow-sm overflow-hidden flex flex-col sm:flex-row">
+              <div className="sm:w-2/5 relative min-h-[160px] bg-gradient-to-br from-primary/10 via-primary/5 to-amber-50">
+                <img
+                  src="https://images.pexels.com/photos/5533568/pexels-photo-5533568.jpeg?auto=compress&cs=tinysrgb&w=800"
+                  alt={t('courses.promotionFlowAlt', '舞蹈等級晉升示意圖')}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+              <div className="sm:w-3/5 p-5 sm:p-6 flex flex-col justify-center gap-2">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+                    i
+                  </span>
+                  {t('courses.promotionFlowTitle', '舞蹈等級晉升流程（示意）')}
+                </h2>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {t(
+                    'courses.promotionFlowDesc',
+                    '學生完成指定堂數及達到導師評核標準後，便有機會晉升至更高級別班別；個別級別或需參與內部評核／考試作實。'
+                  )}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('courses.promotionFlowNote', '以上為示意說明；實際晉升準則以中心最新安排為準。')}
+                </p>
+              </div>
+            </div>
+          </section>
+
           {/* Search + Sort bar */}
           <div className="mb-8 flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">

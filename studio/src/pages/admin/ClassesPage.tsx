@@ -1255,7 +1255,7 @@ export default function ClassesPage() {
                         onUpdateStatus={updateAttendanceStatus}
                         onToggleConfirmation={toggleAttendanceConfirmation}
                         onCancelClass={() => handleCancelClass(classItem.id)}
-                        onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
+                        onReassign={() => { if (classItem?.id) navigate(`/admin/classes/${String(classItem.id)}/reassign`); }}
                         onRefundToken={handleRefundToken}
                         onMarkMultipleAttended={handleMarkMultipleAttended}
                         onClose={() => setExpandedAttendanceClassId(null)}
@@ -1992,7 +1992,7 @@ export default function ClassesPage() {
                       onUpdateStatus={updateAttendanceStatus}
                       onToggleConfirmation={toggleAttendanceConfirmation}
                       onCancelClass={() => handleCancelClass(classItem.id)}
-                      onReassign={() => navigate(`/admin/classes/${classItem.id}/reassign`)}
+                      onReassign={() => { if (classItem?.id) navigate(`/admin/classes/${String(classItem.id)}/reassign`); }}
                       onRefundToken={handleRefundToken}
                       onMarkMultipleAttended={handleMarkMultipleAttended}
                       onClose={() => setExpandedAttendanceClassId(null)}

@@ -13,7 +13,8 @@ export interface TrialApplication {
   applicant_phone?: string;
   trial_class: string;
   preferred_datetime?: string;
-  status: 'pending' | 'confirmed' | 'assigned' | 'cancelled' | 'contacted' | 'attended_trial' | 'converted';
+  /** 用戶可選：pending | assigned | cancelled | could_not_assign；後端可能仍回傳舊狀態僅供顯示 */
+  status: 'pending' | 'assigned' | 'cancelled' | 'could_not_assign' | 'confirmed' | 'contacted' | 'attended_trial' | 'converted';
   assigned_class_id?: string | null;
   assigned_class_name?: string | null;
   assigned_lessons?: number | null;
@@ -91,7 +92,7 @@ const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
     applicant_name: '李小花',
     applicant_email: 'flower@example.com',
     trial_class: '兒童爵士試堂',
-    status: 'confirmed',
+    status: 'assigned',
     assigned_class_id: 'cls_1',
     assigned_class_name: '兒童爵士 A（週五 18:00）',
     notes: '已致電確認時間',
@@ -113,13 +114,21 @@ const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
     applicant_name: '張小美',
     applicant_email: 'mei@example.com',
     trial_class: '兒童芭蕾試堂',
-    status: 'contacted',
+    status: 'could_not_assign',
     applied_at: new Date(Date.now() - 3 * 86400000).toISOString(),
     trial_date: new Date(Date.now() + 2 * 86400000).toISOString(),
   },
 ];
 
-const STATUS_OPTIONS: TrialApplication['status'][] = ['pending', 'confirmed', 'assigned', 'contacted', 'attended_trial', 'converted', 'cancelled'];
+/** 用戶可選的四個狀態 */
+const SELECTABLE_STATUSES: TrialApplication['status'][] = ['pending', 'assigned', 'cancelled', 'could_not_assign'];
+
+/** 後端可能回傳舊狀態，編輯時映射為可選狀態之一（列表顯示仍用原 status） */
+function toSelectableStatus(s: TrialApplication['status']): (typeof SELECTABLE_STATUSES)[number] {
+  if (SELECTABLE_STATUSES.includes(s as any)) return s as (typeof SELECTABLE_STATUSES)[number];
+  if (['confirmed', 'contacted', 'attended_trial', 'converted'].includes(s)) return 'assigned';
+  return 'pending';
+}
 
 const QUICK_FILTERS = ['all', 'not_contacted', 'this_week'] as const;
 type QuickFilter = typeof QUICK_FILTERS[number];
@@ -201,7 +210,7 @@ export default function TrialApplicationsPage() {
         initialAssigned[a.id] = a.assigned_class_name ?? '';
         initialAssignedId[a.id] = a.assigned_class_id ?? '';
         initialAssignedLessons[a.id] = a.assigned_lessons != null ? a.assigned_lessons : '';
-        initialStatus[a.id] = a.status;
+        initialStatus[a.id] = toSelectableStatus(a.status);
       });
       setEditNotes(initialNotes);
       setEditAssignedClass(initialAssigned);
@@ -229,12 +238,10 @@ export default function TrialApplicationsPage() {
   function getStatusColor(s: TrialApplication['status']) {
     switch (s) {
       case 'pending': return 'bg-amber-100 text-amber-800';
-      case 'confirmed': return 'bg-blue-100 text-blue-800';
       case 'assigned': return 'bg-green-100 text-green-800';
-      case 'contacted': return 'bg-cyan-100 text-cyan-800';
-      case 'attended_trial': return 'bg-emerald-100 text-emerald-800';
-      case 'converted': return 'bg-primary-lighter text-primary';
       case 'cancelled': return 'bg-gray-100 text-gray-600';
+      case 'could_not_assign': return 'bg-red-100 text-red-800';
+      case 'confirmed': case 'contacted': case 'attended_trial': case 'converted': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   }
@@ -250,7 +257,7 @@ export default function TrialApplicationsPage() {
     if (!app) return;
     const classId = editAssignedClassId[id] ? String(editAssignedClassId[id]).trim() : '';
     const lessons = editAssignedLessons[id];
-    const status = editStatus[id] ?? app.status;
+    const status = toSelectableStatus(editStatus[id] ?? app.status);
     const payload: { status?: string; assigned_class_id?: number; assigned_lessons?: number } = { status };
     if (classId) payload.assigned_class_id = Number(classId);
     else if (app.assigned_class_id) payload.assigned_class_id = Number(app.assigned_class_id);
@@ -310,7 +317,7 @@ export default function TrialApplicationsPage() {
               className="border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
             >
               <option value="all">{t('admin.trialApplications.filterAllStatus', '全部狀態')}</option>
-              {STATUS_OPTIONS.map((s) => (
+              {SELECTABLE_STATUSES.map((s) => (
                 <option key={s} value={s}>{getStatusLabel(s)}</option>
               ))}
             </select>
@@ -378,11 +385,11 @@ export default function TrialApplicationsPage() {
                                     {t('admin.trialApplications.statusLabel')}
                                   </label>
                                   <select
-                                    value={editStatus[app.id] ?? app.status}
-                                    onChange={(e) => setEditStatus((prev) => ({ ...prev, [app.id]: e.target.value as TrialApplication['status'] }))}
+                                    value={editStatus[app.id] ?? toSelectableStatus(app.status)}
+                                    onChange={(e) => setEditStatus((prev) => ({ ...prev, [app.id]: e.target.value as (typeof SELECTABLE_STATUSES)[number] }))}
                                     className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                   >
-                                    {STATUS_OPTIONS.map((s) => (
+                                    {SELECTABLE_STATUSES.map((s) => (
                                       <option key={s} value={s}>{getStatusLabel(s)}</option>
                                     ))}
                                   </select>

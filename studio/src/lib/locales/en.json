@@ -23,6 +23,8 @@
     "coupons": "Coupons",
     "holidays": "Holidays",
     "purchaseHistory": "Purchase History",
+    "tokenPurchaseHistory": "Token purchase records",
+    "courseSubscriptionRecords": "Course subscription records",
     "refundRecords": "Refund Records",
     "signOut": "Sign Out",
     "menu": "Menu",
@@ -740,6 +742,7 @@
       "sectionRenewalChurn": "Renewal & Churn",
       "renewalChurn": "Student Renewal & Churn Report",
       "renewalChurnDesc": "Key for monitoring customer loyalty and course appeal. Churn list can be exported for retention.",
+      "renewalChurnDataSource": "Data from user token expiry and purchase records. Renewal and churn rates compare the selected month with the previous month.",
       "totalExpiring": "Total expiring",
       "renewedCount": "Renewed",
       "renewalRate": "Renewal rate",
@@ -797,10 +800,15 @@
     },
     "users": {
       "title": "User Management",
+      "accountMembersHint": "One account can have multiple members (e.g. a parent with several children). Users can switch between members after login. The \"Members\" column shows how many profiles are under each account.",
       "searchPlaceholder": "Search by name or mobile...",
+      "filterByRole": "Filter by role",
+      "allRoles": "All roles",
       "name": "Name",
       "mobile": "Mobile",
       "role": "Role",
+      "membersCount": "Members",
+      "membersCountTitle": "Number of profiles under this account (one account can have multiple family members)",
       "tokens": "Tokens",
       "tokenExpiryDate": "Token Expiry Date",
       "joined": "Joined",
@@ -1002,6 +1010,8 @@
       "selected": "Selected",
       "select": "Select",
       "classNotFound": "Class not found",
+      "classNotFoundHint": "Please go back to the class list and open \"Reassign students\" from the class attendance.",
+      "invalidClassId": "Invalid class link.",
       "className": "Class Name",
       "selectAll": "Select All",
       "unselectAll": "Unselect All",
@@ -1061,12 +1071,13 @@
       "statusLabel": "Status",
       "status": {
         "pending": "Pending",
-        "confirmed": "Confirmed",
         "assigned": "Assigned",
+        "cancelled": "Cancelled",
+        "could_not_assign": "Could not assign",
+        "confirmed": "Confirmed",
         "contacted": "Contacted",
         "attended_trial": "Attended trial",
-        "converted": "Converted to paid",
-        "cancelled": "Cancelled"
+        "converted": "Converted to paid"
       },
       "filterAll": "All",
       "filterAllStatus": "All statuses",
@@ -1296,6 +1307,19 @@
         "failed": "Failed",
         "not_required": "Not Required"
       }
+    },
+    "subscriptionRecords": {
+      "title": "Course subscription records",
+      "description": "Records of users enrolling in classes. See who signed up for which class.",
+      "loading": "Loading subscription records…",
+      "searchPlaceholder": "Search by user, class name or code…",
+      "noRecords": "No subscription records yet. If your backend exposes GET /admin/enrollments, ensure the API is enabled.",
+      "user": "User",
+      "class": "Class",
+      "subscribedAt": "Subscribed at",
+      "status": "Status",
+      "actions": "Actions",
+      "viewAttendance": "View attendance"
     },
     "refundRecords": {
       "title": "Refund Records",

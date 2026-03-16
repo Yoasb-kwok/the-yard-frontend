@@ -24,6 +24,8 @@ interface User {
   mobile: string | null;
   created_at: string;
   user_tokens: UserToken[];
+  /** Number of profiles (family members) under this account. One account can have multiple members (e.g. parent + children). */
+  profile_count?: number;
 }
 
 // Mock data
@@ -55,6 +57,7 @@ const MOCK_USERS: User[] = [
     user_tokens: [
       { remaining_tokens: 2, expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
     ],
+    profile_count: 3,
   },
   {
     id: 'student-003',
@@ -89,18 +92,32 @@ export default function UsersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'admin'>('all');
 
   useEffect(() => {
     loadUsers();
   }, []);
 
+  function normalizeUser(raw: any): User {
+    const role = raw.role === 'admin' || raw.role === 1 || raw.role === '1' ? 'admin' : 'student';
+    return {
+      id: String(raw.id),
+      full_name: raw.full_name ?? raw.name ?? '',
+      role,
+      mobile: raw.mobile ?? null,
+      created_at: raw.created_at ?? new Date().toISOString(),
+      user_tokens: Array.isArray(raw.user_tokens) ? raw.user_tokens : raw.user_tokens ?? [],
+      profile_count: raw.profile_count != null ? Number(raw.profile_count) : raw.profiles?.length,
+    };
+  }
+
   async function loadUsers() {
     try {
       setLoading(true);
       setLoadError(null);
-      const response = await api.get<User[]>('/admin/users?demo=1').catch(() => ({ success: true, data: MOCK_USERS }));
+      const response = await api.get<any[]>('/admin/users?demo=1').catch(() => ({ success: true, data: MOCK_USERS }));
       if (response.success && response.data) {
-        setUsers(response.data);
+        setUsers(response.data.map((u: any) => normalizeUser(u)));
       } else {
         setUsers(MOCK_USERS);
       }
@@ -209,11 +226,11 @@ export default function UsersPage() {
     }
   }
 
-  const filteredUsers = users.filter(user =>
-    user.role === 'student' &&
-    (user.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    user.mobile?.includes(search))
-  );
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.full_name.toLowerCase().includes(search.toLowerCase()) || user.mobile?.includes(search);
+    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     if (!sortKey) return 0;
@@ -224,6 +241,8 @@ export default function UsersPage() {
       cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     } else if (sortKey === 'mobile') {
       cmp = (a.mobile || '').localeCompare(b.mobile || '', undefined, { sensitivity: 'base' });
+    } else if (sortKey === 'role') {
+      cmp = (a.role || '').localeCompare(b.role || '', undefined, { sensitivity: 'base' });
     }
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -255,11 +274,13 @@ export default function UsersPage() {
   }
 
   function exportCsv() {
-    const headers = ['ID', 'Name', 'Mobile', 'Tokens', 'Earliest Expiry', 'Joined'];
+    const headers = ['ID', 'Name', 'Role', 'Mobile', 'Members', 'Tokens', 'Earliest Expiry', 'Joined'];
     const rows = sortedUsers.map((u) => {
       const tokens = u.user_tokens.reduce((s, t) => s + t.remaining_tokens, 0);
       const expiry = getEarliestExpiryDate(u.user_tokens);
-      return [u.id, u.full_name, u.mobile || '', tokens, expiry || '', u.created_at.slice(0, 10)].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+      const roleLabel = u.role === 'admin' ? t('admin.users.admin') : t('admin.users.student');
+      const members = u.profile_count != null ? String(u.profile_count) : '';
+      return [u.id, u.full_name, roleLabel, u.mobile || '', members, tokens, expiry || '', u.created_at.slice(0, 10)].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -295,6 +316,9 @@ export default function UsersPage() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">{t('admin.users.title')}</h1>
         </div>
+        <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
+          {t('admin.users.accountMembersHint')}
+        </p>
 
         <div className="bg-white rounded-lg shadow-md p-6">
           {bulkMessage && (
@@ -312,6 +336,21 @@ export default function UsersPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="role-filter" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {t('admin.users.filterByRole')}:
+              </label>
+              <select
+                id="role-filter"
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'student' | 'admin')}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="all">{t('admin.users.allRoles')}</option>
+                <option value="student">{t('admin.users.student')}</option>
+                <option value="admin">{t('admin.users.admin')}</option>
+              </select>
             </div>
             <button
               type="button"
@@ -346,7 +385,9 @@ export default function UsersPage() {
                     />
                   </th>
                   <TableSortButton label={t('admin.users.name')} sortKey="full_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
+                  <TableSortButton label={t('admin.users.role')} sortKey="role" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
                   <TableSortButton label={t('admin.users.mobile')} sortKey="mobile" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.membersCount')}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.tokens')}</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.tokenExpiryDate')}</th>
                   <TableSortButton label={t('admin.users.joined')} sortKey="created_at" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
@@ -356,7 +397,7 @@ export default function UsersPage() {
               <tbody className="divide-y divide-gray-200">
                 {sortedUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-12">
+                    <td colSpan={9} className="px-4 py-12">
                       <EmptyState message={t('admin.users.noUsers', '暫無用戶')} />
                     </td>
                   </tr>
@@ -375,7 +416,17 @@ export default function UsersPage() {
                         />
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{user.full_name}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700'
+                        }`}>
+                          {user.role === 'admin' ? t('admin.users.admin') : t('admin.users.student')}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{user.mobile || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-600" title={t('admin.users.membersCountTitle')}>
+                        {user.profile_count != null ? user.profile_count : '–'}
+                      </td>
                       <td className="px-4 py-3 text-sm text-gray-600">{totalTokens}</td>
                       <td className="px-4 py-3 text-sm text-gray-600">
                         <div className="flex items-center space-x-2">

@@ -6,6 +6,188 @@ import { UserMinus, Calendar, Download } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { FALLBACK_RENEWAL_CHURN, formatMonthLabel, reportMonthOptions, type RenewalChurnData } from '../../lib/adminReportData';
 
+/** User from GET /admin/users with tokens for expiry. */
+interface UserWithTokens {
+  id: string;
+  full_name?: string;
+  mobile?: string | null;
+  user_tokens?: { expiry_date?: string; remaining_tokens?: number; expires_at?: string }[];
+}
+
+/** Order row for renewal check: paid in a given month => user renewed. */
+interface OrderForRenewal {
+  user_id?: string;
+  user_ID?: string | number;
+  userId?: string;
+  user_name?: string;
+  user_mobile?: string | null;
+  payment_status?: string | number;
+  paid_at?: string | null;
+  created_at?: string;
+}
+
+function getMonthKey(isoOrDateStr: string | null | undefined): string | null {
+  if (!isoOrDateStr) return null;
+  const d = new Date(isoOrDateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function isPaid(status: string | number | undefined): boolean {
+  if (status === undefined || status === null) return false;
+  if (status === 'paid' || status === 'not_required') return true;
+  if (status === 1 || status === '1' || status === true) return true;
+  return false;
+}
+
+/** Extract user id from order (backend may use user_id, user_ID, userId). */
+function orderUserId(o: OrderForRenewal): string | null {
+  const id = o.user_id ?? o.user_ID ?? o.userId;
+  if (id != null && id !== '') return String(id);
+  return null;
+}
+
+/** Default token validity in months when deriving expiry from order date (fallback when user_tokens not in API). */
+const DEFAULT_TOKEN_VALIDITY_MONTHS = 6;
+
+/** Normalize token expiry date string from various possible keys. */
+function tokenExpiryStr(t: { expiry_date?: string; expires_at?: string }): string | undefined {
+  const s = t.expiry_date ?? t.expires_at;
+  if (!s || typeof s !== 'string') return undefined;
+  return s.slice(0, 10);
+}
+
+/** Build renewal/churn from DB: users (with token expiry) + orders. Compares current month vs previous month. */
+function buildRenewalChurnFromData(
+  users: UserWithTokens[],
+  orders: OrderForRenewal[],
+  reportMonth: string
+): RenewalChurnData {
+  const [y, m] = reportMonth.split('-').map(Number);
+  const prevMonthNum = m === 1 ? 12 : m - 1;
+  const prevYear = m === 1 ? y - 1 : y;
+  const prevMonthKey = `${prevYear}-${String(prevMonthNum).padStart(2, '0')}`;
+  const prevPrevMonthNum = prevMonthNum === 1 ? 12 : prevMonthNum - 1;
+  const prevPrevYear = prevMonthNum === 1 ? prevYear - 1 : prevYear;
+  const prevPrevMonthKey = `${prevPrevYear}-${String(prevPrevMonthNum).padStart(2, '0')}`;
+
+  const tokenExpiresInMonth = (expiryDate: string | undefined, monthKey: string): boolean => {
+    if (!expiryDate) return false;
+    const exp = expiryDate.slice(0, 7);
+    return exp === monthKey;
+  };
+
+  /** Users who have at least one token expiring in monthKey (from user_tokens). */
+  const userIdsExpiringInMonthFromTokens = (monthKey: string): Set<string> => {
+    const set = new Set<string>();
+    users.forEach((u) => {
+      const tokens = u.user_tokens || [];
+      const hasExpiryInMonth = tokens.some((t) => tokenExpiresInMonth(tokenExpiryStr(t), monthKey));
+      if (hasExpiryInMonth) set.add(String(u.id));
+    });
+    return set;
+  };
+
+  /** Users who "have token expiring in monthKey" derived from orders (each order date + validity). Fallback when user_tokens empty. */
+  const userIdsExpiringInMonthFromOrders = (monthKey: string): Set<string> => {
+    const set = new Set<string>();
+    orders.forEach((o) => {
+      if (!isPaid(o.payment_status)) return;
+      const uid = orderUserId(o);
+      if (!uid) return;
+      const date = o.paid_at ? new Date(o.paid_at) : o.created_at ? new Date(o.created_at) : null;
+      if (!date || Number.isNaN(date.getTime())) return;
+      const expiry = new Date(date.getFullYear(), date.getMonth() + DEFAULT_TOKEN_VALIDITY_MONTHS, date.getDate());
+      const expKey = `${expiry.getFullYear()}-${String(expiry.getMonth() + 1).padStart(2, '0')}`;
+      if (expKey === monthKey) set.add(uid);
+    });
+    return set;
+  };
+
+  const hasAnyTokenExpiryFromUsers = users.some((u) => (u.user_tokens || []).some((t) => tokenExpiryStr(t)));
+  const userIdsExpiringInMonth = (monthKey: string): Set<string> =>
+    hasAnyTokenExpiryFromUsers ? userIdsExpiringInMonthFromTokens(monthKey) : userIdsExpiringInMonthFromOrders(monthKey);
+
+  const userIdsWhoPaidInMonth = (monthKey: string): Set<string> => {
+    const set = new Set<string>();
+    orders.forEach((o) => {
+      if (!isPaid(o.payment_status)) return;
+      const uid = orderUserId(o);
+      if (!uid) return;
+      const date = o.paid_at ? new Date(o.paid_at) : o.created_at ? new Date(o.created_at) : null;
+      if (!date) return;
+      const key = getMonthKey(date.toISOString());
+      if (key === monthKey) set.add(uid);
+    });
+    return set;
+  };
+
+  const totalExpiring = userIdsExpiringInMonth(reportMonth).size;
+  const expiredLastMonth = userIdsExpiringInMonth(prevMonthKey);
+  const renewedInCurrent = userIdsWhoPaidInMonth(reportMonth);
+  const renewedCount = [...expiredLastMonth].filter((id) => renewedInCurrent.has(id)).length;
+  const churnCount = expiredLastMonth.size - renewedCount;
+  const base = renewedCount + churnCount;
+  const renewalRate = base > 0 ? (renewedCount / base) * 100 : 0;
+  const churnRate = base > 0 ? (churnCount / base) * 100 : 0;
+
+  const churnedUserIds = new Set([...expiredLastMonth].filter((id) => !renewedInCurrent.has(id)));
+  const userById = new Map(users.map((u) => [String(u.id), u]));
+  const orderUserInfo = new Map<string, { name: string; mobile: string }>();
+  orders.forEach((o) => {
+    const uid = orderUserId(o);
+    if (!uid) return;
+    const name = (o.user_name ?? '').trim() || (orderUserInfo.get(uid)?.name ?? '');
+    const mobile = o.user_mobile ?? (orderUserInfo.get(uid)?.mobile ?? '');
+    if (name || mobile) orderUserInfo.set(uid, { name: name || (orderUserInfo.get(uid)?.name ?? ''), mobile: mobile || (orderUserInfo.get(uid)?.mobile ?? '') });
+  });
+  const churnList: RenewalChurnData['churnList'] = [];
+  churnedUserIds.forEach((userId) => {
+    const u = userById.get(userId);
+    const fromOrder = orderUserInfo.get(userId);
+    const full_name = u?.full_name ?? fromOrder?.name ?? '';
+    const mobile = u?.mobile ?? fromOrder?.mobile ?? '';
+    let expiry_date = `${prevMonthKey}-01`;
+    if (u?.user_tokens?.length) {
+      const tokens = (u.user_tokens || []).filter((t) => tokenExpiresInMonth(tokenExpiryStr(t), prevMonthKey));
+      if (tokens[0]) expiry_date = tokenExpiryStr(tokens[0]) ?? expiry_date;
+    }
+    churnList.push({
+      id: userId,
+      full_name,
+      mobile,
+      expiry_date: expiry_date.slice(0, 10),
+      churn_reason: 'other',
+    });
+  });
+
+  const monthlyTrend: RenewalChurnData['monthlyTrend'] = [
+    {
+      month: prevMonthKey,
+      expiring: userIdsExpiringInMonth(prevMonthKey).size,
+      renewed: [...userIdsExpiringInMonth(prevPrevMonthKey)].filter((id) => userIdsWhoPaidInMonth(prevMonthKey).has(id)).length,
+      churned: userIdsExpiringInMonth(prevPrevMonthKey).size - [...userIdsExpiringInMonth(prevPrevMonthKey)].filter((id) => userIdsWhoPaidInMonth(prevMonthKey).has(id)).length,
+    },
+    {
+      month: reportMonth,
+      expiring: totalExpiring,
+      renewed: renewedCount,
+      churned: churnCount,
+    },
+  ];
+
+  return {
+    totalExpiring,
+    renewedCount,
+    renewalRate,
+    churnCount,
+    churnRate,
+    churnReasons: churnCount > 0 ? [{ reason: 'other', reasonKey: 'other', count: churnCount }] : [],
+    monthlyTrend,
+    churnList,
+  };
+}
+
 export default function AdminRenewalChurnPage() {
   const { t } = useTranslation();
   const [renewalChurn, setRenewalChurn] = useState<RenewalChurnData | null>(null);
@@ -16,11 +198,20 @@ export default function AdminRenewalChurnPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<RenewalChurnData>(`/admin/renewal-churn?demo=1${monthParam}`)
-      .then((res: any) => {
-        if (res?.success && res?.data) setRenewalChurn(res.data);
-        else setRenewalChurn(FALLBACK_RENEWAL_CHURN);
+    const [y, m] = reportMonth.split('-').map(Number);
+    const prevYear = m === 1 ? y - 1 : y;
+    const prevMonth = m === 1 ? 12 : m - 1;
+    const fromDate = new Date(prevYear, prevMonth - 1 - 1, 1);
+    const toDate = new Date(y, m, 0);
+    const fromStr = fromDate.toISOString().slice(0, 10);
+    const toStr = toDate.toISOString().slice(0, 10);
+
+    Promise.all([
+      api.get<UserWithTokens[]>('/admin/users', { demo: '1' }).then((r: any) => (Array.isArray(r?.data) ? r.data : [])),
+      api.get<OrderForRenewal[]>('/admin/orders', { from: fromStr, to: toStr, demo: '1' }).then((r: any) => (Array.isArray(r?.data) ? r.data : [])),
+    ])
+      .then(([users, orders]) => {
+        setRenewalChurn(buildRenewalChurnFromData(users, orders, reportMonth));
       })
       .catch(() => setRenewalChurn(FALLBACK_RENEWAL_CHURN))
       .finally(() => setLoading(false));
@@ -97,6 +288,7 @@ export default function AdminRenewalChurnPage() {
         </div>
 
         <p className="text-sm text-gray-600">{t('admin.dashboard.renewalChurnDesc')}</p>
+        <p className="text-xs text-gray-500">{t('admin.dashboard.renewalChurnDataSource')}</p>
 
         <div className="grid md:grid-cols-4 gap-4">
           <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">

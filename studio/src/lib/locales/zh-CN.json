@@ -23,6 +23,8 @@
     "coupons": "优惠券",
     "holidays": "假期",
     "purchaseHistory": "购买记录",
+    "tokenPurchaseHistory": "代币购买记录",
+    "courseSubscriptionRecords": "课程订阅记录",
     "refundRecords": "退款记录",
     "signOut": "登出",
     "menu": "菜单",
@@ -725,6 +727,7 @@
       "sectionRenewalChurn": "续报与流失",
       "renewalChurn": "学员续报与流失报表",
       "renewalChurnDesc": "监测客户忠诚度和课程吸引力的关键。流失名单可导出进行挽留。",
+      "renewalChurnDataSource": "数据来自用户代币到期日与购买记录，以所选月份与上一个月比较计算续报率与流失率。",
       "totalExpiring": "到期学员总数",
       "renewedCount": "已续报人数",
       "renewalRate": "续报率",
@@ -782,10 +785,15 @@
     },
     "users": {
       "title": "用户管理",
+      "accountMembersHint": "一个账户可包含多位成员（例如家长与多位子女），登录后可切换成员身份。下方「成员数」显示该账户下的成员数量。",
       "searchPlaceholder": "按姓名或手机搜索...",
+      "filterByRole": "身份筛选",
+      "allRoles": "全部身份",
       "name": "姓名",
       "mobile": "手机",
-      "role": "角色",
+      "role": "身份",
+      "membersCount": "成员数",
+      "membersCountTitle": "此账户下的成员数量（同一账户可有多位家庭成员）",
       "tokens": "代币",
       "tokenExpiryDate": "代币到期日",
       "joined": "加入时间",
@@ -981,6 +989,8 @@
       "selected": "已选择",
       "select": "选择",
       "classNotFound": "未找到课程",
+      "classNotFoundHint": "请返回课程列表，再从该课程的出席按堂进入「重新分配学生」。",
+      "invalidClassId": "无效的课程链接。",
       "className": "课程名称",
       "selectAll": "全选",
       "unselectAll": "取消全选",
@@ -1040,9 +1050,13 @@
       "statusLabel": "状态",
       "status": {
         "pending": "待确认",
-        "confirmed": "已确认",
         "assigned": "已分配班别",
-        "cancelled": "已取消"
+        "cancelled": "已取消",
+        "could_not_assign": "未能分配",
+        "confirmed": "已确认",
+        "contacted": "已联络",
+        "attended_trial": "已到堂",
+        "converted": "已转正价"
       },
       "filterAll": "全部状态",
       "applicant": "申请人",
@@ -1265,6 +1279,19 @@
         "failed": "付款失败",
         "not_required": "无需付款"
       }
+    },
+    "subscriptionRecords": {
+      "title": "课程订阅记录",
+      "description": "用户报名课程／班别的订阅记录，可查看谁报了哪一班。",
+      "loading": "载入课程订阅记录…",
+      "searchPlaceholder": "搜寻用户、课程名称或代码…",
+      "noRecords": "暂无课程订阅记录。若后端已提供 GET /admin/enrollments，请确认 API 已启用。",
+      "user": "用户",
+      "class": "课程／班别",
+      "subscribedAt": "报名时间",
+      "status": "状态",
+      "actions": "操作",
+      "viewAttendance": "查看出席"
     },
     "refundRecords": {
       "title": "退款记录",
