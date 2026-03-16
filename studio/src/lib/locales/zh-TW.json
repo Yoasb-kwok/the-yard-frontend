@@ -1468,11 +1468,11 @@
     "filterByLevel": "程度",
     "filterByAge": "年齡",
     "filterByCategory": "課程分類",
-    "courseType": {
-      "regular": "常規班",
+      "courseType": {
+      "regular": "恆常班",
       "summer": "暑假班",
       "short_term": "短期班"
-    }
+      }
   },
   "instructors": {
     "title": "導師介紹",

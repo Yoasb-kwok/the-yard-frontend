@@ -147,7 +147,7 @@ export interface DemoLessonForCalendar {
   age_tag: AgeTag;
   weekday: number;
   total_lessons: 4 | 8 | 16;
-  /** 課程分類：常規班、暑假班、短期班（日曆篩選用） */
+  /** 課程分類：恆常班、暑假班、短期班（日曆篩選用） */
   course_type?: 'regular' | 'summer' | 'short_term';
 }
 
