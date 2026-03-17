@@ -237,10 +237,6 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
-            {/* Upgrade 圖片 - 最新消息下方 */}
-            <div className="mt-10 sm:mt-12 flex justify-center">
-              <img src="/images/Upgrade.png" alt="Upgrade" className="max-w-full h-auto rounded-2xl shadow-lg border border-gray-200/80" />
-            </div>
           </div>
         )}
       </div>

@@ -6,6 +6,7 @@ import { BookOpen, Calendar, MapPin, Search, ArrowDownWideNarrow, ChevronDown, C
 import type { CourseLevel } from '../../contexts/AuthContext';
 import { ALL_COURSES, type CourseItem, type CourseType } from '../../lib/coursesData';
 import { applyCourseIntroOverrides } from '../../lib/courseIntroStorage';
+import { getCoursesPageHero, getHeroTitleForLocale, getHeroDescForLocale, getHeroNoteForLocale } from '../../lib/coursesPageHeroStorage';
 import { api } from '../../lib/api';
 
 export type { CourseItem, CourseType };
@@ -151,6 +152,10 @@ export default function CoursesPage() {
   }, [expandedCourseId, courses]);
 
   const locale = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US';
+  const hero = getCoursesPageHero();
+  const heroTitle = getHeroTitleForLocale(hero, t('courses.promotionFlowTitle', '舞蹈等級晉升流程（示意）'), i18n.language);
+  const heroDesc = getHeroDescForLocale(hero, t('courses.promotionFlowDesc', '學生完成指定堂數及達到導師評核標準後，便有機會晉升至更高級別班別；個別級別或需參與內部評核／考試作實。'), i18n.language);
+  const heroNote = getHeroNoteForLocale(hero, t('courses.promotionFlowNote', '以上為示意說明；實際晉升準則以中心最新安排為準。'), i18n.language);
 
   /** Apply admin 3-lang overrides for 課堂介紹 */
   const displayCourses = useMemo(
@@ -212,14 +217,14 @@ export default function CoursesPage() {
             </p>
           </header>
 
-          {/* Demo: 晉升流程說明卡（之後可改成正式圖片／後端管理） */}
+          {/* 課程介紹頂部區塊：圖片 + 晉升流程文字（後台可編輯，圖片用 object-contain 不裁切） */}
           <section className="mb-8">
             <div className="rounded-2xl border border-primary/10 bg-white shadow-sm overflow-hidden flex flex-col sm:flex-row">
-              <div className="sm:w-2/5 relative min-h-[160px] bg-gradient-to-br from-primary/10 via-primary/5 to-amber-50">
+              <div className="sm:w-2/5 relative min-h-[160px] max-h-[280px] sm:max-h-[320px] bg-gradient-to-br from-primary/10 via-primary/5 to-amber-50 flex items-center justify-center overflow-hidden">
                 <img
-                  src="https://images.pexels.com/photos/5533568/pexels-photo-5533568.jpeg?auto=compress&cs=tinysrgb&w=800"
+                  src={hero?.image_url?.trim() || '/images/Upgrade.png'}
                   alt={t('courses.promotionFlowAlt', '舞蹈等級晉升示意圖')}
-                  className="h-full w-full object-cover"
+                  className="w-full h-full object-contain"
                   loading="lazy"
                 />
               </div>
@@ -228,17 +233,16 @@ export default function CoursesPage() {
                   <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
                     i
                   </span>
-                  {t('courses.promotionFlowTitle', '舞蹈等級晉升流程（示意）')}
+                  {heroTitle}
                 </h2>
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  {t(
-                    'courses.promotionFlowDesc',
-                    '學生完成指定堂數及達到導師評核標準後，便有機會晉升至更高級別班別；個別級別或需參與內部評核／考試作實。'
-                  )}
+                  {heroDesc}
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {t('courses.promotionFlowNote', '以上為示意說明；實際晉升準則以中心最新安排為準。')}
-                </p>
+                {heroNote && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {heroNote}
+                  </p>
+                )}
               </div>
             </div>
           </section>
