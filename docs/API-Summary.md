@@ -200,15 +200,32 @@ Backend base URL: `/api`（例：`http://localhost:3002/api`）
   - `404` — `{ success: false, msg: 'Trial application not found' }`  
   - `500` — `{ success: false, msg }`
 
-### POST /api/admin/class-notice
+### GET /api/admin/class-notices
 
-- **Body**：`{ classId: number, message: string }`  
-  - `classId` 須為有效且未取消的班別 ID；`message` 不可為空。
+- **成功 (200)**：`{ success: true, data: [{ id, class_id, class_name?, message?, message_zh_tw?, message_zh_cn?, message_en?, created_at }, ...] }`
+- **失敗**：`401` / `403`；`500`
+
+### POST /api/admin/class-notices
+
+- **Body**：`{ classId: number, message?: string, message_zh_tw?: string, message_zh_cn?: string, message_en?: string }`  
+  - `classId` 須為有效且未取消的班別 ID（對應 `classes.id`）。  
+  - 至少提供一種內容：`message` 或任一 `message_zh_*`；前端會以第一個非空語言填 `message` 作後備。
 - **成功 (201)**：`{ success: true, id: number, msg: 'Class notice sent' }`
 - **失敗**：  
   - `400` — `{ success: false, msg: 'Valid classId is required' }` 或 `'Message is required' }`  
   - `404` — `{ success: false, msg: 'Class not found' }`  
   - `500` — `{ success: false, msg }`
+
+### PATCH /api/admin/class-notices/:id
+
+- **Body**：可更新 `message`、`message_zh_tw`、`message_zh_cn`、`message_en`（及後端允許之欄位）。
+- **成功 (200)**：`{ success: true }`
+- **失敗**：`400` / `404` / `500`
+
+### DELETE /api/admin/class-notices/:id
+
+- **成功 (200)**：`{ success: true }`
+- **失敗**：`404` / `500`
 
 ---
 
@@ -253,7 +270,7 @@ Backend base URL: `/api`（例：`http://localhost:3002/api`）
 | 試堂申請（提交） | 預約試堂表單 | POST `/api/trial-application` |
 | 我的試堂申請 | 學生 Dashboard 區塊 | GET `/api/student/trial-applications` |
 | 試堂申請管理 | Admin 試堂申請頁 | GET `/api/admin/trial-applications`、PATCH `/api/admin/trial-applications/:id` |
-| 全班通知（發送） | Admin 全班通知頁 | POST `/api/admin/class-notice` |
+| 全班通知（列表／發送／編輯／刪除） | Admin 全班通知頁 | GET/POST `/api/admin/class-notices`、PATCH/DELETE `/api/admin/class-notices/:id` |
 | 全班通知（顯示） | 學生端彈出視窗 | GET `/api/student/class-notices` |
 | 登入／改密碼提示 | 登入後、getMe | POST `/api/user/login`、GET `/api/user/me`、POST `/api/user/change-password` |
 

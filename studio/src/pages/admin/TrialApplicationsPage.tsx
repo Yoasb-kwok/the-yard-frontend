@@ -11,6 +11,8 @@ export interface TrialApplication {
   applicant_name: string;
   applicant_email: string;
   applicant_phone?: string;
+  /** 用戶於試堂申請時填的居住地區 key（例如 centralWestern） */
+  residential_district?: string | null;
   trial_class: string;
   preferred_datetime?: string;
   /** 用戶可選：pending | assigned | cancelled | could_not_assign；後端可能仍回傳舊狀態僅供顯示 */
@@ -35,6 +37,10 @@ interface AdminClassOption {
   program_code?: string;
   instructor?: string;
   is_cancelled?: number;
+  // Optional fields (may be returned by backend)
+  location?: string | null;
+  level?: string | null;
+  age_tag?: string | null;
 }
 
 /** 班別選項顯示：課堂名稱 · 逢星期X · HH:mm */
@@ -48,7 +54,19 @@ function getClassOptionLabel(c: AdminClassOption, locale: string): string {
   const min = d.getMinutes();
   const timeStr = `${String(hour).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
   const prefix = locale.startsWith('zh') ? '逢' : '';
-  return `${name} · ${prefix}${w} ${timeStr}`;
+  const program = c.program_code ? ` (${c.program_code})` : '';
+  const total = c.total_lessons != null ? Number(c.total_lessons) : null;
+  const totalStr = total && !Number.isNaN(total) ? ` · ${total} 堂` : '';
+  return `${name}${program} · ${prefix}${w} ${timeStr}${totalStr}`;
+}
+
+function getClassOptionDedupeKey(c: AdminClassOption): string {
+  // We dedupe recurring "series" rows (same course/time each week).
+  // Backend `createRecurringClasses` inserts one row per lesson occurrence (different start_time),
+  // but for admin assignment we want to show only ONE option per series and pick lesson index later.
+  // Therefore we intentionally IGNORE start_time/end_time in the key,
+  // and keep the earliest row as the representative for lesson date calculations.
+  return `${c.program_code || ''}|${c.instructor || ''}|${c.location || ''}|${c.level || ''}|${c.age_tag || ''}|${c.name || ''}`;
 }
 
 /** 依班別計算「尚未上完」的堂數與該堂上課日期（每週一堂）；供選項顯示「第N堂 · 日期」 */
@@ -191,6 +209,39 @@ export default function TrialApplicationsPage() {
     } catch {
       setClasses([]);
     }
+  }
+
+  const uniqueClassOptions = (() => {
+    const map = new Map<string, AdminClassOption>();
+    for (const c of classes) {
+      const key = getClassOptionDedupeKey(c);
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, c);
+        continue;
+      }
+      // Keep the earliest start_time row as the representative.
+      // If multiple rows have same start_time (rare), keep the one with larger total_lessons.
+      const exStart = existing.start_time ? new Date(existing.start_time).getTime() : Number.POSITIVE_INFINITY;
+      const cStart = c.start_time ? new Date(c.start_time).getTime() : Number.POSITIVE_INFINITY;
+      if (cStart < exStart) {
+        map.set(key, c);
+        continue;
+      }
+      if (cStart === exStart) {
+        const exTotal = existing.total_lessons != null ? Number(existing.total_lessons) : 0;
+        const cTotal = c.total_lessons != null ? Number(c.total_lessons) : 0;
+        if (!Number.isNaN(cTotal) && (Number.isNaN(exTotal) || cTotal > exTotal)) map.set(key, c);
+      }
+    }
+    return Array.from(map.values());
+  })();
+
+  function getResidentialDistrictLabel(districtKey?: string | null): string {
+    if (!districtKey) return '—';
+    // districtKey expected to be hkDistrict key like "centralWestern"
+    const v = t(`districts.${districtKey}`, districtKey);
+    return typeof v === 'string' && v.trim() ? v : districtKey;
   }
 
   async function loadApplications() {
@@ -355,6 +406,9 @@ export default function TrialApplicationsPage() {
                           <div className="font-medium text-gray-900">{app.applicant_name}</div>
                           <div className="text-xs text-gray-500">{app.applicant_email}</div>
                           {app.applicant_phone && <div className="text-xs text-gray-500">{app.applicant_phone}</div>}
+                          <div className="text-xs text-gray-500">
+                            {t('admin.trialApplications.residentialDistrict', '試堂地區')}: {getResidentialDistrictLabel(app.residential_district)}
+                          </div>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-900">{app.trial_class}</td>
                         <td className="px-4 py-3">
@@ -427,7 +481,7 @@ export default function TrialApplicationsPage() {
                                     className="min-w-0 flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:border-primary"
                                   >
                                     <option value="">{t('admin.trialApplications.assignClassPlaceholder')}</option>
-                                    {classes.map((c) => (
+                                    {uniqueClassOptions.map((c) => (
                                       <option key={c.id} value={String(c.id)}>
                                         {getClassOptionLabel(c, getLocale())}
                                       </option>

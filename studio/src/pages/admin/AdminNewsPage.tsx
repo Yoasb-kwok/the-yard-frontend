@@ -168,7 +168,13 @@ export default function AdminNewsPage() {
     if (!hasAtLeastOneTitle) return;
     setSaving(true);
     const published_at = form.published_at ? `${form.published_at}T12:00:00.000Z` : new Date().toISOString();
+    // Backend news table currently supports legacy `title/content` only.
+    // Send fallback fields so PATCH/POST can actually update DB.
+    const fallbackTitle = form.title_zh_tw.trim() || form.title_zh_cn.trim() || form.title_en.trim() || '';
+    const fallbackContent = form.content_zh_tw.trim() || form.content_zh_cn.trim() || form.content_en.trim() || '';
     const body = {
+      title: fallbackTitle,
+      content: fallbackContent,
       title_zh_tw: form.title_zh_tw.trim() || undefined,
       title_zh_cn: form.title_zh_cn.trim() || undefined,
       title_en: form.title_en.trim() || undefined,
