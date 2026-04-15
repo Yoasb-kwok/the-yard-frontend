@@ -4,6 +4,7 @@ import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { FileText, Filter, Search } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export interface AuditLogEntry {
   id: string;
@@ -67,6 +68,15 @@ export default function AuditLogPage() {
     return true;
   });
 
+  const {
+    page: auditPage,
+    setPage: setAuditPage,
+    totalPages: auditTotalPages,
+    pageSize: auditPageSize,
+    totalItems: auditTotalItems,
+    paginatedItems: paginatedAudit,
+  } = useTablePagination(filtered, undefined, [search, actionFilter]);
+
   if (loading) {
     return (
       <Layout>
@@ -129,7 +139,7 @@ export default function AuditLogPage() {
                     <td colSpan={4} className="px-4 py-8 text-center text-gray-500">{t('admin.auditLog.noEntries')}</td>
                   </tr>
                 ) : (
-                  filtered.map((e) => (
+                  paginatedAudit.map((e) => (
                     <tr key={e.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">{formatDateTime(e.created_at, getLocale())}</td>
                       <td className="px-4 py-3 text-sm font-medium text-gray-900">{e.actor}</td>
@@ -141,6 +151,13 @@ export default function AuditLogPage() {
               </tbody>
             </table>
           </div>
+          <TablePaginationBar
+            page={auditPage}
+            totalPages={auditTotalPages}
+            totalItems={auditTotalItems}
+            pageSize={auditPageSize}
+            onPageChange={setAuditPage}
+          />
         </div>
       </div>
     </Layout>

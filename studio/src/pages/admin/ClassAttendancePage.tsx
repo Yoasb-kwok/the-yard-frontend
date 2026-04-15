@@ -6,6 +6,7 @@ import { formatDateTime } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { ArrowLeft, Search, X, AlertTriangle, Users, RefreshCw } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Class {
   id: string;
@@ -332,8 +333,20 @@ export default function ClassAttendancePage() {
     e.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     e.user_mobile?.includes(searchTerm)
   );
+  const {
+    page: attPage,
+    setPage: setAttPage,
+    totalPages: attTotalPages,
+    pageSize: attPageSize,
+    totalItems: attTotalItems,
+    paginatedItems: paginatedEnrollments,
+  } = useTablePagination(filteredEnrollments, undefined, [searchTerm]);
+
+  const selectableOnPage = paginatedEnrollments.filter((e) => e.status !== 'attended');
+  const allSelectedOnPage =
+    selectableOnPage.length > 0 && selectableOnPage.every((e) => selectedIds.has(e.id));
+
   const selectedCount = filteredEnrollments.filter((e) => selectedIds.has(e.id)).length;
-  const allSelected = filteredEnrollments.length > 0 && selectedCount === filteredEnrollments.length;
   const canMarkAttended = filteredEnrollments.some((e) => e.status !== 'attended');
 
   function toggleSelect(id: string) {
@@ -344,17 +357,19 @@ export default function ClassAttendancePage() {
       return next;
     });
   }
-  function toggleSelectAll() {
-    if (allSelected) {
+  function toggleSelectAllOnPage() {
+    const ids = selectableOnPage.map((e) => e.id);
+    if (ids.length === 0) return;
+    if (allSelectedOnPage) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        filteredEnrollments.forEach((e) => next.delete(e.id));
+        ids.forEach((id) => next.delete(id));
         return next;
       });
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        filteredEnrollments.forEach((e) => next.add(e.id));
+        ids.forEach((id) => next.add(id));
         return next;
       });
     }
@@ -549,8 +564,8 @@ export default function ClassAttendancePage() {
             </div>
             {canMarkAttended && (
               <div className="flex flex-wrap items-center gap-2 mb-3">
-                <button type="button" onClick={toggleSelectAll} className="text-sm text-primary hover:underline">
-                  {allSelected ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
+                <button type="button" onClick={toggleSelectAllOnPage} className="text-sm text-primary hover:underline">
+                  {allSelectedOnPage ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
                 </button>
                 {selectedCount > 0 && (
                   <button
@@ -578,8 +593,8 @@ export default function ClassAttendancePage() {
                         <th className="px-2 py-3 w-10">
                           <input
                             type="checkbox"
-                            checked={allSelected}
-                            onChange={toggleSelectAll}
+                            checked={allSelectedOnPage}
+                            onChange={toggleSelectAllOnPage}
                             className="rounded border-gray-300 text-primary focus:ring-primary"
                             aria-label={t('admin.attendance.selectAll')}
                           />
@@ -598,7 +613,7 @@ export default function ClassAttendancePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                      {filteredEnrollments.map((enrollment) => (
+                      {paginatedEnrollments.map((enrollment) => (
                         <tr key={enrollment.id}>
                           <td className="px-2 py-3 w-10">
                             {enrollment.status !== 'attended' && (
@@ -675,11 +690,19 @@ export default function ClassAttendancePage() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePaginationBar
+                    page={attPage}
+                    totalPages={attTotalPages}
+                    totalItems={attTotalItems}
+                    pageSize={attPageSize}
+                    onPageChange={setAttPage}
+                    className="hidden md:flex"
+                  />
                 </div>
 
                 {/* Mobile Card View */}
                 <div className="md:hidden space-y-3">
-                  {filteredEnrollments.map((enrollment) => (
+                  {paginatedEnrollments.map((enrollment) => (
                     <div key={enrollment.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
@@ -761,6 +784,14 @@ export default function ClassAttendancePage() {
                     </div>
                   ))}
                 </div>
+                <TablePaginationBar
+                  page={attPage}
+                  totalPages={attTotalPages}
+                  totalItems={attTotalItems}
+                  pageSize={attPageSize}
+                  onPageChange={setAttPage}
+                  className="md:hidden border-t border-gray-200"
+                />
               </>
             )}
           </div>

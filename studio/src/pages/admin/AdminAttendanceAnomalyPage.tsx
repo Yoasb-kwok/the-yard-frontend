@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { downloadCsv } from '../../lib/utils';
 import { ClipboardList, Calendar, Download } from 'lucide-react';
 import { FALLBACK_ATTENDANCE_ANOMALY, reportMonthOptions, type AttendanceAnomalyData } from '../../lib/adminReportData';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export default function AdminAttendanceAnomalyPage() {
   const { t } = useTranslation();
@@ -25,6 +26,25 @@ export default function AdminAttendanceAnomalyPage() {
       .catch(() => setData(FALLBACK_ATTENDANCE_ANOMALY))
       .finally(() => setLoading(false));
   }, [reportMonth]);
+
+  const lowAttendanceRows = data?.lowAttendanceRateClasses ?? [];
+  const consecutiveAbsenceRows = data?.consecutiveAbsenceStudents ?? [];
+  const {
+    page: lowAttPage,
+    setPage: setLowAttPage,
+    totalPages: lowAttTotalPages,
+    pageSize: lowAttPageSize,
+    totalItems: lowAttTotalItems,
+    paginatedItems: paginatedLowAttendance,
+  } = useTablePagination(lowAttendanceRows, undefined, [reportMonth]);
+  const {
+    page: consecPage,
+    setPage: setConsecPage,
+    totalPages: consecTotalPages,
+    pageSize: consecPageSize,
+    totalItems: consecTotalItems,
+    paginatedItems: paginatedConsecutive,
+  } = useTablePagination(consecutiveAbsenceRows, undefined, [reportMonth]);
 
   if (loading || !data) {
     return (
@@ -106,7 +126,7 @@ export default function AdminAttendanceAnomalyPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.lowAttendanceRateClasses.map((row) => (
+                  {paginatedLowAttendance.map((row) => (
                     <tr key={row.classId} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.className}</td>
                       <td className="py-2 pr-4">{row.programCode}</td>
@@ -117,6 +137,13 @@ export default function AdminAttendanceAnomalyPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={lowAttPage}
+                totalPages={lowAttTotalPages}
+                totalItems={lowAttTotalItems}
+                pageSize={lowAttPageSize}
+                onPageChange={setLowAttPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>
@@ -140,7 +167,7 @@ export default function AdminAttendanceAnomalyPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.consecutiveAbsenceStudents.map((row) => (
+                  {paginatedConsecutive.map((row) => (
                     <tr key={row.studentId} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.full_name}</td>
                       <td className="py-2 pr-4">{row.mobile}</td>
@@ -151,6 +178,13 @@ export default function AdminAttendanceAnomalyPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={consecPage}
+                totalPages={consecTotalPages}
+                totalItems={consecTotalItems}
+                pageSize={consecPageSize}
+                onPageChange={setConsecPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>

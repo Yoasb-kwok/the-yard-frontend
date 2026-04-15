@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { api } from '../../lib/api';
-import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package, X, Printer } from 'lucide-react';
+import { extractServerErrorText, formatCurrency, formatDateTime } from '../../lib/utils';
+import { api, ApiError } from '../../lib/api';
+import { patchAdminOrderPaymentStatus } from '../../lib/adminOrderApi';
+import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package, X, Printer, Pencil } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Purchase {
   id: string;
@@ -45,6 +47,13 @@ export default function UserPurchaseHistoryPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
+  const [statusEditPurchase, setStatusEditPurchase] = useState<Purchase | null>(null);
+  const [statusEditStep, setStatusEditStep] = useState<1 | 2>(1);
+  const [pendingPaymentStatus, setPendingPaymentStatus] = useState<Purchase['payment_status'] | null>(null);
+  const [statusConfirmChecked, setStatusConfirmChecked] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [statusEditError, setStatusEditError] = useState<string | null>(null);
+  const [statusSuccessMessage, setStatusSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     loadPurchases();
@@ -103,6 +112,53 @@ export default function UserPurchaseHistoryPage() {
         return 'bg-gray-100 text-gray-800';
     }
   };
+
+  function openStatusEdit(purchase: Purchase) {
+    setStatusEditError(null);
+    setStatusConfirmChecked(false);
+    setStatusEditStep(1);
+    setStatusEditPurchase(purchase);
+    setPendingPaymentStatus(purchase.payment_status);
+  }
+
+  function closeStatusEdit() {
+    setStatusEditPurchase(null);
+    setStatusEditStep(1);
+    setPendingPaymentStatus(null);
+    setStatusConfirmChecked(false);
+    setStatusEditError(null);
+    setStatusUpdating(false);
+  }
+
+  async function applyPaymentStatusChange() {
+    if (!statusEditPurchase || !pendingPaymentStatus || pendingPaymentStatus === statusEditPurchase.payment_status) return;
+    setStatusUpdating(true);
+    setStatusEditError(null);
+    try {
+      await patchAdminOrderPaymentStatus(statusEditPurchase.id, pendingPaymentStatus);
+      setStatusSuccessMessage(t('admin.purchaseHistory.statusUpdateSuccess'));
+      setTimeout(() => setStatusSuccessMessage(null), 4000);
+      closeStatusEdit();
+      await loadPurchases();
+    } catch (e) {
+      let msg: string;
+      if (e instanceof ApiError) {
+        const detail = extractServerErrorText(e.message);
+        if (e.status === 404 || /cannot\s+patch/i.test(detail)) {
+          msg = t('admin.purchaseHistory.statusUpdateRouteMissing');
+        } else {
+          msg = detail || t('admin.purchaseHistory.statusUpdateFailed');
+        }
+      } else if (e instanceof Error) {
+        msg = extractServerErrorText(e.message) || e.message;
+      } else {
+        msg = t('admin.purchaseHistory.statusUpdateFailed');
+      }
+      setStatusEditError(msg);
+    } finally {
+      setStatusUpdating(false);
+    }
+  }
 
   const getPaymentMethodLabel = (method: string | null) => {
     if (!method) return '-';
@@ -378,6 +434,15 @@ export default function UserPurchaseHistoryPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const {
+    page: purchasePage,
+    setPage: setPurchasePage,
+    totalPages: purchaseTotalPages,
+    pageSize: purchasePageSize,
+    totalItems: purchaseTotalItems,
+    paginatedItems: paginatedPurchases,
+  } = useTablePagination(filteredPurchases, undefined, [searchTerm, statusFilter]);
+
   if (loading) {
     return (
       <Layout>
@@ -390,11 +455,17 @@ export default function UserPurchaseHistoryPage() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-6 min-w-0 max-w-full">
         <div className="flex items-center gap-4">
           <Receipt className="h-8 w-8 text-primary" />
           <h1 className="text-3xl font-bold text-gray-900">{t('admin.purchaseHistory.title')}</h1>
         </div>
+
+        {statusSuccessMessage && (
+          <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md text-sm">
+            {statusSuccessMessage}
+          </div>
+        )}
 
         {/* Search and Filters */}
         <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
@@ -458,7 +529,7 @@ export default function UserPurchaseHistoryPage() {
           <>
             {/* Mobile View - Card Layout */}
             <div className="md:hidden space-y-4">
-              {filteredPurchases.map((purchase) => (
+              {paginatedPurchases.map((purchase) => (
                 <div key={purchase.id} className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
@@ -538,6 +609,14 @@ export default function UserPurchaseHistoryPage() {
                         {getStatusLabel(purchase.payment_status)}
                       </span>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => openStatusEdit(purchase)}
+                      className="w-full mt-2 px-4 py-2 border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                    >
+                      <Pencil className="h-4 w-4" />
+                      {t('admin.purchaseHistory.editPaymentStatus')}
+                    </button>
                     {purchase.payment_status === 'paid' && (
                       <div className="pt-2 border-t border-gray-100 space-y-2">
                         <button
@@ -560,11 +639,21 @@ export default function UserPurchaseHistoryPage() {
                 </div>
               ))}
             </div>
+            <div className="md:hidden">
+              <TablePaginationBar
+                page={purchasePage}
+                totalPages={purchaseTotalPages}
+                totalItems={purchaseTotalItems}
+                pageSize={purchasePageSize}
+                onPageChange={setPurchasePage}
+                className="rounded-lg border border-gray-200 border-t-0 bg-white shadow-md"
+              />
+            </div>
 
-            {/* Desktop View - Table Layout */}
-            <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
+            {/* Desktop View - Table Layout (horizontal scroll when columns exceed viewport) */}
+            <div className="hidden md:block bg-white rounded-lg shadow-md border border-gray-200">
+              <div className="horizontal-scroll-always w-full min-w-0 overscroll-x-contain pb-1">
+                <table className="min-w-max w-full table-auto divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -597,7 +686,7 @@ export default function UserPurchaseHistoryPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredPurchases.map((purchase) => (
+                    {paginatedPurchases.map((purchase) => (
                       <tr key={purchase.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {purchase.order_id}
@@ -661,7 +750,16 @@ export default function UserPurchaseHistoryPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openStatusEdit(purchase)}
+                              className="px-3 py-1.5 border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                              title={t('admin.purchaseHistory.editPaymentStatus')}
+                            >
+                              <Pencil className="h-4 w-4" />
+                              {t('admin.purchaseHistory.editPaymentStatus')}
+                            </button>
                             {purchase.payment_status === 'paid' && (
                               <>
                                 <button
@@ -689,12 +787,160 @@ export default function UserPurchaseHistoryPage() {
                   </tbody>
                 </table>
               </div>
+              <TablePaginationBar
+                page={purchasePage}
+                totalPages={purchaseTotalPages}
+                totalItems={purchaseTotalItems}
+                pageSize={purchasePageSize}
+                onPageChange={setPurchasePage}
+                className="rounded-b-lg"
+              />
             </div>
           </>
         )}
       </div>
 
       {/* Receipt Modal */}
+      {statusEditPurchase && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto"
+            role="dialog"
+            aria-labelledby="status-edit-title"
+          >
+            <div className="p-6 border-b border-gray-200 flex items-start justify-between gap-3">
+              <h2 id="status-edit-title" className="text-lg font-semibold text-gray-900">
+                {statusEditStep === 1
+                  ? t('admin.purchaseHistory.editPaymentStatus')
+                  : t('admin.purchaseHistory.confirmStatusTitle')}
+              </h2>
+              <button
+                type="button"
+                onClick={closeStatusEdit}
+                className="p-1 rounded-md text-gray-500 hover:bg-gray-100"
+                aria-label={t('common.close')}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {statusEditStep === 1 && (
+                <>
+                  <p className="text-sm text-gray-600">
+                    {t('admin.purchaseHistory.orderId')}:{' '}
+                    <span className="font-mono font-medium text-gray-900">{statusEditPurchase.order_id}</span>
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    {t('admin.purchaseHistory.user')}:{' '}
+                    <span className="font-medium text-gray-900">{statusEditPurchase.user_name}</span>
+                  </p>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('admin.purchaseHistory.currentStatus')}
+                    </label>
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${getStatusColor(statusEditPurchase.payment_status)}`}>
+                      {getStatusLabel(statusEditPurchase.payment_status)}
+                    </span>
+                  </div>
+                  <div>
+                    <label htmlFor="new-payment-status" className="block text-sm font-medium text-gray-700 mb-2">
+                      {t('admin.purchaseHistory.newPaymentStatus')}
+                    </label>
+                    <select
+                      id="new-payment-status"
+                      value={pendingPaymentStatus ?? statusEditPurchase.payment_status}
+                      onChange={(e) => setPendingPaymentStatus(e.target.value as Purchase['payment_status'])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="paid">{t('admin.purchaseHistory.statuses.paid')}</option>
+                      <option value="pending">{t('admin.purchaseHistory.statuses.pending')}</option>
+                      <option value="failed">{t('admin.purchaseHistory.statuses.failed')}</option>
+                      <option value="not_required">{t('admin.purchaseHistory.statuses.not_required')}</option>
+                    </select>
+                  </div>
+                  {statusEditError && <p className="text-sm text-red-600">{statusEditError}</p>}
+                </>
+              )}
+
+              {statusEditStep === 2 && statusEditPurchase && pendingPaymentStatus && (
+                <>
+                  <p className="text-sm text-gray-800">
+                    {t('admin.purchaseHistory.confirmStatusSummary', {
+                      orderId: statusEditPurchase.order_id,
+                      from: getStatusLabel(statusEditPurchase.payment_status),
+                      to: getStatusLabel(pendingPaymentStatus),
+                    })}
+                  </p>
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md p-3">
+                    {t('admin.purchaseHistory.confirmStatusWarning')}
+                  </p>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      checked={statusConfirmChecked}
+                      onChange={(e) => setStatusConfirmChecked(e.target.checked)}
+                    />
+                    <span className="text-sm text-gray-700">{t('admin.purchaseHistory.confirmStatusCheckbox')}</span>
+                  </label>
+                  {statusEditError && <p className="text-sm text-red-600">{statusEditError}</p>}
+                </>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex flex-wrap justify-end gap-2">
+              {statusEditStep === 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={closeStatusEdit}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                  >
+                    {t('common.cancel')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!pendingPaymentStatus || pendingPaymentStatus === statusEditPurchase.payment_status}
+                    onClick={() => {
+                      setStatusEditError(null);
+                      setStatusConfirmChecked(false);
+                      setStatusEditStep(2);
+                    }}
+                    className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('admin.purchaseHistory.continueToConfirm')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={statusUpdating}
+                    onClick={() => {
+                      setStatusEditStep(1);
+                      setStatusConfirmChecked(false);
+                      setStatusEditError(null);
+                    }}
+                    className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 disabled:opacity-50"
+                  >
+                    {t('common.back')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={statusUpdating || !statusConfirmChecked || !pendingPaymentStatus}
+                    onClick={() => applyPaymentStatusChange()}
+                    className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {statusUpdating ? t('common.sending') : t('admin.purchaseHistory.applyStatusChange')}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedPurchase && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:hidden">
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none">

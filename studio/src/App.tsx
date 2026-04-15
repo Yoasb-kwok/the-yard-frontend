@@ -24,7 +24,10 @@ import ResetPasswordPage from './pages/auth/ResetPasswordPage';
 import DashboardPage from './pages/student/DashboardPage';
 import SchedulePage from './pages/student/SchedulePage';
 import NotificationsPage from './pages/student/NotificationsPage';
+import ShopPage from './pages/student/ShopPage';
 import PaymentHistoryPage from './pages/student/PaymentHistoryPage';
+import PaymentSuccessPage from './pages/student/PaymentSuccessPage';
+import PaymentCancelPage from './pages/student/PaymentCancelPage';
 import ProfilePage from './pages/student/ProfilePage';
 
 import AdminDashboard from './pages/admin/AdminDashboard';
@@ -97,10 +100,34 @@ function App() {
             }
           />
           <Route
+            path="/student/shop"
+            element={
+              <ProtectedRoute>
+                <ShopPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/payment-history"
             element={
               <ProtectedRoute>
                 <PaymentHistoryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payment/success"
+            element={
+              <ProtectedRoute>
+                <PaymentSuccessPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payment/cancel"
+            element={
+              <ProtectedRoute>
+                <PaymentCancelPage />
               </ProtectedRoute>
             }
           />

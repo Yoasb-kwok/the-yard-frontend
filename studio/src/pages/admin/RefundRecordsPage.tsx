@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { Search, RefreshCw, RotateCcw } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export interface RefundRecord {
   id: string;
@@ -95,6 +96,15 @@ export default function RefundRecordsPage() {
     }
     return sortDir === 'asc' ? cmp : -cmp;
   });
+
+  const {
+    page: refundPage,
+    setPage: setRefundPage,
+    totalPages: refundTotalPages,
+    pageSize: refundPageSize,
+    totalItems: refundTotalItems,
+    paginatedItems: paginatedRefunds,
+  } = useTablePagination(sorted, undefined, [searchTerm, dateFrom, dateTo, sortKey, sortDir]);
 
   function handleSort(key: string) {
     if (sortKey === key) {
@@ -194,7 +204,7 @@ export default function RefundRecordsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {sorted.map((r) => (
+                    {paginatedRefunds.map((r) => (
                       <tr key={r.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
                           {formatDateTime(r.refunded_at, getLocale())}
@@ -211,10 +221,18 @@ export default function RefundRecordsPage() {
                     ))}
                   </tbody>
                 </table>
+                <TablePaginationBar
+                  page={refundPage}
+                  totalPages={refundTotalPages}
+                  totalItems={refundTotalItems}
+                  pageSize={refundPageSize}
+                  onPageChange={setRefundPage}
+                  className="hidden md:flex"
+                />
               </div>
 
               <div className="md:hidden divide-y divide-gray-200">
-                {sorted.map((r) => (
+                {paginatedRefunds.map((r) => (
                   <div key={r.id} className="p-4">
                     <div className="flex justify-between items-start mb-2">
                       <span className="text-sm font-medium text-gray-900">{r.user_name}</span>
@@ -231,6 +249,14 @@ export default function RefundRecordsPage() {
                   </div>
                 ))}
               </div>
+              <TablePaginationBar
+                page={refundPage}
+                totalPages={refundTotalPages}
+                totalItems={refundTotalItems}
+                pageSize={refundPageSize}
+                onPageChange={setRefundPage}
+                className="md:hidden rounded-b-lg border border-gray-200 border-t-0"
+              />
             </>
           )}
         </div>

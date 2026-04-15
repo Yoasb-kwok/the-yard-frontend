@@ -20,13 +20,55 @@ interface UserToken {
   expiry_date: string;
 }
 
+interface OrderTokenLike {
+  id?: string | number;
+  order_id?: string;
+  payment_status?: string;
+  token_count?: number;
+  created_at?: string;
+}
+
+function normalizeUserTokens(payload: any): UserToken[] {
+  const candidates = [payload, payload?.data, payload?.data?.data, payload?.tokens, payload?.data?.tokens];
+  const rows = candidates.find((x) => Array.isArray(x));
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((r: any): UserToken | null => {
+      if (!r) return null;
+      return {
+        id: String(r.id ?? r.user_token_id ?? ''),
+        remaining_tokens: Number(r.remaining_tokens ?? r.balance ?? 0),
+        total_tokens: Number(r.total_tokens ?? r.initial_tokens ?? r.remaining_tokens ?? 0),
+        expiry_date: String(r.expiry_date ?? r.expires_at ?? ''),
+      };
+    })
+    .filter((r: UserToken | null): r is UserToken => Boolean(r && r.id));
+}
+
+function tokensFromPaidOrders(payload: any): UserToken[] {
+  const candidates = [payload, payload?.data, payload?.data?.data, payload?.orders, payload?.data?.orders];
+  const rows = candidates.find((x) => Array.isArray(x));
+  if (!Array.isArray(rows)) return [];
+  const paid = (rows as OrderTokenLike[]).filter((o) => String(o?.payment_status ?? '').toLowerCase() === 'paid');
+  const sum = paid.reduce((acc, o) => acc + Number(o?.token_count ?? 0), 0);
+  if (sum <= 0) return [];
+  const latest = paid
+    .map((o) => String(o?.created_at ?? ''))
+    .filter(Boolean)
+    .sort()
+    .pop();
+  return [
+    {
+      id: 'orders-derived',
+      remaining_tokens: sum,
+      total_tokens: sum,
+      expiry_date: latest || new Date().toISOString().slice(0, 10),
+    },
+  ];
+}
+
 /** Same shape as EnrolledClass so dashboard and schedule use same data */
 type UpcomingClass = EnrolledClass;
-
-/** Fallback demo data when API is unavailable or for demo profiles */
-const FALLBACK_TOKENS: UserToken[] = [
-  { id: 'tok_demo_1', remaining_tokens: 5, total_tokens: 10, expiry_date: new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10) },
-];
 
 /** One source of truth: same enrollments as SchedulePage & sidebar so counts match */
 const FALLBACK_UPCOMING_CLASSES: UpcomingClass[] = getFallbackUpcomingClasses();
@@ -138,16 +180,20 @@ export default function DashboardPage() {
     try {
       const profileId = profile?.id;
       const [tokensRes, classesRes, notifRes, trialRes] = await Promise.all([
-        api.get<{ data?: UserToken[] }>('/student/tokens'),
+        api.get('/student/tokens').catch(() => api.get('/user-tokens')).catch(() => ({ success: false, data: [] })),
         api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes'),
         api.get<{ data?: ApiNotification[] }>('/student/notifications').catch(() => ({ success: true, data: [] })),
         api.get<{ success?: boolean; data?: TrialApplicationItem[] }>('/student/trial-applications').catch(() => ({ success: false, data: [] })),
       ]);
-      const tokensData = (tokensRes as any).data;
+      let tokensData = normalizeUserTokens(tokensRes);
+      if (tokensData.length === 0) {
+        const ordersRes = await api.get('/orders/me').catch(() => ({ success: false, data: [] }));
+        tokensData = tokensFromPaidOrders(ordersRes);
+      }
       let classesData = (classesRes as any).data;
       const notifData = (notifRes as any).data;
       const trialData = (trialRes as any).data;
-      setTokens(Array.isArray(tokensData) ? tokensData : FALLBACK_TOKENS);
+      setTokens(tokensData);
       setTrialApplications(Array.isArray(trialData) ? trialData : []);
       setTrialApplicationsLoaded((trialRes as any).success === true);
       if (Array.isArray(classesData) && profileId) {
@@ -156,7 +202,7 @@ export default function DashboardPage() {
       setUpcomingClasses(Array.isArray(classesData) && classesData.length > 0 ? classesData : getFallbackUpcomingClasses(profileId ?? undefined, profile?.full_name ?? undefined));
       setRawNotifications(Array.isArray(notifData) ? notifData : []);
     } catch {
-      setTokens(FALLBACK_TOKENS);
+      setTokens([]);
       setTrialApplications([]);
       setTrialApplicationsLoaded(false);
       setUpcomingClasses(getFallbackUpcomingClasses(profile?.id ?? undefined, profile?.full_name ?? undefined));

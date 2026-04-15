@@ -5,6 +5,7 @@ import { formatCurrency, downloadCsv } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Target, Calendar, Download } from 'lucide-react';
 import { FALLBACK_FUNNEL, reportMonthOptions, type ConversionFunnelData } from '../../lib/adminReportData';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export default function AdminFunnelPage() {
   const { t } = useTranslation();
@@ -25,6 +26,16 @@ export default function AdminFunnelPage() {
       .catch(() => setFunnel(FALLBACK_FUNNEL))
       .finally(() => setLoading(false));
   }, [reportMonth]);
+
+  const channelRows = funnel?.byChannel ?? [];
+  const {
+    page: funnelChPage,
+    setPage: setFunnelChPage,
+    totalPages: funnelChTotalPages,
+    pageSize: funnelChPageSize,
+    totalItems: funnelChTotalItems,
+    paginatedItems: paginatedByChannel,
+  } = useTablePagination(channelRows, undefined, [reportMonth]);
 
   if (loading || !funnel) {
     return (
@@ -138,8 +149,8 @@ export default function AdminFunnelPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {funnel.byChannel.map((row, i) => (
-                        <tr key={i} className="border-b border-gray-100">
+                      {paginatedByChannel.map((row, i) => (
+                        <tr key={`${row.channel}-${i}`} className="border-b border-gray-100">
                           <td className="py-2 pr-4 font-medium text-gray-900">{row.channel}</td>
                           <td className="py-2 pr-4">{row.trialCount}</td>
                           <td className="py-2 pr-4">{row.enrollmentCount}</td>
@@ -149,6 +160,13 @@ export default function AdminFunnelPage() {
                       ))}
                     </tbody>
                   </table>
+                  <TablePaginationBar
+                    page={funnelChPage}
+                    totalPages={funnelChTotalPages}
+                    totalItems={funnelChTotalItems}
+                    pageSize={funnelChPageSize}
+                    onPageChange={setFunnelChPage}
+                  />
                 </div>
               ) : (
                 <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>

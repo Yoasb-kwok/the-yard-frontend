@@ -8,3 +8,36 @@
     background-color: #FFFEF6;
   }
 }
+
+/**
+ * Horizontal scroll region with a always-visible scrollbar (macOS overlay scrollbars
+ * stay hidden unless styled; WebKit track + thumb below keeps the bar visible).
+ */
+@layer components {
+  .horizontal-scroll-always {
+    overflow-x: scroll;
+    overflow-y: hidden;
+    scrollbar-gutter: stable;
+    scrollbar-width: auto;
+    scrollbar-color: #94a3b8 #e2e8f0;
+  }
+
+  .horizontal-scroll-always::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  .horizontal-scroll-always::-webkit-scrollbar-track {
+    background: #e2e8f0;
+    border-radius: 6px;
+  }
+
+  .horizontal-scroll-always::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 6px;
+    border: 2px solid #e2e8f0;
+  }
+
+  .horizontal-scroll-always::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
+}

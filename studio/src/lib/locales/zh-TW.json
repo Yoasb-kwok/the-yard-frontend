@@ -72,6 +72,12 @@
     "retry": "重試",
     "skipToContent": "跳到主內容"
   },
+  "pagination": {
+    "showing": "顯示第 {{from}}–{{to}} 項，共 {{total}} 項",
+    "pageOf": "第 {{page}} / {{totalPages}} 頁",
+    "prev": "上一頁",
+    "next": "下一頁"
+  },
   "districts": {
     "pleaseSelect": "請選擇居住地區",
     "centralWestern": "中西區",
@@ -560,7 +566,31 @@
     "redirectToPayMe": "結帳後將開啟 PayMe／HSBC 應用程式完成付款。",
     "checkout": "結帳",
     "processing": "處理中...",
-    "orderPlaced": "訂單已成功下達！等待管理員確認付款。"
+    "orderPlaced": "訂單已成功下達！等待管理員確認付款。",
+    "stripeHostedHint": "將前往 Stripe 安全結帳頁以信用卡付款；無需在本站輸入卡號。",
+    "stripeSinglePackageOnly": "線上刷卡每次僅限一個套票，購物車請只保留一項且數量為 1。",
+    "stripeRedirectError": "無法開始結帳，請稍後再試。"
+  },
+  "payment": {
+    "successTitle": "付款成功",
+    "verifyingTitle": "正在確認付款",
+    "verifyingBody": "請稍候，正在確認您的訂單。",
+    "confirmingTitle": "正在入帳",
+    "pendingWebhook": "Stripe 已收到款項，系統正在入帳，代幣稍後會顯示在帳戶中。",
+    "missingSessionTitle": "缺少付款工作階段",
+    "missingSessionBody": "無法從連結讀取付款資訊，請返回代幣套票頁再試。",
+    "loadErrorTitle": "無法驗證付款",
+    "loadError": "載入訂單時發生錯誤。",
+    "timeoutTitle": "仍在確認中",
+    "timeoutBody": "付款可能仍在處理。請數分鐘後查看付款記錄；若銀行已扣款仍未入帳，請聯絡客服。",
+    "goDashboard": "前往儀表板",
+    "goShop": "代幣套票",
+    "goPaymentHistory": "付款記錄",
+    "orderLabel": "訂單",
+    "tokensCredited": "已為您入帳 {{count}} 個代幣。",
+    "cancelTitle": "已取消結帳",
+    "cancelBody": "您已在付款頁離開，尚未完成付款，不會扣款。",
+    "tryAgain": "返回代幣套票"
   },
   "paymentHistory": {
     "title": "付款記錄",
@@ -1304,6 +1334,18 @@
       "purchaseDate": "購買日期",
       "receiptFooter": "此收據由電腦自動生成，無需簽名。",
       "thankYou": "感謝您的購買！",
+      "editPaymentStatus": "修改付款狀態",
+      "currentStatus": "目前狀態",
+      "newPaymentStatus": "新狀態",
+      "continueToConfirm": "前往確認",
+      "confirmStatusTitle": "確認變更付款狀態",
+      "confirmStatusSummary": "訂單 {{orderId}}：由「{{from}}」改為「{{to}}」。",
+      "confirmStatusWarning": "此操作會更新系統內訂單狀態，請確認與實際收款情況一致後再套用。",
+      "confirmStatusCheckbox": "我確認此付款狀態變更正確無誤。",
+      "applyStatusChange": "套用變更",
+      "statusUpdateSuccess": "付款狀態已更新。",
+      "statusUpdateFailed": "無法更新付款狀態，請檢查後端 API 或稍後再試。",
+      "statusUpdateRouteMissing": "後端尚未提供此 API：需要 PATCH /api/admin/orders/:id，JSON 內容為 { \"payment_status\": \"paid\" | \"pending\" | \"failed\" | \"not_required\" }。請在後端實作此路由；若路徑不同，可設定環境變數 VITE_ADMIN_ORDER_PATCH_URL_TEMPLATE（用 {id} 代表訂單 id）。",
       "statuses": {
         "paid": "已付款",
         "pending": "待付款",

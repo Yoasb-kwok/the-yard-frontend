@@ -124,6 +124,8 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 | | | | | | | | |
 | getOrders | UserPurchaseHistory | GET | /api/admin/orders | {<br>    "user_id": 1,<br>    "from": "2026-01-01",<br>    "to": "2026-01-31"<br>} | {<br>    "success": true,<br>    "data": []<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Query |
 | | | | | | | | |
+| updateOrderPaymentStatus | UserPurchaseHistory | PATCH | /api/admin/orders/:id | {<br>    "payment_status": "paid" \| "pending" \| "failed" \| "not_required"<br>} | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Admin; :id = order row id from GET admin/orders. |
+| | | | | | | | |
 | getOrdersByUser | UserPurchaseHistoryDetail | GET | /api/admin/users/:userId/orders | — | {<br>    "success": true,<br>    "data": []<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | — |
 | | | | | | | | |
 | getUserEnrollments | UserSchedule | GET | /api/admin/users/:userId/class-enrollments | — | {<br>    "success": true,<br>    "data": []<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | — |

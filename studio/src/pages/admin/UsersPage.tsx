@@ -10,6 +10,7 @@ import { api } from '../../lib/api';
 import { Search, Edit, Mail, Calendar, Package, Receipt, Clock, Download, Send } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface UserToken {
   remaining_tokens: number;
@@ -247,6 +248,15 @@ export default function UsersPage() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
+  const {
+    page: usersPage,
+    setPage: setUsersPage,
+    totalPages: usersTotalPages,
+    pageSize: usersPageSize,
+    totalItems: usersTotalItems,
+    paginatedItems: paginatedUsers,
+  } = useTablePagination(sortedUsers, undefined, [search, roleFilter]);
+
   function handleSort(key: string) {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -265,11 +275,21 @@ export default function UsersPage() {
     });
   }
 
-  function toggleSelectAll() {
-    if (selectedIds.size === sortedUsers.length) {
-      setSelectedIds(new Set());
+  function toggleSelectAllOnPage() {
+    const ids = paginatedUsers.map((u) => u.id);
+    const allOnPageSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
+    if (allOnPageSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
     } else {
-      setSelectedIds(new Set(sortedUsers.map((u) => u.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.add(id));
+        return next;
+      });
     }
   }
 
@@ -379,8 +399,11 @@ export default function UsersPage() {
                   <th className="px-4 py-3 text-left w-10">
                     <input
                       type="checkbox"
-                      checked={sortedUsers.length > 0 && selectedIds.size === sortedUsers.length}
-                      onChange={toggleSelectAll}
+                      checked={
+                        paginatedUsers.length > 0 &&
+                        paginatedUsers.every((u) => selectedIds.has(u.id))
+                      }
+                      onChange={toggleSelectAllOnPage}
                       className="rounded border-gray-300 text-primary focus:ring-primary"
                     />
                   </th>
@@ -402,7 +425,7 @@ export default function UsersPage() {
                     </td>
                   </tr>
                 ) : (
-                sortedUsers.map((user) => {
+                paginatedUsers.map((user) => {
                   const totalTokens = user.user_tokens.reduce((sum, t) => sum + t.remaining_tokens, 0);
                   const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
                   return (
@@ -490,6 +513,13 @@ export default function UsersPage() {
                 )}
               </tbody>
             </table>
+            <TablePaginationBar
+              page={usersPage}
+              totalPages={usersTotalPages}
+              totalItems={usersTotalItems}
+              pageSize={usersPageSize}
+              onPageChange={setUsersPage}
+            />
           </div>
         </div>
       </div>

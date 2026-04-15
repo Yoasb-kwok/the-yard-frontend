@@ -4,7 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { buildReceiptHtml, downloadReceiptHtml } from '../../lib/receiptHtml';
+import { api } from '../../lib/api';
 import { Receipt, CheckCircle, Clock, XCircle, Download, Mail } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Payment {
   id: string;
@@ -18,31 +20,34 @@ interface Payment {
   token_count?: number; // Token count for display
 }
 
-// Profile-specific mock payments for testing (each child has different payment history)
-function getMockPaymentsForProfile(profileId: string | undefined): Payment[] {
-  if (profileId === 'student-001') {
-    return [
-      { id: '1', date: '2024-01-15T10:30:00', amount: 1600, status: 'completed', payment_method: 'credit_card', description: 'Premium Pack - 20 tokens', package_id: '3', token_count: 20, order_id: 'ORD-001' },
-      { id: '2', date: '2024-01-10T14:20:00', amount: 900, status: 'completed', payment_method: 'fps', description: 'Regular Pack - 10 tokens', package_id: '2', token_count: 10, order_id: 'ORD-002' },
-      { id: '3', date: '2024-01-05T09:15:00', amount: 500, status: 'pending', payment_method: 'cash', description: 'Starter Pack - 5 tokens', package_id: '1', token_count: 5, order_id: 'ORD-003' },
-    ];
-  }
-  if (profileId === 'student-001-sub-2') {
-    return [
-      { id: '1', date: '2024-01-20T11:00:00', amount: 900, status: 'completed', payment_method: 'fps', description: 'Regular Pack - 10 tokens', package_id: '2', token_count: 10, order_id: 'ORD-101' },
-      { id: '2', date: '2024-01-12T16:45:00', amount: 500, status: 'completed', payment_method: 'cash', description: 'Starter Pack - 5 tokens', package_id: '1', token_count: 5, order_id: 'ORD-102' },
-    ];
-  }
-  if (profileId === 'student-001-sub-3') {
-    return [
-      { id: '1', date: '2024-01-18T09:30:00', amount: 1600, status: 'completed', payment_method: 'credit_card', description: 'Premium Pack - 20 tokens', package_id: '3', token_count: 20, order_id: 'ORD-201' },
-      { id: '2', date: '2024-01-08T14:00:00', amount: 1600, status: 'completed', payment_method: 'fps', description: 'Premium Pack - 20 tokens', package_id: '3', token_count: 20, order_id: 'ORD-202' },
-      { id: '3', date: '2024-01-02T10:15:00', amount: 900, status: 'completed', payment_method: 'credit_card', description: 'Regular Pack - 10 tokens', package_id: '2', token_count: 10, order_id: 'ORD-203' },
-    ];
-  }
-  return [
-    { id: '1', date: '2024-01-10T10:00:00', amount: 500, status: 'completed', payment_method: 'cash', description: 'Starter Pack - 5 tokens', package_id: '1', token_count: 5, order_id: 'ORD-999' },
-  ];
+function normalizeOrderStatus(status: string): Payment['status'] {
+  const s = String(status || '').toLowerCase();
+  if (s === 'paid' || s === 'completed' || s === 'success') return 'completed';
+  if (s === 'failed' || s === 'canceled' || s === 'cancelled') return 'failed';
+  return 'pending';
+}
+
+function normalizePayments(payload: any): Payment[] {
+  const candidates = [payload, payload?.data, payload?.data?.data, payload?.orders, payload?.data?.orders];
+  const rows = candidates.find((x) => Array.isArray(x));
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((o: any): Payment | null => {
+      if (!o) return null;
+      return {
+        id: String(o.id ?? o.order_id ?? ''),
+        date: String(o.created_at ?? o.date ?? new Date().toISOString()),
+        amount: Number(o.total ?? o.amount ?? 0),
+        status: normalizeOrderStatus(String(o.payment_status ?? o.status ?? 'pending')),
+        payment_method: String(o.payment_method ?? 'credit_card'),
+        description: String(o.description ?? ''),
+        order_id: o.order_id ? String(o.order_id) : undefined,
+        package_id: o.package_id != null ? String(o.package_id) : undefined,
+        token_count: o.token_count != null ? Number(o.token_count) : undefined,
+      };
+    })
+    .filter((p: Payment | null): p is Payment => Boolean(p && p.id))
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 export default function PaymentHistoryPage() {
@@ -61,6 +66,30 @@ export default function PaymentHistoryPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  async function loadOrdersFromApi(profileId?: string): Promise<Payment[]> {
+    const endpoints = [
+      '/orders/me',
+      '/student/orders/me',
+      '/student/orders',
+      '/orders',
+      '/payment/orders/me',
+    ];
+    const errors: string[] = [];
+    for (const endpoint of endpoints) {
+      const res = await api.get(endpoint, profileId ? { profile_id: profileId } : undefined).catch((e) => {
+        errors.push(`${endpoint}: ${e instanceof Error ? e.message : 'request failed'}`);
+        return null;
+      });
+      if (!res) continue;
+      const list = normalizePayments(res);
+      if (list.length > 0) return list;
+      if ((res as any).success === true) return [];
+      errors.push(`${endpoint}: empty/unsupported response`);
+    }
+    throw new Error(errors[0] || 'Unable to load orders from API');
+  }
 
   const handleReceiptDownload = (payment: Payment) => {
     const html = buildReceiptHtml({
@@ -120,13 +149,35 @@ export default function PaymentHistoryPage() {
 
   useEffect(() => {
     if (!profile) return;
-    setLoading(true);
-    const timer = setTimeout(() => {
-      setPayments(getMockPaymentsForProfile(profile?.id));
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const list = await loadOrdersFromApi(profile?.id);
+        if (!cancelled) setPayments(list);
+      } catch (e) {
+        if (!cancelled) {
+          setPayments([]);
+          setLoadError(e instanceof Error ? e.message : 'Load error');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.id]);
+
+  const {
+    page: payPage,
+    setPage: setPayPage,
+    totalPages: payTotalPages,
+    pageSize: payPageSize,
+    totalItems: payTotalItems,
+    paginatedItems: paginatedPayments,
+  } = useTablePagination(payments, undefined, [profile?.id]);
 
   const getStatusIcon = (status: Payment['status']) => {
     switch (status) {
@@ -207,12 +258,13 @@ export default function PaymentHistoryPage() {
           <div className="bg-white rounded-lg shadow-md p-12 text-center">
             <Receipt className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 text-lg">{t('paymentHistory.noPayments')}</p>
+            {loadError && <p className="text-xs text-red-500 mt-2">{loadError}</p>}
           </div>
         ) : (
           <>
             {/* Mobile View - Card Layout */}
             <div className="md:hidden space-y-4">
-              {payments.map((payment) => (
+              {paginatedPayments.map((payment) => (
                 <div key={payment.id} className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
@@ -285,6 +337,16 @@ export default function PaymentHistoryPage() {
                 </div>
               ))}
             </div>
+            <div className="md:hidden">
+              <TablePaginationBar
+                page={payPage}
+                totalPages={payTotalPages}
+                totalItems={payTotalItems}
+                pageSize={payPageSize}
+                onPageChange={setPayPage}
+                className="rounded-lg border border-gray-200 border-t-0 bg-white shadow-md"
+              />
+            </div>
 
             {/* Desktop View - Table Layout */}
             <div className="hidden md:block bg-white rounded-lg shadow-md overflow-hidden">
@@ -313,7 +375,7 @@ export default function PaymentHistoryPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {payments.map((payment) => (
+                    {paginatedPayments.map((payment) => (
                       <tr key={payment.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {formatDateTime(payment.date, getLocale())}
@@ -373,6 +435,14 @@ export default function PaymentHistoryPage() {
                   </tbody>
                 </table>
               </div>
+              <TablePaginationBar
+                page={payPage}
+                totalPages={payTotalPages}
+                totalItems={payTotalItems}
+                pageSize={payPageSize}
+                onPageChange={setPayPage}
+                className="rounded-b-lg"
+              />
             </div>
           </>
         )}

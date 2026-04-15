@@ -7,6 +7,8 @@ import { formatCurrency, calculateDiscount } from '../../lib/utils';
 import { ShoppingCart, Lock, Check, Calendar, Clock, MapPin } from 'lucide-react';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
+import { fetchTokenPackages } from '../../lib/tokenPackages';
+import { createCheckoutSession } from '../../lib/paymentApi';
 
 interface ClassData {
   id: string;
@@ -19,7 +21,7 @@ interface ClassData {
 }
 
 interface TokenPackage {
-  id: string;
+  id: number;
   name: string;
   description: string;
   token_count: number;
@@ -43,7 +45,7 @@ const REFERRAL_CODE_REGEX = /^std\d+$/i;
 // Mock data - same as ShopPage
 const MOCK_PACKAGES: TokenPackage[] = [
   {
-    id: '1',
+    id: 1,
     name: 'Starter Pack',
     description: 'Perfect for beginners',
     token_count: 5,
@@ -51,7 +53,7 @@ const MOCK_PACKAGES: TokenPackage[] = [
     validity_days: 30,
   },
   {
-    id: '2',
+    id: 2,
     name: 'Regular Pack',
     description: 'Great value for regular students',
     token_count: 10,
@@ -59,7 +61,7 @@ const MOCK_PACKAGES: TokenPackage[] = [
     validity_days: 60,
   },
   {
-    id: '3',
+    id: 3,
     name: 'Premium Pack',
     description: 'Best value for frequent visitors',
     token_count: 20,
@@ -85,27 +87,41 @@ export default function TokenPackagePage() {
   } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash' | 'alipay' | 'wechatpay' | 'payme'>('credit_card');
   const [submitting, setSubmitting] = useState(false);
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [cardholderName, setCardholderName] = useState('');
-  const [addressLine1, setAddressLine1] = useState('');
-  const [addressLine2, setAddressLine2] = useState('');
-  const [city, setCity] = useState('');
-  const [postalCode, setPostalCode] = useState('');
   const [fpsIdOrPhone, setFpsIdOrPhone] = useState('');
+  const [packagesSource, setPackagesSource] = useState<TokenPackage[]>([]);
 
   useEffect(() => {
-    // Simulate API call delay
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const rows = await fetchTokenPackages();
+        if (!cancelled) {
+          setPackagesSource(
+            rows.map((r) => ({
+              id: r.id,
+              name: r.name,
+              description: r.description,
+              token_count: r.token_count,
+              price: r.price,
+              validity_days: r.validity_days,
+            }))
+          );
+        }
+      } catch {
+        if (!cancelled) setPackagesSource(MOCK_PACKAGES);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Get translated packages - use useMemo to recompute when language changes
   const packages = useMemo(() => {
-    return MOCK_PACKAGES.map(pkg => {
+    return packagesSource.map(pkg => {
       const nameKey = `tokenPackage.packages.${pkg.id}.name`;
       const descKey = `tokenPackage.packages.${pkg.id}.description`;
       const translatedName = t(nameKey, { defaultValue: pkg.name });
@@ -117,7 +133,7 @@ export default function TokenPackagePage() {
         description: translatedDesc,
       };
     });
-  }, [t, i18n.language]);
+  }, [t, i18n.language, packagesSource]);
 
   function addToCart(pkg: TokenPackage) {
     setCart(prev => {
@@ -133,11 +149,11 @@ export default function TokenPackagePage() {
     });
   }
 
-  function removeFromCart(pkgId: string) {
+  function removeFromCart(pkgId: number) {
     setCart(prev => prev.filter(item => item.package.id !== pkgId));
   }
 
-  function updateQuantity(pkgId: string, quantity: number) {
+  function updateQuantity(pkgId: number, quantity: number) {
     if (quantity < 1) return;
     setCart(prev =>
       prev.map(item =>
@@ -162,30 +178,23 @@ export default function TokenPackagePage() {
 
   async function handleCheckout() {
     if (cart.length === 0) return;
+
     if (paymentMethod === 'credit_card') {
-      const num = cardNumber.replace(/\D/g, '');
-      if (num.length < 13) {
-        alert(t('shop.cardNumber') + ' ' + (t('common.error') || '請填寫正確'));
+      if (cart.length !== 1 || cart[0].quantity !== 1) {
+        alert(t('shop.stripeSinglePackageOnly'));
         return;
       }
-      const expiryMatch = expiry.match(/^(\d{2})\/?(\d{2})$/);
-      if (!expiryMatch) {
-        alert(t('shop.expiryDate') + ' ' + (t('common.error') || '請填寫 MM/YY'));
-        return;
+      setSubmitting(true);
+      try {
+        const { url } = await createCheckoutSession(cart[0].package.id);
+        window.location.href = url;
+      } catch (e) {
+        alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));
+        setSubmitting(false);
       }
-      if (cvv.replace(/\D/g, '').length < 3) {
-        alert(t('shop.cvv') + ' ' + (t('common.error') || '請填寫安全碼'));
-        return;
-      }
-      if (!cardholderName.trim()) {
-        alert(t('shop.cardholderName') + ' ' + (t('common.error') || '請填寫'));
-        return;
-      }
-      if (!addressLine1.trim()) {
-        alert(t('shop.addressLine1') + ' ' + (t('common.error') || '請填寫帳單地址'));
-        return;
-      }
+      return;
     }
+
     if (paymentMethod === 'fps' && !fpsIdOrPhone.trim()) {
       alert(t('shop.fpsIdOrPhone') + ' ' + (t('common.error') || '請填寫'));
       return;
@@ -200,14 +209,6 @@ export default function TokenPackagePage() {
     setAppliedCoupon(null);
     setCouponCode('');
     setReferralCode('');
-    setCardNumber('');
-    setExpiry('');
-    setCvv('');
-    setCardholderName('');
-    setAddressLine1('');
-    setAddressLine2('');
-    setCity('');
-    setPostalCode('');
     setFpsIdOrPhone('');
     navigate('/dashboard');
     setSubmitting(false);
@@ -518,94 +519,9 @@ export default function TokenPackagePage() {
 
                     {/* Payment method specific fields */}
                     {paymentMethod === 'credit_card' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                        <p className="text-xs font-medium text-gray-500 uppercase">{t('shop.billingAddress')}</p>
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">{t('shop.cardNumber')}</label>
-                          <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder={t('shop.cardNumberPlaceholder')}
-                            value={cardNumber}
-                            onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-sm text-gray-700 mb-1">{t('shop.expiryDate')}</label>
-                            <input
-                              type="text"
-                              placeholder={t('shop.expiryPlaceholder')}
-                              value={expiry}
-                              onChange={(e) => {
-                                const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                                if (v.length >= 2) setExpiry(v.slice(0, 2) + '/' + v.slice(2));
-                                else setExpiry(v);
-                              }}
-                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm text-gray-700 mb-1">{t('shop.cvv')}</label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              placeholder={t('shop.cvvPlaceholder')}
-                              value={cvv}
-                              onChange={(e) => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">{t('shop.cardholderName')}</label>
-                          <input
-                            type="text"
-                            placeholder={t('shop.cardholderName')}
-                            value={cardholderName}
-                            onChange={(e) => setCardholderName(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">{t('shop.addressLine1')}</label>
-                          <input
-                            type="text"
-                            value={addressLine1}
-                            onChange={(e) => setAddressLine1(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">{t('shop.addressLine2')}</label>
-                          <input
-                            type="text"
-                            value={addressLine2}
-                            onChange={(e) => setAddressLine2(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-sm text-gray-700 mb-1">{t('shop.city')}</label>
-                            <input
-                              type="text"
-                              value={city}
-                              onChange={(e) => setCity(e.target.value)}
-                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-sm text-gray-700 mb-1">{t('shop.postalCode')}</label>
-                            <input
-                              type="text"
-                              value={postalCode}
-                              onChange={(e) => setPostalCode(e.target.value)}
-                              className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                            />
-                          </div>
-                        </div>
+                      <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <p className="text-sm text-gray-700">{t('shop.stripeHostedHint')}</p>
+                        <p className="text-xs text-gray-500 mt-2">{t('shop.stripeSinglePackageOnly')}</p>
                       </div>
                     )}
                     {paymentMethod === 'fps' && (

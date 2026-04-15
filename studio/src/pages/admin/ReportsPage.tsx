@@ -17,6 +17,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 /** Demo: 每月收入 */
 const DEMO_MONTHLY_REVENUE = (() => {
@@ -85,6 +86,15 @@ export default function ReportsPage() {
     })();
   }, []);
 
+  const {
+    page: reportAttPage,
+    setPage: setReportAttPage,
+    totalPages: reportAttTotalPages,
+    pageSize: reportAttPageSize,
+    totalItems: reportAttTotalItems,
+    paginatedItems: paginatedClassAttendance,
+  } = useTablePagination(classAttendance, undefined, [classAttendance]);
+
   if (loading) {
     return (
       <Layout>
@@ -136,7 +146,7 @@ export default function ReportsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {classAttendance.map((row) => (
+                {paginatedClassAttendance.map((row) => (
                   <tr key={row.name} className="hover:bg-gray-50">
                     <td className="px-4 py-2 text-sm font-medium text-gray-900">{row.name}</td>
                     <td className="px-4 py-2 text-sm text-right text-gray-900">{row.rate}%</td>
@@ -145,6 +155,13 @@ export default function ReportsPage() {
                 ))}
               </tbody>
             </table>
+            <TablePaginationBar
+              page={reportAttPage}
+              totalPages={reportAttTotalPages}
+              totalItems={reportAttTotalItems}
+              pageSize={reportAttPageSize}
+              onPageChange={setReportAttPage}
+            />
           </div>
         </section>
 

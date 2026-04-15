@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, formatProgramCodeDisplay } from '../lib/utils';
 import { Search, X, AlertTriangle, Users, ChevronUp, RefreshCw } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from './TablePagination';
 
 export interface Enrollment {
   id: string;
@@ -123,12 +124,20 @@ export default function ClassAttendancePanel({
       e.user_mobile?.includes(searchTerm)
   );
 
+  const {
+    page: panelAttPage,
+    setPage: setPanelAttPage,
+    totalPages: panelAttTotalPages,
+    pageSize: panelAttPageSize,
+    totalItems: panelAttTotalItems,
+    paginatedItems: paginatedEnrollments,
+  } = useTablePagination(filteredEnrollments, undefined, [searchTerm]);
+
   const canMarkAttended = filteredEnrollments.some((e) => e.status !== 'attended');
-  const selectableEnrollments = filteredEnrollments.filter((e) => e.status !== 'attended');
+  const selectableOnPage = paginatedEnrollments.filter((e) => e.status !== 'attended');
   const selectedCount = filteredEnrollments.filter((e) => selectedIds.has(e.id)).length;
-  const allSelectableSelected =
-    selectableEnrollments.length > 0 &&
-    selectableEnrollments.every((e) => selectedIds.has(e.id));
+  const allSelectableSelectedOnPage =
+    selectableOnPage.length > 0 && selectableOnPage.every((e) => selectedIds.has(e.id));
 
   function toggleSelect(id: string) {
     setSelectedIds((prev) => {
@@ -139,17 +148,19 @@ export default function ClassAttendancePanel({
     });
   }
 
-  function toggleSelectAll() {
-    if (allSelectableSelected) {
+  function toggleSelectAllOnPage() {
+    const ids = selectableOnPage.map((e) => e.id);
+    if (ids.length === 0) return;
+    if (allSelectableSelectedOnPage) {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        filteredEnrollments.forEach((e) => next.delete(e.id));
+        ids.forEach((id) => next.delete(id));
         return next;
       });
     } else {
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        selectableEnrollments.forEach((e) => next.add(e.id));
+        ids.forEach((id) => next.add(id));
         return next;
       });
     }
@@ -264,10 +275,10 @@ export default function ClassAttendancePanel({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={toggleSelectAll}
+              onClick={toggleSelectAllOnPage}
               className="text-sm text-primary hover:underline"
             >
-              {allSelectableSelected ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
+              {allSelectableSelectedOnPage ? t('admin.attendance.unselectAll') : t('admin.attendance.selectAll')}
             </button>
             {selectedCount > 0 && (
               <button
@@ -297,8 +308,8 @@ export default function ClassAttendancePanel({
                     <th className="px-2 py-2 text-left w-10">
                       <input
                         type="checkbox"
-                        checked={allSelectableSelected}
-                        onChange={toggleSelectAll}
+                        checked={allSelectableSelectedOnPage}
+                        onChange={toggleSelectAllOnPage}
                         className="rounded border-gray-300 text-primary focus:ring-primary"
                         aria-label={t('admin.attendance.selectAll')}
                       />
@@ -319,7 +330,7 @@ export default function ClassAttendancePanel({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredEnrollments.map((enrollment) => (
+                {paginatedEnrollments.map((enrollment) => (
                   <tr key={enrollment.id}>
                     {onMarkMultipleAttended && (
                       <td className="px-2 py-2 w-10">
@@ -416,10 +427,18 @@ export default function ClassAttendancePanel({
                 ))}
               </tbody>
             </table>
+            <TablePaginationBar
+              page={panelAttPage}
+              totalPages={panelAttTotalPages}
+              totalItems={panelAttTotalItems}
+              pageSize={panelAttPageSize}
+              onPageChange={setPanelAttPage}
+              className="hidden md:flex"
+            />
           </div>
 
           <div className="md:hidden space-y-2">
-            {filteredEnrollments.map((enrollment) => (
+            {paginatedEnrollments.map((enrollment) => (
               <div key={enrollment.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                 <div className="flex justify-between items-start mb-2">
                   <div className="flex-1 min-w-0 flex items-start gap-2">
@@ -520,6 +539,14 @@ export default function ClassAttendancePanel({
               </div>
             ))}
           </div>
+          <TablePaginationBar
+            page={panelAttPage}
+            totalPages={panelAttTotalPages}
+            totalItems={panelAttTotalItems}
+            pageSize={panelAttPageSize}
+            onPageChange={setPanelAttPage}
+            className="md:hidden border-t border-gray-200"
+          />
         </>
       )}
 

@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { downloadCsv } from '../../lib/utils';
 import { BookOpen, Calendar, Download } from 'lucide-react';
 import { FALLBACK_CLASS_HEALTH, reportMonthOptions, type ClassHealthData } from '../../lib/adminReportData';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export default function AdminClassHealthPage() {
   const { t } = useTranslation();
@@ -25,6 +26,34 @@ export default function AdminClassHealthPage() {
       .catch(() => setData(FALLBACK_CLASS_HEALTH))
       .finally(() => setLoading(false));
   }, [reportMonth]);
+
+  const byClassRows = data?.byClass ?? [];
+  const lowAttendanceRows = data?.lowAttendanceClasses ?? [];
+  const byInstructorRows = data?.byInstructor ?? [];
+  const {
+    page: healthClassPage,
+    setPage: setHealthClassPage,
+    totalPages: healthClassTotalPages,
+    pageSize: healthClassPageSize,
+    totalItems: healthClassTotalItems,
+    paginatedItems: paginatedByClass,
+  } = useTablePagination(byClassRows, undefined, [reportMonth]);
+  const {
+    page: healthLowPage,
+    setPage: setHealthLowPage,
+    totalPages: healthLowTotalPages,
+    pageSize: healthLowPageSize,
+    totalItems: healthLowTotalItems,
+    paginatedItems: paginatedLowClass,
+  } = useTablePagination(lowAttendanceRows, undefined, [reportMonth]);
+  const {
+    page: healthInstPage,
+    setPage: setHealthInstPage,
+    totalPages: healthInstTotalPages,
+    pageSize: healthInstPageSize,
+    totalItems: healthInstTotalItems,
+    paginatedItems: paginatedByInstructor,
+  } = useTablePagination(byInstructorRows, undefined, [reportMonth]);
 
   if (loading || !data) {
     return (
@@ -101,7 +130,7 @@ export default function AdminClassHealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.byClass.map((row) => (
+                  {paginatedByClass.map((row) => (
                     <tr key={row.classId} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.className}</td>
                       <td className="py-2 pr-4">{row.programCode}</td>
@@ -113,6 +142,13 @@ export default function AdminClassHealthPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={healthClassPage}
+                totalPages={healthClassTotalPages}
+                totalItems={healthClassTotalItems}
+                pageSize={healthClassPageSize}
+                onPageChange={setHealthClassPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>
@@ -136,7 +172,7 @@ export default function AdminClassHealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.lowAttendanceClasses.map((row) => (
+                  {paginatedLowClass.map((row) => (
                     <tr key={row.classId} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.className}</td>
                       <td className="py-2 pr-4">{row.programCode}</td>
@@ -147,6 +183,13 @@ export default function AdminClassHealthPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={healthLowPage}
+                totalPages={healthLowTotalPages}
+                totalItems={healthLowTotalItems}
+                pageSize={healthLowPageSize}
+                onPageChange={setHealthLowPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-4">{t('admin.dashboard.noData')}</p>
@@ -166,7 +209,7 @@ export default function AdminClassHealthPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data.byInstructor.map((row) => (
+                  {paginatedByInstructor.map((row) => (
                     <tr key={row.instructor} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.instructor}</td>
                       <td className="py-2 pr-4">{row.classCount}</td>
@@ -175,6 +218,13 @@ export default function AdminClassHealthPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={healthInstPage}
+                totalPages={healthInstTotalPages}
+                totalItems={healthInstTotalItems}
+                pageSize={healthInstPageSize}
+                onPageChange={setHealthInstPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>

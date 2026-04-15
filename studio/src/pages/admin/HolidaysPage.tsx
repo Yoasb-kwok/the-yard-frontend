@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { Plus, Edit, Trash2, Search, CalendarOff, RefreshCw, CalendarClock } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export interface Holiday {
   id: string;
@@ -198,6 +199,15 @@ export default function HolidaysPage() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
+  const {
+    page: holPage,
+    setPage: setHolPage,
+    totalPages: holTotalPages,
+    pageSize: holPageSize,
+    totalItems: holTotalItems,
+    paginatedItems: paginatedHolidays,
+  } = useTablePagination(sortedHolidays, undefined, [search, sortKey, sortDir]);
+
   function handleSort(key: string) {
     if (sortKey === key) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -318,7 +328,7 @@ export default function HolidaysPage() {
           ) : (
             <>
               <div className="md:hidden space-y-4">
-                {sortedHolidays.map((holiday) => (
+                {paginatedHolidays.map((holiday) => (
                   <div
                     key={holiday.id}
                     className="rounded-lg border border-gray-200 bg-gray-50 p-4"
@@ -360,6 +370,16 @@ export default function HolidaysPage() {
                   </div>
                 ))}
               </div>
+              <div className="md:hidden">
+                <TablePaginationBar
+                  page={holPage}
+                  totalPages={holTotalPages}
+                  totalItems={holTotalItems}
+                  pageSize={holPageSize}
+                  onPageChange={setHolPage}
+                  className="rounded-lg border border-gray-200 border-t-0 bg-gray-50/80"
+                />
+              </div>
 
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[500px]">
@@ -376,7 +396,7 @@ export default function HolidaysPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {sortedHolidays.map((holiday) => (
+                    {paginatedHolidays.map((holiday) => (
                       <tr key={holiday.id} className="hover:bg-gray-50/50">
                         <td className="px-3 py-3 text-sm font-medium text-gray-900 lg:px-4">
                           {holiday.name}
@@ -416,6 +436,14 @@ export default function HolidaysPage() {
                     ))}
                   </tbody>
                 </table>
+                <TablePaginationBar
+                  page={holPage}
+                  totalPages={holTotalPages}
+                  totalItems={holTotalItems}
+                  pageSize={holPageSize}
+                  onPageChange={setHolPage}
+                  className="hidden md:flex"
+                />
               </div>
             </>
           )}

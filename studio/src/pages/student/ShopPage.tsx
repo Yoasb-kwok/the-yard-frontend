@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, calculateDiscount } from '../../lib/utils';
 import { ShoppingCart, Check } from 'lucide-react';
+import { fetchTokenPackages } from '../../lib/tokenPackages';
+import { createCheckoutSession } from '../../lib/paymentApi';
 
 interface TokenPackage {
-  id: string;
+  id: number;
   name: string;
   description: string;
   token_count: number;
@@ -22,7 +24,7 @@ interface CartItem {
 // Mock data
 const MOCK_PACKAGES: TokenPackage[] = [
   {
-    id: '1',
+    id: 1,
     name: 'Starter Pack',
     description: 'Perfect for beginners',
     token_count: 5,
@@ -30,7 +32,7 @@ const MOCK_PACKAGES: TokenPackage[] = [
     validity_days: 30,
   },
   {
-    id: '2',
+    id: 2,
     name: 'Regular Pack',
     description: 'Great value for regular students',
     token_count: 10,
@@ -38,7 +40,7 @@ const MOCK_PACKAGES: TokenPackage[] = [
     validity_days: 60,
   },
   {
-    id: '3',
+    id: 3,
     name: 'Premium Pack',
     description: 'Best value for frequent visitors',
     token_count: 20,
@@ -56,7 +58,7 @@ const MOCK_COUPONS: { [key: string]: { id: string; discount_type: 'percentage' |
 const REFERRAL_CODE_REGEX = /^std\d+$/i;
 
 export default function ShopPage() {
-  const { user } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [packages, setPackages] = useState<TokenPackage[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -76,10 +78,24 @@ export default function ShopPage() {
   }, []);
 
   async function loadPackages() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setPackages(MOCK_PACKAGES);
-    setLoading(false);
+    setLoading(true);
+    try {
+      const rows = await fetchTokenPackages();
+      setPackages(
+        rows.map((r) => ({
+          id: r.id,
+          name: r.name,
+          description: r.description,
+          token_count: r.token_count,
+          price: r.price,
+          validity_days: r.validity_days,
+        }))
+      );
+    } catch {
+      setPackages(MOCK_PACKAGES);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function addToCart(pkg: TokenPackage) {
@@ -96,11 +112,11 @@ export default function ShopPage() {
     });
   }
 
-  function removeFromCart(pkgId: string) {
+  function removeFromCart(pkgId: number) {
     setCart(prev => prev.filter(item => item.package.id !== pkgId));
   }
 
-  function updateQuantity(pkgId: string, quantity: number) {
+  function updateQuantity(pkgId: number, quantity: number) {
     if (quantity < 1) return;
     setCart(prev =>
       prev.map(item =>
@@ -125,12 +141,26 @@ export default function ShopPage() {
 
   async function handleCheckout() {
     if (cart.length === 0) return;
+
+    if (paymentMethod === 'credit_card') {
+      if (cart.length !== 1 || cart[0].quantity !== 1) {
+        alert(t('shop.stripeSinglePackageOnly'));
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const { url } = await createCheckoutSession(cart[0].package.id);
+        window.location.href = url;
+      } catch (e) {
+        alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));
+        setSubmitting(false);
+      }
+      return;
+    }
+
     setSubmitting(true);
-
-    // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1000));
-
-    alert('Order placed successfully! Awaiting payment confirmation from admin.');
+    alert(t('shop.orderPlaced'));
     setCart([]);
     setAppliedCoupon(null);
     setCouponCode('');
@@ -300,25 +330,32 @@ export default function ShopPage() {
 
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Payment Method
+                      {t('shop.paymentMethod')}
                     </label>
                     <select
                       value={paymentMethod}
                       onChange={(e) => setPaymentMethod(e.target.value as typeof paymentMethod)}
                       className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     >
-                      <option value="credit_card">Credit Card</option>
-                      <option value="fps">FPS</option>
-                      <option value="cash">Cash</option>
+                      <option value="credit_card">{t('shop.creditCard')}</option>
+                      <option value="fps">{t('shop.fps')}</option>
+                      <option value="cash">{t('shop.cash')}</option>
                     </select>
                   </div>
+
+                  {paymentMethod === 'credit_card' && (
+                    <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                      <p className="text-sm text-gray-700">{t('shop.stripeHostedHint')}</p>
+                      <p className="text-xs text-gray-500 mt-2">{t('shop.stripeSinglePackageOnly')}</p>
+                    </div>
+                  )}
 
                   <button
                     onClick={handleCheckout}
                     disabled={submitting}
                     className="w-full bg-primary text-white py-3 rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 font-medium"
                   >
-                    {submitting ? 'Processing...' : 'Checkout'}
+                    {submitting ? t('shop.processing') : t('shop.checkout')}
                   </button>
                 </>
               )}

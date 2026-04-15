@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { downloadCsv } from '../../lib/utils';
 import { GraduationCap, Calendar, ArrowUpDown, Download } from 'lucide-react';
 import { FALLBACK_INSTRUCTOR_PERFORMANCE, reportMonthOptions, type InstructorPerformanceData, type InstructorPerformanceRow } from '../../lib/adminReportData';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 type SortKey = 'totalHours' | 'totalSessions' | 'totalStudents' | 'avgClassSize' | 'avgRenewalRate' | 'attendanceRate';
 
@@ -41,6 +42,15 @@ export default function AdminInstructorPerformancePage() {
     });
     return rows;
   }, [data?.byInstructor, sortKey, sortAsc]);
+
+  const {
+    page: instPerfPage,
+    setPage: setInstPerfPage,
+    totalPages: instPerfTotalPages,
+    pageSize: instPerfPageSize,
+    totalItems: instPerfTotalItems,
+    paginatedItems: paginatedInstPerf,
+  } = useTablePagination(sortedRows, undefined, [reportMonth, sortKey, sortAsc]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc((a) => !a);
@@ -130,7 +140,7 @@ export default function AdminInstructorPerformancePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedRows.map((row: InstructorPerformanceRow) => (
+                  {paginatedInstPerf.map((row: InstructorPerformanceRow) => (
                     <tr key={row.instructorId} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.instructor}</td>
                       <td className="py-2 pr-4">{row.totalHours}</td>
@@ -143,6 +153,13 @@ export default function AdminInstructorPerformancePage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={instPerfPage}
+                totalPages={instPerfTotalPages}
+                totalItems={instPerfTotalItems}
+                pageSize={instPerfPageSize}
+                onPageChange={setInstPerfPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>

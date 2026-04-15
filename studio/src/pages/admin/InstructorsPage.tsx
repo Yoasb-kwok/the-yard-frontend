@@ -5,6 +5,7 @@ import { formatDate } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Plus, Edit, Trash2, User, Upload, X, ChevronDown, ChevronRight, BookOpen } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile, saveInstructorProfile, type InstructorProfile } from '../../lib/instructorProfiles';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 
@@ -133,6 +134,15 @@ export default function InstructorsPage() {
     }
     return sortDir === 'asc' ? cmp : -cmp;
   });
+
+  const {
+    page: instPage,
+    setPage: setInstPage,
+    totalPages: instTotalPages,
+    pageSize: instPageSize,
+    totalItems: instTotalItems,
+    paginatedItems: paginatedInstructors,
+  } = useTablePagination(sortedInstructors, undefined, [sortKey, sortDir]);
 
   function handleSort(key: string) {
     if (sortKey === key) {
@@ -467,7 +477,7 @@ export default function InstructorsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {sortedInstructors.map((instructor) => {
+                  {paginatedInstructors.map((instructor) => {
                     const upcomingCount = getUpcomingClassesCount(instructor.name);
                     const courseNames = getCourseNamesForInstructor(instructor.name);
                     const isExpanded = expandedInstructorId === instructor.id;
@@ -555,6 +565,13 @@ export default function InstructorsPage() {
                   })}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={instPage}
+                totalPages={instTotalPages}
+                totalItems={instTotalItems}
+                pageSize={instPageSize}
+                onPageChange={setInstPage}
+              />
             </div>
           )}
         </div>

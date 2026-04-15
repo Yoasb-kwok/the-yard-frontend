@@ -302,6 +302,17 @@ export function shouldPostponeClassWithHolidays(
   return { shouldPostpone: true, newDate };
 }
 
+/** If the server returns an HTML error page (e.g. Express), pull text from &lt;pre&gt; when present. */
+export function extractServerErrorText(htmlOrText: string): string {
+  const m = htmlOrText.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+  if (m) return m[1].trim();
+  const t = htmlOrText.trim();
+  if (t.startsWith('<!DOCTYPE') || t.startsWith('<html')) {
+    return t.length > 280 ? `${t.slice(0, 280)}…` : t;
+  }
+  return t;
+}
+
 /** Build CSV string from rows and trigger download (UTF-8 with BOM for Excel). */
 export function downloadCsv(rows: (string | number)[][], filename: string): void {
   const escape = (c: string | number): string => {

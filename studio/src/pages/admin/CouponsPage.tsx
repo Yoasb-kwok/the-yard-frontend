@@ -5,6 +5,7 @@ import { formatDate, formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Plus, Edit, Trash2, Search, Power, PowerOff, Percent, DollarSign } from 'lucide-react';
 import { TableSortButton } from '../../components/TableSortButton';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Coupon {
   id: string;
@@ -255,6 +256,15 @@ export default function CouponsPage() {
     return sortDir === 'asc' ? cmp : -cmp;
   });
 
+  const {
+    page: couponPage,
+    setPage: setCouponPage,
+    totalPages: couponTotalPages,
+    pageSize: couponPageSize,
+    totalItems: couponTotalItems,
+    paginatedItems: paginatedCoupons,
+  } = useTablePagination(sortedCoupons, undefined, [search, statusFilter, sortKey, sortDir]);
+
   function handleSort(key: string) {
     if (sortKey === key) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -327,7 +337,7 @@ export default function CouponsPage() {
             <>
               {/* Mobile/Tablet Card View */}
               <div className="md:hidden space-y-4">
-                {sortedCoupons.map((coupon) => {
+                {paginatedCoupons.map((coupon) => {
                   const status = getCouponStatus(coupon);
                   return (
                     <div
@@ -427,6 +437,16 @@ export default function CouponsPage() {
                   );
                 })}
               </div>
+              <div className="md:hidden">
+                <TablePaginationBar
+                  page={couponPage}
+                  totalPages={couponTotalPages}
+                  totalItems={couponTotalItems}
+                  pageSize={couponPageSize}
+                  onPageChange={setCouponPage}
+                  className="rounded-lg border border-gray-200 border-t-0 bg-gray-50/80"
+                />
+              </div>
 
               {/* Desktop Table View */}
               <div className="hidden md:block overflow-x-auto">
@@ -445,7 +465,7 @@ export default function CouponsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {sortedCoupons.map((coupon) => {
+                    {paginatedCoupons.map((coupon) => {
                       const status = getCouponStatus(coupon);
                       return (
                         <tr key={coupon.id} className={status === 'expired' ? 'opacity-60' : ''}>
@@ -522,6 +542,14 @@ export default function CouponsPage() {
                     })}
                   </tbody>
                 </table>
+                <TablePaginationBar
+                  page={couponPage}
+                  totalPages={couponTotalPages}
+                  totalItems={couponTotalItems}
+                  pageSize={couponPageSize}
+                  onPageChange={setCouponPage}
+                  className="hidden md:flex"
+                />
               </div>
             </>
           )}

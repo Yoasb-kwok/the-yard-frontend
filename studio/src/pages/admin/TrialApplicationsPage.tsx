@@ -5,6 +5,7 @@ import { formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { Fragment } from 'react';
 import { BookOpen, Calendar, MessageSquare, ChevronDown, Filter } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export interface TrialApplication {
   id: string;
@@ -195,6 +196,15 @@ export default function TrialApplicationsPage() {
     if (statusFilter !== 'all' && a.status !== statusFilter) return false;
     return true;
   });
+
+  const {
+    page: trialPage,
+    setPage: setTrialPage,
+    totalPages: trialTotalPages,
+    pageSize: trialPageSize,
+    totalItems: trialTotalItems,
+    paginatedItems: paginatedTrial,
+  } = useTablePagination(filtered, undefined, [quickFilter, statusFilter]);
 
   useEffect(() => {
     loadApplications();
@@ -399,7 +409,7 @@ export default function TrialApplicationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filtered.map((app) => (
+                  {paginatedTrial.map((app) => (
                     <Fragment key={app.id}>
                       <tr className="hover:bg-gray-50">
                         <td className="px-4 py-3">
@@ -525,6 +535,13 @@ export default function TrialApplicationsPage() {
                 </tbody>
               </table>
             </div>
+            <TablePaginationBar
+              page={trialPage}
+              totalPages={trialTotalPages}
+              totalItems={trialTotalItems}
+              pageSize={trialPageSize}
+              onPageChange={setTrialPage}
+            />
           </div>
         )}
       </div>

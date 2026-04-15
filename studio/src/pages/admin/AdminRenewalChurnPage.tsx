@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 import { UserMinus, Calendar, Download } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { FALLBACK_RENEWAL_CHURN, formatMonthLabel, reportMonthOptions, type RenewalChurnData } from '../../lib/adminReportData';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 /** User from GET /admin/users with tokens for expiry. */
 interface UserWithTokens {
@@ -246,6 +247,16 @@ export default function AdminRenewalChurnPage() {
     URL.revokeObjectURL(url);
   };
 
+  const churnListRows = renewalChurn?.churnList ?? [];
+  const {
+    page: churnPage,
+    setPage: setChurnPage,
+    totalPages: churnTotalPages,
+    pageSize: churnPageSize,
+    totalItems: churnTotalItems,
+    paginatedItems: paginatedChurn,
+  } = useTablePagination(churnListRows, undefined, [reportMonth]);
+
   if (loading || !renewalChurn) {
     return (
       <Layout>
@@ -353,7 +364,7 @@ export default function AdminRenewalChurnPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {renewalChurn.churnList.map((r) => (
+                  {paginatedChurn.map((r) => (
                     <tr key={r.id} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{r.full_name}</td>
                       <td className="py-2 pr-4">{r.mobile}</td>
@@ -363,6 +374,13 @@ export default function AdminRenewalChurnPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={churnPage}
+                totalPages={churnTotalPages}
+                totalItems={churnTotalItems}
+                pageSize={churnPageSize}
+                onPageChange={setChurnPage}
+              />
             </div>
           ) : (
             <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>

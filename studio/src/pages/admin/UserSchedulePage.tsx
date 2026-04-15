@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
 import { ArrowLeft, Calendar, Clock, MapPin, User } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Enrollment {
   id: string;
@@ -181,6 +182,15 @@ export default function UserSchedulePage() {
     );
   }, [enrollments]);
 
+  const {
+    page: schedPage,
+    setPage: setSchedPage,
+    totalPages: schedTotalPages,
+    pageSize: schedPageSize,
+    totalItems: schedTotalItems,
+    paginatedItems: paginatedEnrollments,
+  } = useTablePagination(sortedEnrollments, undefined, [userId, enrollments]);
+
   if (loading) {
     return (
       <Layout>
@@ -244,7 +254,7 @@ export default function UserSchedulePage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {sortedEnrollments.map((enrollment) => (
+                    {paginatedEnrollments.map((enrollment) => (
                       <tr key={enrollment.id}>
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">
                           <div className="flex items-center gap-2">
@@ -283,11 +293,19 @@ export default function UserSchedulePage() {
                     ))}
                   </tbody>
                 </table>
+                <TablePaginationBar
+                  page={schedPage}
+                  totalPages={schedTotalPages}
+                  totalItems={schedTotalItems}
+                  pageSize={schedPageSize}
+                  onPageChange={setSchedPage}
+                  className="hidden md:flex"
+                />
               </div>
 
               {/* Mobile Card View */}
               <div className="md:hidden divide-y divide-gray-200">
-                {sortedEnrollments.map((enrollment) => (
+                {paginatedEnrollments.map((enrollment) => (
                   <div key={enrollment.id} className="p-4">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
@@ -336,6 +354,14 @@ export default function UserSchedulePage() {
                   </div>
                 ))}
               </div>
+              <TablePaginationBar
+                page={schedPage}
+                totalPages={schedTotalPages}
+                totalItems={schedTotalItems}
+                pageSize={schedPageSize}
+                onPageChange={setSchedPage}
+                className="md:hidden border-t border-gray-200"
+              />
             </div>
           )}
         </div>

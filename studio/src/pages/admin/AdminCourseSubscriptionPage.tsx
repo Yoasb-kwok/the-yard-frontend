@@ -7,6 +7,7 @@ import EmptyState from '../../components/EmptyState';
 import { api } from '../../lib/api';
 import { formatDateTime } from '../../lib/utils';
 import { BookOpen, Search, Calendar } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export interface SubscriptionRecord {
   id: string;
@@ -57,6 +58,15 @@ export default function AdminCourseSubscriptionPage() {
       (r.class_name || '').toLowerCase().includes(search.toLowerCase()) ||
       (r.class_code || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const {
+    page: subPage,
+    setPage: setSubPage,
+    totalPages: subTotalPages,
+    pageSize: subPageSize,
+    totalItems: subTotalItems,
+    paginatedItems: paginatedSubRecords,
+  } = useTablePagination(filteredRecords, undefined, [search]);
 
   if (loading) {
     return (
@@ -126,7 +136,7 @@ export default function AdminCourseSubscriptionPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {filteredRecords.map((r) => (
+                  {paginatedSubRecords.map((r) => (
                     <tr key={r.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900">{r.user_name}</div>
@@ -165,6 +175,13 @@ export default function AdminCourseSubscriptionPage() {
                   ))}
                 </tbody>
               </table>
+              <TablePaginationBar
+                page={subPage}
+                totalPages={subTotalPages}
+                totalItems={subTotalItems}
+                pageSize={subPageSize}
+                onPageChange={setSubPage}
+              />
             </div>
           )}
         </div>

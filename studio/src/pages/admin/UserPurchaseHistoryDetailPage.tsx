@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, Package, X, Printer } from 'lucide-react';
+import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Purchase {
   id: string;
@@ -305,6 +306,15 @@ export default function UserPurchaseHistoryDetailPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const {
+    page: detailPurchasePage,
+    setPage: setDetailPurchasePage,
+    totalPages: detailPurchaseTotalPages,
+    pageSize: detailPurchasePageSize,
+    totalItems: detailPurchaseTotalItems,
+    paginatedItems: paginatedDetailPurchases,
+  } = useTablePagination(filteredPurchases, undefined, [searchTerm, statusFilter]);
+
   if (loading) {
     return (
       <Layout>
@@ -423,7 +433,7 @@ export default function UserPurchaseHistoryDetailPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredPurchases.map((purchase) => (
+                    {paginatedDetailPurchases.map((purchase) => (
                       <tr key={purchase.id}>
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{purchase.order_id}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{purchase.package_name}</td>
@@ -469,11 +479,19 @@ export default function UserPurchaseHistoryDetailPage() {
                     ))}
                   </tbody>
                 </table>
+                <TablePaginationBar
+                  page={detailPurchasePage}
+                  totalPages={detailPurchaseTotalPages}
+                  totalItems={detailPurchaseTotalItems}
+                  pageSize={detailPurchasePageSize}
+                  onPageChange={setDetailPurchasePage}
+                  className="hidden md:flex"
+                />
               </div>
 
               {/* Mobile Card View */}
               <div className="md:hidden divide-y divide-gray-200">
-                {filteredPurchases.map((purchase) => (
+                {paginatedDetailPurchases.map((purchase) => (
                   <div key={purchase.id} className="p-4">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -526,6 +544,14 @@ export default function UserPurchaseHistoryDetailPage() {
                   </div>
                 ))}
               </div>
+              <TablePaginationBar
+                page={detailPurchasePage}
+                totalPages={detailPurchaseTotalPages}
+                totalItems={detailPurchaseTotalItems}
+                pageSize={detailPurchasePageSize}
+                onPageChange={setDetailPurchasePage}
+                className="md:hidden border-t border-gray-200"
+              />
             </>
           )}
         </div>

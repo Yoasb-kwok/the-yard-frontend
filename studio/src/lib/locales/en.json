@@ -72,6 +72,12 @@
     "retry": "Retry",
     "skipToContent": "Skip to main content"
   },
+  "pagination": {
+    "showing": "Showing {{from}}–{{to}} of {{total}}",
+    "pageOf": "Page {{page}} / {{totalPages}}",
+    "prev": "Previous",
+    "next": "Next"
+  },
   "districts": {
     "pleaseSelect": "Please select district",
     "centralWestern": "Central and Western",
@@ -559,7 +565,31 @@
     "redirectToPayMe": "You will be redirected to PayMe / HSBC app to complete payment.",
     "checkout": "Checkout",
     "processing": "Processing...",
-    "orderPlaced": "Order placed successfully! Awaiting payment confirmation from admin."
+    "orderPlaced": "Order placed successfully! Awaiting payment confirmation from admin.",
+    "stripeHostedHint": "You will be redirected to Stripe's secure checkout page to pay by card. No card details are entered on this site.",
+    "stripeSinglePackageOnly": "Online card payment supports one package at a time. Keep only one item in your cart with quantity 1.",
+    "stripeRedirectError": "Could not start checkout. Please try again."
+  },
+  "payment": {
+    "successTitle": "Payment successful",
+    "verifyingTitle": "Verifying payment",
+    "verifyingBody": "Please wait while we confirm your order.",
+    "confirmingTitle": "Confirming your payment",
+    "pendingWebhook": "Stripe has received your payment. Your tokens will appear shortly while we update your account.",
+    "missingSessionTitle": "Missing session",
+    "missingSessionBody": "We could not read the payment session from the link. Return to the token shop to try again.",
+    "loadErrorTitle": "Could not verify payment",
+    "loadError": "Something went wrong while loading your order.",
+    "timeoutTitle": "Still confirming",
+    "timeoutBody": "Your payment may still be processing. Check Payment History in a few minutes or contact support if the charge appears on your card.",
+    "goDashboard": "Go to dashboard",
+    "goShop": "Token packages",
+    "goPaymentHistory": "Payment history",
+    "orderLabel": "Order",
+    "tokensCredited": "{{count}} tokens have been added to your account.",
+    "cancelTitle": "Checkout cancelled",
+    "cancelBody": "You left the payment page before completing checkout. You have not been charged.",
+    "tryAgain": "Back to token packages"
   },
   "paymentHistory": {
     "title": "Payment History",
@@ -1301,6 +1331,18 @@
       "purchaseDate": "Purchase Date",
       "receiptFooter": "This is a computer-generated receipt. No signature required.",
       "thankYou": "Thank you for your purchase!",
+      "editPaymentStatus": "Change payment status",
+      "currentStatus": "Current status",
+      "newPaymentStatus": "New status",
+      "continueToConfirm": "Continue to confirmation",
+      "confirmStatusTitle": "Confirm payment status change",
+      "confirmStatusSummary": "Order {{orderId}}: change from “{{from}}” to “{{to}}”.",
+      "confirmStatusWarning": "This updates the order in your system. Ensure the change matches the actual payment before applying.",
+      "confirmStatusCheckbox": "I confirm this payment status change is correct.",
+      "applyStatusChange": "Apply change",
+      "statusUpdateSuccess": "Payment status updated.",
+      "statusUpdateFailed": "Could not update payment status. Check the API or try again.",
+      "statusUpdateRouteMissing": "The server has no PATCH route for admin orders (expected PATCH /api/admin/orders/:id with body { \"payment_status\": \"paid\" | \"pending\" | \"failed\" | \"not_required\" }). Add this endpoint on the backend, or set VITE_ADMIN_ORDER_PATCH_URL_TEMPLATE if your path differs (use {id} as placeholder).",
       "statuses": {
         "paid": "Paid",
         "pending": "Pending",
