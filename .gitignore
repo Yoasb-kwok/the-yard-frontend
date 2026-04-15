@@ -48,3 +48,8 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Studio environment files
+studio/.env
+studio/.env.*
+!studio/.env.example
+
