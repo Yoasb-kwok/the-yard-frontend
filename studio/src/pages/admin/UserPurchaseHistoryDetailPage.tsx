@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
+import { api } from '../../lib/api';
 import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, Package, X, Printer } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
@@ -33,75 +34,62 @@ interface User {
   mobile: string | null;
 }
 
-// Mock data - in real app, this would come from API
-const MOCK_PURCHASES: Purchase[] = [
-  {
-    id: '1',
-    order_id: 'ORD-001',
-    user_id: 'student-001',
-    user_name: 'Student User',
-    user_mobile: '87654321',
-    package_id: '3',
-    package_name: 'Premium Pack',
-    quantity: 1,
-    subtotal: 1600,
-    discount: 0,
-    total: 1600,
-    coupon_code: null,
-    payment_status: 'paid',
-    payment_method: 'credit_card',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000 + 10 * 60 * 1000).toISOString(),
-    token_count: 20,
-  },
-  {
-    id: '2',
-    order_id: 'ORD-002',
-    user_id: 'student-001',
-    user_name: 'Student User',
-    user_mobile: '87654321',
-    package_id: '2',
-    package_name: 'Regular Pack',
-    quantity: 1,
-    subtotal: 900,
-    discount: 90,
-    total: 810,
-    coupon_code: 'SAVE10',
-    payment_status: 'paid',
-    payment_method: 'fps',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000).toISOString(),
-    token_count: 10,
-  },
-  {
-    id: '3',
-    order_id: 'ORD-003',
-    user_id: 'student-002',
-    user_name: 'John Doe',
-    user_mobile: '98765432',
-    package_id: '1',
-    package_name: 'Starter Pack',
-    quantity: 1,
-    subtotal: 500,
-    discount: 0,
-    total: 500,
-    coupon_code: null,
-    payment_status: 'pending',
-    payment_method: 'cash',
-    payment_slip_url: null,
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    paid_at: null,
-    token_count: 5,
-  },
-];
+type PurchaseStatus = Purchase['payment_status'];
 
-const MOCK_USER: User = {
-  id: 'student-001',
-  full_name: 'Student User',
-  mobile: '87654321',
-};
+function normalizePaymentStatus(value: unknown): PurchaseStatus {
+  const next = String(value ?? '').toLowerCase();
+  if (next === 'paid' || next === 'pending' || next === 'failed' || next === 'not_required') {
+    return next;
+  }
+  return 'pending';
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizePurchaseRow(row: any): Purchase {
+  const user = row?.user ?? {};
+  const pkg = row?.package ?? {};
+  const coupon = row?.coupon ?? {};
+  const id = String(row?.id ?? row?.order_id ?? '');
+  const orderId = String(row?.order_id ?? row?.id ?? '');
+
+  return {
+    id: id || orderId,
+    order_id: orderId || id,
+    user_id: String(row?.user_id ?? user?.id ?? ''),
+    user_name: String(row?.user_name ?? user?.full_name ?? user?.name ?? '-'),
+    user_mobile: row?.user_mobile ?? user?.mobile ?? null,
+    package_id: String(row?.package_id ?? pkg?.id ?? ''),
+    package_name: String(row?.package_name ?? pkg?.name ?? '-'),
+    quantity: toNumber(row?.quantity ?? row?.qty, 1),
+    subtotal: toNumber(row?.subtotal ?? row?.total, 0),
+    discount: toNumber(row?.discount, 0),
+    total: toNumber(row?.total ?? row?.subtotal, 0),
+    coupon_code: row?.coupon_code ?? coupon?.code ?? null,
+    payment_status: normalizePaymentStatus(row?.payment_status),
+    payment_method: row?.payment_method ?? 'cash',
+    payment_slip_url: row?.payment_slip_url ?? null,
+    created_at: String(row?.created_at ?? new Date().toISOString()),
+    paid_at: row?.paid_at ?? null,
+    token_count: toNumber(row?.token_count ?? pkg?.token_count ?? row?.tokens, 0),
+  };
+}
+
+function extractPurchaseList(payload: any): Purchase[] {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.data?.data,
+    payload?.orders,
+    payload?.data?.orders,
+  ];
+  const rows = candidates.find((x) => Array.isArray(x));
+  if (!Array.isArray(rows)) return [];
+  return rows.map(normalizePurchaseRow).filter((r) => r.id || r.order_id);
+}
 
 export default function UserPurchaseHistoryDetailPage() {
   const { t, i18n } = useTranslation();
@@ -123,16 +111,40 @@ export default function UserPurchaseHistoryDetailPage() {
 
   async function loadData() {
     setLoading(true);
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setUser(MOCK_USER);
-    
-    // Load purchases for this user
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const userPurchases = MOCK_PURCHASES.filter(p => p.user_id === userId);
-    setPurchases(userPurchases);
-    
-    setLoading(false);
+    try {
+      const orderRes = await api.get<any>('/admin/orders', { user_id: userId });
+      const rows = extractPurchaseList(orderRes);
+      setPurchases(rows);
+
+      const first = rows[0];
+      if (first?.user_id || first?.user_name) {
+        setUser({
+          id: first.user_id || String(userId),
+          full_name: first.user_name || '-',
+          mobile: first.user_mobile ?? null,
+        });
+      } else {
+        // Fallback: try users list if order rows don't include user fields.
+        const usersRes = await api.get<any>('/admin/users');
+        const list = Array.isArray(usersRes?.data) ? usersRes.data : [];
+        const matched = list.find((u: any) => String(u?.id) === String(userId));
+        if (matched) {
+          setUser({
+            id: String(matched.id),
+            full_name: String(matched.full_name ?? matched.name ?? '-'),
+            mobile: matched.mobile ?? null,
+          });
+        } else {
+          setUser(null);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load user purchase history:', error);
+      setPurchases([]);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const getLocale = (): string => {

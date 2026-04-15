@@ -29,6 +29,8 @@ interface Purchase {
   token_count: number;
 }
 
+type PurchaseStatus = Purchase['payment_status'];
+
 /** Fallback demo data when API is unavailable */
 const FALLBACK_PURCHASES: Purchase[] = (() => {
   const d = new Date().toISOString();
@@ -37,6 +39,61 @@ const FALLBACK_PURCHASES: Purchase[] = (() => {
     { id: 'ord_2', order_id: 'ord_2', user_id: 'student-002', user_name: 'Student Two', user_mobile: '98765432', package_id: 'pkg_2', package_name: 'Regular Pack', quantity: 1, subtotal: 900, discount: 50, total: 850, coupon_code: 'SAVE50', payment_status: 'paid', payment_method: 'credit_card', payment_slip_url: null, created_at: d, paid_at: d, token_count: 10 },
   ];
 })();
+
+function normalizePaymentStatus(value: unknown): PurchaseStatus {
+  const next = String(value ?? '').toLowerCase();
+  if (next === 'paid' || next === 'pending' || next === 'failed' || next === 'not_required') {
+    return next;
+  }
+  return 'pending';
+}
+
+function toNumber(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizePurchaseRow(row: any): Purchase {
+  const user = row?.user ?? {};
+  const pkg = row?.package ?? {};
+  const coupon = row?.coupon ?? {};
+  const id = String(row?.id ?? row?.order_id ?? '');
+  const orderId = String(row?.order_id ?? row?.id ?? '');
+
+  return {
+    id: id || orderId,
+    order_id: orderId || id,
+    user_id: String(row?.user_id ?? user?.id ?? ''),
+    user_name: String(row?.user_name ?? user?.full_name ?? user?.name ?? '-'),
+    user_mobile: row?.user_mobile ?? user?.mobile ?? null,
+    package_id: String(row?.package_id ?? pkg?.id ?? ''),
+    package_name: String(row?.package_name ?? pkg?.name ?? '-'),
+    quantity: toNumber(row?.quantity ?? row?.qty, 1),
+    subtotal: toNumber(row?.subtotal ?? row?.total, 0),
+    discount: toNumber(row?.discount, 0),
+    total: toNumber(row?.total ?? row?.subtotal, 0),
+    coupon_code: row?.coupon_code ?? coupon?.code ?? null,
+    payment_status: normalizePaymentStatus(row?.payment_status),
+    payment_method: row?.payment_method ?? null,
+    payment_slip_url: row?.payment_slip_url ?? null,
+    created_at: String(row?.created_at ?? new Date().toISOString()),
+    paid_at: row?.paid_at ?? null,
+    token_count: toNumber(row?.token_count ?? pkg?.token_count ?? row?.tokens, 0),
+  };
+}
+
+function extractPurchaseList(payload: any): Purchase[] {
+  const candidates = [
+    payload,
+    payload?.data,
+    payload?.data?.data,
+    payload?.orders,
+    payload?.data?.orders,
+  ];
+  const rows = candidates.find((x) => Array.isArray(x));
+  if (!Array.isArray(rows)) return [];
+  return rows.map(normalizePurchaseRow).filter((r) => r.id || r.order_id);
+}
 
 export default function UserPurchaseHistoryPage() {
   const { t, i18n } = useTranslation();
@@ -62,13 +119,20 @@ export default function UserPurchaseHistoryPage() {
   async function loadPurchases() {
     setLoading(true);
     try {
-      const params: Record<string, string> = { demo: '1' };
+      const params: Record<string, string> = {};
       if (statusFilter && statusFilter !== 'all') params.payment_status = statusFilter;
-      const res = await api.get<Purchase[]>('admin/orders', params).catch(() => ({ success: true, data: FALLBACK_PURCHASES }));
-      setPurchases(res.data ?? FALLBACK_PURCHASES);
+      const res = await api.get<any>('admin/orders', params);
+      const next = extractPurchaseList(res);
+      if (next.length > 0) {
+        setPurchases(next);
+      } else if (import.meta.env.DEV) {
+        setPurchases(FALLBACK_PURCHASES);
+      } else {
+        setPurchases([]);
+      }
     } catch (err) {
       console.error('Failed to load purchases:', err);
-      setPurchases(FALLBACK_PURCHASES);
+      setPurchases(import.meta.env.DEV ? FALLBACK_PURCHASES : []);
     } finally {
       setLoading(false);
     }
