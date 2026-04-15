@@ -3,7 +3,9 @@
  * Handles all HTTP requests to the backend API
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '/api' : 'http://localhost:3002/api');
+const DEFAULT_PROD_API_URL = 'https://theyardapis.01tech.work/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? '/api' : DEFAULT_PROD_API_URL);
 
 /** Build full request path. Backend expects /api/student/..., /api/admin/..., so ensure /api prefix when base might not include it. */
 function buildRequestUrl(endpoint: string): string {
@@ -46,9 +48,9 @@ async function request<T = any>(
   const url = buildRequestUrl(endpoint);
   const token = getAuthToken();
 
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
+    ...(options.headers as Record<string, string> | undefined),
   };
 
   if (token) {
@@ -99,7 +101,9 @@ async function request<T = any>(
     }
     // Handle network errors, CORS errors, etc.
     if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Network error: Cannot connect to API server. Please ensure the backend is running.');
+      throw new Error(
+        'Network error: Cannot connect to API server. Check VITE_API_URL, backend health, and CORS_ORIGIN.'
+      );
     }
     throw new Error('Network error: ' + (error as Error).message);
   }

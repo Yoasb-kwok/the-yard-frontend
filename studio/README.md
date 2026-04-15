@@ -17,15 +17,20 @@ Open your terminal and navigate to the project folder:
 cd "/Users/01tech/Desktop/Jason/01 Tech/studio2/studio"
 ```
 
-### Step 1.5: Configure API Connection (Optional)
+### Step 1.5: Configure API Connection
 
-The frontend is configured to connect to the backend API. By default, it will connect to `http://localhost:3001/api`.
+The frontend is configured to connect to the backend API via `VITE_API_URL`.
 
 To customize the API URL, create a `.env` file in the `studio/` directory:
 
 ```bash
-# .env file
-VITE_API_URL=http://localhost:3001/api
+# .env.development (local dev)
+VITE_API_URL=http://localhost:3002/api
+```
+
+```bash
+# .env.production (production build)
+VITE_API_URL=https://theyardapis.01tech.work/api
 ```
 
 **Note:** Make sure the backend API server (in `studio-api/` folder) is running before using features that require API access.
@@ -87,7 +92,8 @@ To stop the development server, press `Ctrl + C` in the terminal.
 The frontend communicates with the backend API for data operations:
 
 - **Backend Location**: `studio-api/` folder
-- **Default API URL**: `http://localhost:3001/api`
+- **Local API URL**: `http://localhost:3002/api`
+- **Production API URL**: `https://theyardapis.01tech.work/api`
 - **API Endpoints**: 
   - `GET /api/admin/classes` - Fetch all classes
   - `POST /api/admin/classes` - Create a new class
@@ -113,7 +119,7 @@ The frontend communicates with the backend API for data operations:
    npm run dev
    ```
 
-The API server will run on `http://localhost:3001` by default.
+The API server will run on `http://localhost:3002` by default.
 
 ## Troubleshooting
 
@@ -125,10 +131,25 @@ If port 5173 is already in use, Vite will automatically try the next available p
 
 If you see "Cannot connect to API server" errors:
 
-1. **Check if backend is running**: Ensure the `studio-api` server is running on port 3001
+1. **Check if backend is running**: Ensure the `studio-api` server is running on port 3002
 2. **Check API URL**: Verify the `VITE_API_URL` in your `.env` file (if you created one)
 3. **Check CORS**: The backend should have CORS configured to allow requests from `http://localhost:5173`
 4. **Check browser console**: Open browser DevTools (F12) and check the Console and Network tabs for detailed error messages
+
+## Vercel + EC2 Production Alignment
+
+Use these values for your current domains:
+
+- **Frontend (Vercel project env var)**: `VITE_API_URL=https://theyardapis.01tech.work/api`
+- **Backend health check**: `https://theyardapis.01tech.work/api/health`
+- **Backend CORS env var on EC2**: `CORS_ORIGIN=https://theyard.01tech.work`
+- **Optional additional frontend domains**: comma-separate in `CORS_ORIGIN`
+- **Stripe frontend base URL on backend**: `APP_PUBLIC_URL=https://theyard.01tech.work`
+- **Optional explicit Stripe redirects**:
+  - `STRIPE_SUCCESS_URL=https://theyard.01tech.work/payment/success?session_id={CHECKOUT_SESSION_ID}`
+  - `STRIPE_CANCEL_URL=https://theyard.01tech.work/payment/cancel`
+
+After changing backend env vars, restart your backend service and re-test from the frontend Network tab.
 
 ### Dependencies Installation Issues
 
