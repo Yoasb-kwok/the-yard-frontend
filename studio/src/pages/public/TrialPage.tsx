@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { useAuth, CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import { CheckCircle, Calendar, Clock, MapPin } from 'lucide-react';
+import { CheckCircle, Calendar, Clock, MapPin, Mail } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
@@ -70,18 +70,21 @@ export default function TrialPage() {
   const [promoCode, setPromoCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  /** 試堂 API 成功後：新帳號+臨時密碼 / 已有帳號 / 僅成功 */
+  /**
+   * 試堂 API 成功後的結果摘要。後端不再把臨時密碼放進 JSON 回傳
+   * （會透過 email 寄給用戶），所以前端只需要知道帳號是否新建。
+   */
   const [trialSuccessResult, setTrialSuccessResult] = useState<{
     accountCreated?: boolean;
-    temporaryPassword?: string;
     existingUser?: boolean;
+    emailSent?: boolean;
     message?: string;
   } | null>(null);
   const [error, setError] = useState('');
   const [wasLoggedIn, setWasLoggedIn] = useState(false);
   const [selectedTrialClass, setSelectedTrialClass] = useState<ClassData | null>(null);
   const navigate = useNavigate();
-  const { signUp, user, profile } = useAuth();
+  const { user, profile } = useAuth();
 
   const effectiveClassData = classData || selectedTrialClass;
   
@@ -140,16 +143,6 @@ export default function TrialPage() {
     });
   };
 
-  // Generate password from date of birth (YYYYMMDD format)
-  const generatePasswordFromBirthdate = (birthdate: string): string => {
-    if (!birthdate) return '';
-    const date = new Date(birthdate);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}${month}${day}`;
-  };
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -200,8 +193,10 @@ export default function TrialPage() {
       return;
     }
 
-    // For non-logged-in users: 後端 POST /api/trial-application 可自動建帳號並回傳臨時密碼
-    // 新 API 只要求 classId, fullName, email；dateOfBirth 等為選填
+    // Non-logged-in flow:
+    //   1. POST /api/trial-application — 後端自動建帳號（隨機臨時密碼）+ 寄 email
+    //   2. 成功後只顯示「密碼已寄到 email」，絕不在畫面顯示密碼
+    // 新 API 只要求 classId, fullName, email；其餘為選填
     if (!fullName.trim() || !email.trim()) {
       setError(t('trial.fullName') + ' / ' + t('trial.email') + ' ' + t('common.required'));
       return;
@@ -214,7 +209,7 @@ export default function TrialPage() {
       const payload = {
         classId: effectiveClassData.id,
         fullName: fullName.trim(),
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         contactNumber: fullContactNumber || undefined,
         countryCode: countryCode || undefined,
         nickName: nickName.trim() || undefined,
@@ -223,6 +218,9 @@ export default function TrialPage() {
         parentsName: parentsName.trim() || undefined,
         residentialDistrict: residentialDistrict || undefined,
         hasJoinedCourses: hasJoinedCourses !== null ? hasJoinedCourses : undefined,
+        hasDanceExperience: hasDanceExperience !== null ? hasDanceExperience : undefined,
+        howDidYouHear: howDidYouHear || undefined,
+        promoCode: promoCode.trim() || undefined,
       };
 
       const res = await api.post<{
@@ -230,8 +228,7 @@ export default function TrialPage() {
         applicationId?: number;
         existingUser?: boolean;
         accountCreated?: boolean;
-        requirePasswordChange?: boolean;
-        temporaryPassword?: string;
+        emailSent?: boolean;
         message?: string;
         msg?: string;
       }>(TRIAL_APPLY_ENDPOINT, payload);
@@ -239,46 +236,25 @@ export default function TrialPage() {
       if (res?.success) {
         setTrialSuccessResult({
           accountCreated: res.accountCreated,
-          temporaryPassword: res.temporaryPassword,
           existingUser: res.existingUser,
+          // Backend defaults to true when account is newly created; undefined is treated as
+          // "unknown" and will still show the generic success message.
+          emailSent: res.emailSent ?? res.accountCreated,
           message: res.message ?? res.msg,
         });
         setSuccess(true);
         return;
       }
 
-      // 後端回傳非 success，走 fallback
-      if (!dateOfBirth) {
-        setError(t('trial.dateOfBirthRequired'));
-        setLoading(false);
-        return;
-      }
-      const password = generatePasswordFromBirthdate(dateOfBirth);
-      await signUp(
-        email,
-        password,
-        fullName,
-        nickName || null,
-        dateOfBirth || null,
-        sex,
-        parentsName || null,
-        fullContactNumber || null,
-        residentialDistrict || null,
-        hasJoinedCourses
-      );
-      setTrialSuccessResult({ accountCreated: true, temporaryPassword: password });
-      setSuccess(true);
+      // 後端回傳非 2xx 理論上會 throw ApiError；這裡是保險的泛用錯誤
+      setError((res as { msg?: string })?.msg || t('common.error'));
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409) {
         setError(t('trial.emailAlreadyRegistered'));
         return;
       }
-      // 試堂 API 失敗（404、網路錯誤等）→ 直接顯示 demo 成功畫面與臨時密碼，不需加 ?demo=1
-      setTrialSuccessResult({
-        accountCreated: true,
-        temporaryPassword: 'Demo123!',
-      });
-      setSuccess(true);
+      const msg = err instanceof ApiError ? err.message : (err as Error)?.message || t('common.error');
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -318,43 +294,46 @@ export default function TrialPage() {
                 </Link>
                 <p className="text-sm text-gray-500 mt-4">{t('trial.redirectingToDashboard')}</p>
               </>
+            ) : trialSuccessResult?.existingUser ? (
+              <>
+                <p className="text-gray-600 mb-4">{t('trial.existingUserApplicationSubmitted')}</p>
+                <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
+                <Link
+                  to="/login"
+                  className="inline-block mt-2 px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-dark"
+                >
+                  {t('trial.goToLogin')}
+                </Link>
+              </>
             ) : (
               <>
-                <p className="text-gray-600 mb-2">{t('trial.accountCreated')}</p>
-                {trialSuccessResult?.temporaryPassword ? (
-                  <>
-                    <p className="text-gray-700 mb-1 font-medium">
-                      {t('trial.loginAccountLabel')}：<span className="font-mono text-primary">{email}</span>
-                    </p>
-                    <p className="text-gray-700 mb-2 font-medium">
-                      {t('trial.tempPasswordLabel')}：<span className="font-mono bg-gray-100 px-2 py-1 rounded">{trialSuccessResult.temporaryPassword}</span>
-                    </p>
-                    <p className="text-sm text-gray-600 mb-4">{t('trial.loginAndChangePassword')}</p>
-                    <Link
-                      to="/login"
-                      className="inline-block mt-2 px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-dark"
-                    >
-                      {t('trial.goToLogin')}
-                    </Link>
-                  </>
-                ) : trialSuccessResult?.existingUser ? (
-                  <>
-                    <p className="text-gray-600 mb-4">{t('trial.existingUserApplicationSubmitted')}</p>
-                    <Link to="/login" className="inline-block mt-2 text-primary font-medium hover:underline">
-                      {t('trial.goToLogin')}
-                    </Link>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-gray-600 mb-2">{t('trial.emailSentWithTempPassword', { email })}</p>
-                    <p className="text-sm text-gray-600 mb-2">{t('trial.checkEmailAndChangePassword')}</p>
-                    <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
-                    <Link to="/login" className="inline-block mt-2 text-primary font-medium hover:underline">
-                      {t('trial.viewTrialStatus', '查看我的試堂申請狀態')}
-                    </Link>
-                    <p className="text-sm text-gray-500 mt-4">{t('trial.redirecting')}</p>
-                  </>
-                )}
+                <p className="text-gray-600 mb-4">{t('trial.accountCreated')}</p>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 text-left">
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-gray-800 mb-1">
+                        {t('trial.emailSentWithTempPassword', { email })}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {t('trial.checkEmailAndChangePassword')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-gray-700 mb-4">
+                  {t('trial.loginAccountLabel')}：
+                  <span className="font-mono text-primary break-all">{email}</span>
+                </p>
+                <p className="text-gray-600 mb-4">
+                  {t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}
+                </p>
+                <Link
+                  to="/login"
+                  className="inline-block mt-2 px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-dark"
+                >
+                  {t('trial.goToLogin')}
+                </Link>
               </>
             )}
           </div>

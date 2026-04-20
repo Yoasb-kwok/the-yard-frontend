@@ -250,13 +250,17 @@ export default function InstructorsPage() {
   }
 
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+    const inputEl = e.currentTarget;
+    const file = inputEl.files?.[0];
+    const resetInput = () => {
+      if (inputEl) inputEl.value = '';
+    };
     if (file) {
       // Check file size (max 2MB)
       const maxSize = 2 * 1024 * 1024; // 2MB
       if (file.size > maxSize) {
         alert(t('admin.instructors.imageTooLarge') || 'Image is too large. Please use an image smaller than 2MB, or use an image URL instead.');
-        e.target.value = ''; // Reset input
+        resetInput();
         return;
       }
 
@@ -306,7 +310,7 @@ export default function InstructorsPage() {
                 const veryCompressed = canvas.toDataURL('image/jpeg', 0.4);
                 if (veryCompressed.length > 45000) {
                   alert(t('admin.instructors.imageTooLargeForSheet') || 'Image is too large even after compression. Please use the "Use URL" option instead and paste an image URL, or use a smaller image file.');
-                  e.target.value = '';
+                  resetInput();
                   return;
                 }
                 setImagePreview(veryCompressed);
@@ -323,7 +327,7 @@ export default function InstructorsPage() {
         };
         img.onerror = () => {
           alert(t('admin.instructors.imageLoadError') || 'Failed to load image. Please try again.');
-          e.target.value = '';
+          resetInput();
         };
         img.src = reader.result as string;
       };

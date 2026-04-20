@@ -49,7 +49,7 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     teaching_experience: 6,
     dance_school: '香港專業進修學校舞蹈系',
     icon: 'hiphop',
-    background_image: 'https://images.unsplash.com/photo-1557672172-671e2a69f690?w=600&q=80',
+    background_image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&q=80',
     avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&q=80',
   },
   {
@@ -93,7 +93,7 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     teaching_experience: 9,
     dance_school: '英國 IDTA 認證教師',
     icon: 'latin',
-    background_image: 'https://images.unsplash.com/photo-1547153760-18fc949bc80b?w=600&q=80',
+    background_image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=600&q=80',
     avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&h=400&fit=crop&q=80',
   },
   {
@@ -126,7 +126,7 @@ export const EXAMPLE_INSTRUCTOR_PROFILES: InstructorProfile[] = [
     teaching_experience: 5,
     dance_school: '本地 Crew 及海外進修',
     icon: 'breaking',
-    background_image: 'https://images.unsplash.com/photo-1557672172-671e2a69f690?w=600&q=80',
+    background_image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&q=80',
     avatar_url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&h=400&fit=crop&q=80',
   },
   {

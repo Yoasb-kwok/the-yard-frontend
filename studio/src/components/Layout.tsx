@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, ShoppingBag, User, LogOut, Users, Settings, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, PieChart as PieChartIcon, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare, KeyRound } from 'lucide-react';
+import { Home, Calendar, User, LogOut, Users, Info, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare, KeyRound, ScrollText, ShieldCheck, HelpCircle } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
 import ClassNoticePopup from './ClassNoticePopup';
@@ -25,6 +25,9 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+type NavItem = { path: string; icon: any; label: string };
+type AdminNavGroup = { title: string; items: NavItem[] };
+
 export default function Layout({ children }: LayoutProps) {
   const { profile, signOut, isAdmin, user, profiles, activeProfileId, switchProfile, requirePasswordChange } = useAuth();
   const hasMultipleProfiles = !isAdmin && profiles.length > 1;
@@ -35,8 +38,16 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Reset main scroll position on route change (main is its own scroll container).
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+  }, [location.pathname]);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -67,30 +78,51 @@ export default function Layout({ children }: LayoutProps) {
   ];
   const studentNavItems = isOnDashboardSection ? studentNavItemsDashboard : studentNavItemsScheduleProfile;
 
-  const adminNavItems = [
-    { path: '/admin', icon: LayoutDashboard, label: t('admin.dashboard.sectionOverview') },
-    { path: '/admin/financial', icon: DollarSign, label: t('admin.dashboard.sectionFinancial') },
-    { path: '/admin/funnel', icon: Target, label: t('admin.dashboard.sectionConversionFunnel') },
-    { path: '/admin/renewal-churn', icon: UserMinus, label: t('admin.dashboard.sectionRenewalChurn') },
-    { path: '/admin/class-health', icon: BookOpen, label: t('admin.dashboard.sectionClassHealth') },
-    { path: '/admin/instructor-performance', icon: GraduationCap, label: t('admin.dashboard.sectionInstructorPerformance') },
-    { path: '/admin/attendance-anomaly', icon: ClipboardList, label: t('admin.dashboard.sectionAttendanceAnomaly') },
-    { path: '/admin/pending-applications', icon: ListChecks, label: t('admin.dashboard.pendingApplications') },
-    { path: '/admin/trial-applications', icon: BookOpen, label: t('admin.trialApplications.title') },
-    { path: '/admin/users', icon: Users, label: t('nav.users') },
-    { path: '/admin/purchase-history', icon: Receipt, label: t('nav.tokenPurchaseHistory') },
-    { path: '/admin/subscription-records', icon: BookOpen, label: t('nav.courseSubscriptionRecords') },
-    { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
-    { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },
-    { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
-    { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
-    { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
-    { path: '/admin/audit-log', icon: FileText, label: t('admin.auditLog.title') },
-    { path: '/admin/class-notice', icon: MessageSquare, label: t('admin.classNotice.title', '全班通知') },
-    { path: '/admin/news', icon: Newspaper, label: t('admin.news.navTitle', '最新消息') },
-    { path: '/admin/course-intro', icon: BookOpen, label: t('admin.courseIntro.navTitle', '課堂介紹') },
+  const adminNavGroups: AdminNavGroup[] = [
+    {
+      title: t('admin.dashboard.title', '儀表板與分析'),
+      items: [
+        { path: '/admin', icon: LayoutDashboard, label: t('admin.dashboard.sectionOverview') },
+        { path: '/admin/financial', icon: DollarSign, label: t('admin.dashboard.sectionFinancial') },
+        { path: '/admin/funnel', icon: Target, label: t('admin.dashboard.sectionConversionFunnel') },
+        { path: '/admin/renewal-churn', icon: UserMinus, label: t('admin.dashboard.sectionRenewalChurn') },
+        { path: '/admin/class-health', icon: BookOpen, label: t('admin.dashboard.sectionClassHealth') },
+        { path: '/admin/instructor-performance', icon: GraduationCap, label: t('admin.dashboard.sectionInstructorPerformance') },
+        { path: '/admin/attendance-anomaly', icon: ClipboardList, label: t('admin.dashboard.sectionAttendanceAnomaly') },
+      ],
+    },
+    {
+      title: t('admin.manage.title', '學員與營運管理'),
+      items: [
+        { path: '/admin/pending-applications', icon: ListChecks, label: t('admin.dashboard.pendingApplications') },
+        { path: '/admin/trial-applications', icon: BookOpen, label: t('admin.trialApplications.title') },
+        { path: '/admin/users', icon: Users, label: t('nav.users') },
+        { path: '/admin/purchase-history', icon: Receipt, label: t('nav.tokenPurchaseHistory') },
+        { path: '/admin/token-packages', icon: Package, label: t('nav.tokenPackageManagement', '代幣套票管理') },
+        { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
+        { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },
+        { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
+        { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
+        { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
+        { path: '/admin/audit-log', icon: FileText, label: t('admin.auditLog.title') },
+      ],
+    },
+    {
+      title: t('admin.content.title', '內容與系統設定'),
+      items: [
+        { path: '/admin/class-notice', icon: MessageSquare, label: t('admin.classNotice.title', '全班通知') },
+        { path: '/admin/news', icon: Newspaper, label: t('admin.news.navTitle', '最新消息') },
+        { path: '/admin/course-intro', icon: BookOpen, label: t('admin.courseIntro.navTitle', '課堂介紹') },
+        { path: '/admin/settings', icon: Info, label: t('nav.settingsHomeAbout', '關於我們') },
+        { path: '/admin/contact', icon: Phone, label: t('nav.adminContact', '聯絡我們') },
+        { path: '/admin/faq', icon: HelpCircle, label: t('nav.adminFaq', '常見問題') },
+        { path: '/admin/terms', icon: ScrollText, label: t('nav.adminTerms', '條款與細則') },
+        { path: '/admin/privacy', icon: ShieldCheck, label: t('nav.adminPrivacy', '私隱政策') },
+      ],
+    },
   ];
 
+  const adminNavItems = adminNavGroups.flatMap((group) => group.items);
   const navItems = isAdmin ? adminNavItems : studentNavItems;
   const pendingCounts = useAdminPendingCounts(!!isAdmin);
   const getPendingBadge = (path: string): number => {
@@ -110,14 +142,14 @@ export default function Layout({ children }: LayoutProps) {
   ];
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="h-screen flex flex-col bg-cream overflow-hidden">
       <a
         href="#main-content"
         className="absolute left-4 top-4 -translate-y-[200%] focus:translate-y-0 focus:z-[100] px-4 py-2 bg-primary text-white rounded-md outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-transform"
       >
         {t('common.skipToContent', 'Skip to main content')}
       </a>
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-cream shadow-sm border-b border-primary/10">
+      <nav className="flex-shrink-0 z-50 bg-cream shadow-sm border-b border-primary/10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -377,37 +409,81 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </nav>
 
-      <div className="flex pt-16 min-h-screen">
+      <div className="flex flex-1 min-h-0">
         {/* Desktop Sidebar - admin and student both show from lg; student has 課程表 below nav */}
-        <aside className={`hidden w-64 flex-shrink-0 bg-white/80 backdrop-blur shadow-sm min-h-[calc(100vh-4rem)] border-r border-primary/10 lg:block`}>
-          <nav className="mt-5 px-2 space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const badge = getPendingBadge(item.path);
-              return (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isActive(item.path)
-                      ? 'bg-primary-lighter text-primary'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                  }`}
-                >
-                  <Icon
-                    className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                      isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
+        <aside
+          className={
+            'hidden w-64 flex-shrink-0 bg-white/80 backdrop-blur shadow-sm border-r border-primary/10 ' +
+            'lg:block lg:overflow-y-auto lg:overscroll-contain'
+          }
+        >
+          <nav className="mt-5 px-2 pb-6 space-y-1">
+            {isAdmin ? (
+              adminNavGroups.map((group) => (
+                <div key={group.title} className="mb-3 last:mb-0">
+                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                    {group.title}
+                  </p>
+                  <div className="space-y-1">
+                    {group.items.map((item) => {
+                      const Icon = item.icon;
+                      const badge = getPendingBadge(item.path);
+                      return (
+                        <Link
+                          key={item.path}
+                          to={item.path}
+                          className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                            isActive(item.path)
+                              ? 'bg-primary-lighter text-primary'
+                              : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                          }`}
+                        >
+                          <Icon
+                            className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                              isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
+                            }`}
+                          />
+                          <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                          {badge > 0 && (
+                            <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
+                              {badge > 99 ? '99+' : badge}
+                            </span>
+                          )}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            ) : (
+              navItems.map((item) => {
+                const Icon = item.icon;
+                const badge = getPendingBadge(item.path);
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive(item.path)
+                        ? 'bg-primary-lighter text-primary'
+                        : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                     }`}
-                  />
-                  <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                  {badge > 0 && (
-                    <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
-                      {badge > 99 ? '99+' : badge}
-                    </span>
-                  )}
-                </Link>
-              );
-            })}
+                  >
+                    <Icon
+                      className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                        isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
+                      }`}
+                    />
+                    <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                    {badge > 0 && (
+                      <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
+                  </Link>
+                );
+              })
+            )}
           </nav>
           {/* 最新通知（下一堂 + 接下來所有課程）只在課程表／我的資料時顯示，不在 Dashboard 區顯示 */}
           {!isAdmin && !isOnDashboardSection && <StudentSidebarSchedule />}
@@ -420,8 +496,8 @@ export default function Layout({ children }: LayoutProps) {
               className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
               onClick={() => setSidebarOpen(false)}
             />
-            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out lg:hidden">
-              <div className="flex items-center justify-between h-16 px-4 border-b">
+            <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg flex flex-col transform transition-transform duration-300 ease-in-out lg:hidden">
+              <div className="flex items-center justify-between h-16 px-4 border-b flex-shrink-0">
                 <span className="text-xl font-semibold text-gray-900">{t('nav.menu')}</span>
                 <button
                   onClick={() => setSidebarOpen(false)}
@@ -430,58 +506,105 @@ export default function Layout({ children }: LayoutProps) {
                   <X className="h-6 w-6" />
                 </button>
               </div>
-              <nav className="mt-5 px-2 space-y-1">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const badge = getPendingBadge(item.path);
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setSidebarOpen(false)}
-                      className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                        isActive(item.path)
-                          ? 'bg-primary-lighter text-primary'
-                          : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
-                    >
-                      <Icon
-                        className={`mr-3 h-5 w-5 flex-shrink-0 ${
-                          isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
+              <div className="flex-1 overflow-y-auto overscroll-contain">
+              <nav className="mt-5 px-2 pb-6 space-y-1">
+                {isAdmin ? (
+                  adminNavGroups.map((group) => (
+                    <div key={group.title} className="mb-3 last:mb-0">
+                      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                        {group.title}
+                      </p>
+                      <div className="space-y-1">
+                        {group.items.map((item) => {
+                          const Icon = item.icon;
+                          const badge = getPendingBadge(item.path);
+                          return (
+                            <Link
+                              key={item.path}
+                              to={item.path}
+                              onClick={() => setSidebarOpen(false)}
+                              className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                                isActive(item.path)
+                                  ? 'bg-primary-lighter text-primary'
+                                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
+                              }`}
+                            >
+                              <Icon
+                                className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                                  isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
+                                }`}
+                              />
+                              <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                              {badge > 0 && (
+                                <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
+                                  {badge > 99 ? '99+' : badge}
+                                </span>
+                              )}
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  navItems.map((item) => {
+                    const Icon = item.icon;
+                    const badge = getPendingBadge(item.path);
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setSidebarOpen(false)}
+                        className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                          isActive(item.path)
+                            ? 'bg-primary-lighter text-primary'
+                            : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
                         }`}
-                      />
-                      <span className="flex-1 min-w-0 truncate">{item.label}</span>
-                      {badge > 0 && (
-                        <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
-                          {badge > 99 ? '99+' : badge}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+                      >
+                        <Icon
+                          className={`mr-3 h-5 w-5 flex-shrink-0 ${
+                            isActive(item.path) ? 'text-primary' : "text-gray-400 group-hover:text-gray-500"
+                          }`}
+                        />
+                        <span className="flex-1 min-w-0 truncate">{item.label}</span>
+                        {badge > 0 && (
+                          <span className="ml-2 flex-shrink-0 bg-red-500 text-white text-xs font-bold min-w-[1.25rem] h-5 px-1.5 rounded-full flex items-center justify-center">
+                            {badge > 99 ? '99+' : badge}
+                          </span>
+                        )}
+                      </Link>
+                    );
+                  })
+                )}
               </nav>
               {!isAdmin && !isOnDashboardSection && <StudentSidebarSchedule />}
+              </div>
             </aside>
           </>
         )}
 
-        <main id="main-content" className="flex-1 min-w-0 p-4 sm:p-6 xl:p-8" tabIndex={-1}>
-          <div className="max-w-7xl mx-auto">
-            {!isAdmin && requirePasswordChange && (
-              <Link
-                to="/profile?changePassword=1"
-                className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 hover:bg-amber-100"
-              >
-                <KeyRound className="h-5 w-5 flex-shrink-0" />
-                <span className="font-medium">{t('auth.requirePasswordChangeBanner')}</span>
-              </Link>
-            )}
-            {children}
+        <main
+          id="main-content"
+          ref={mainRef}
+          className="flex-1 min-w-0 overflow-y-auto overscroll-contain"
+          tabIndex={-1}
+        >
+          <div className="p-4 sm:p-6 xl:p-8">
+            <div className="max-w-7xl mx-auto">
+              {!isAdmin && requirePasswordChange && (
+                <Link
+                  to="/profile?changePassword=1"
+                  className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 hover:bg-amber-100"
+                >
+                  <KeyRound className="h-5 w-5 flex-shrink-0" />
+                  <span className="font-medium">{t('auth.requirePasswordChangeBanner')}</span>
+                </Link>
+              )}
+              {children}
+            </div>
           </div>
-        </main>
-      </div>
 
-      <footer className="bg-primary-dark text-white border-t border-primary mt-12">
+          <footer className="bg-primary-dark text-white border-t border-primary mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
             <div>
@@ -553,11 +676,13 @@ export default function Layout({ children }: LayoutProps) {
               </div>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t border-white/20 text-center text-sm text-white/70">
-            {t('footer.copyright')}
+            <div className="mt-8 pt-8 border-t border-white/20 text-center text-sm text-white/70">
+              {t('footer.copyright')}
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+        </main>
+      </div>
 
       {/* 學生端：全班通知彈出（修讀該班的學生登入後自動顯示，僅學生身份） */}
       {user && profile && profile.role === 'student' && <ClassNoticePopup />}

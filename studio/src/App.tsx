@@ -56,8 +56,12 @@ import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import AdminClassNoticePage from './pages/admin/AdminClassNoticePage';
 import AdminCourseIntroPage from './pages/admin/AdminCourseIntroPage';
-import AdminCourseSubscriptionPage from './pages/admin/AdminCourseSubscriptionPage';
 import AdminNewsPage from './pages/admin/AdminNewsPage';
+import AdminTokenPackagesPage from './pages/admin/AdminTokenPackagesPage';
+import AdminContactPage from './pages/admin/AdminContactPage';
+import AdminTermsPage from './pages/admin/AdminTermsPage';
+import AdminPrivacyPage from './pages/admin/AdminPrivacyPage';
+import AdminFaqPage from './pages/admin/AdminFaqPage';
 
 function App() {
   return (
@@ -285,14 +289,6 @@ function App() {
             }
           />
           <Route
-            path="/admin/subscription-records"
-            element={
-              <ProtectedRoute requireAdmin>
-                <AdminCourseSubscriptionPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
             path="/admin/users/:userId/purchase-history"
             element={
               <ProtectedRoute requireAdmin>
@@ -369,6 +365,46 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <AdminCourseIntroPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/token-packages"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminTokenPackagesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/contact"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminContactPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/terms"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminTermsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/privacy"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminPrivacyPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/faq"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminFaqPage />
               </ProtectedRoute>
             }
           />

@@ -40,4 +40,58 @@
   .horizontal-scroll-always::-webkit-scrollbar-thumb:hover {
     background: #64748b;
   }
+
+  /** WYSIWYG (e.g. React Quill) HTML rendered on public About page */
+  .about-wysiwyg p {
+    margin-bottom: 0.75rem;
+  }
+
+  .about-wysiwyg p:last-child {
+    margin-bottom: 0;
+  }
+
+  .about-wysiwyg ul,
+  .about-wysiwyg ol {
+    margin-bottom: 0.75rem;
+    padding-left: 1.25rem;
+  }
+
+  .about-wysiwyg ul {
+    list-style-type: disc;
+  }
+
+  .about-wysiwyg ol {
+    list-style-type: decimal;
+  }
+
+  .about-wysiwyg a {
+    color: #d26a17;
+    text-decoration: underline;
+  }
+
+  .about-wysiwyg h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .about-wysiwyg img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+
+  /** Admin Settings: React Quill */
+  .site-content-quill .ql-container {
+    min-height: 240px;
+    font-size: 0.9375rem;
+    border-bottom-left-radius: 0.375rem;
+    border-bottom-right-radius: 0.375rem;
+  }
+
+  .site-content-quill .ql-toolbar {
+    border-top-left-radius: 0.375rem;
+    border-top-right-radius: 0.375rem;
+  }
 }

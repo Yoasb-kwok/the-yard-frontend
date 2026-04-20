@@ -20,6 +20,15 @@ function getTutorImageUrl(name: string, size?: number): string {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=${s}&background=random&color=fff&bold=true`;
 }
 
+function sanitizeBackgroundImage(url?: string | null): string | undefined {
+  const trimmed = url?.trim();
+  if (!trimmed) return undefined;
+  // Known dead Unsplash assets; skip to avoid noisy 404 in production.
+  const blockedIds = ['photo-1557672172-671e2a69f690', 'photo-1547153760-18fc949bc80b'];
+  if (blockedIds.some((id) => trimmed.includes(id))) return undefined;
+  return trimmed;
+}
+
 export default function InstructorIntroCard({ instructorName, imageUrl, compact, featured, profile: profileOverride }: InstructorIntroCardProps) {
   const { t, i18n } = useTranslation();
   const resolved = profileOverride !== undefined ? profileOverride : getInstructorProfile(instructorName);
@@ -36,7 +45,7 @@ export default function InstructorIntroCard({ instructorName, imageUrl, compact,
   const danceSchool = profile.dance_school?.trim() ?? '';
 
   if (featured) {
-    const bgImage = profile.background_image?.trim();
+    const bgImage = sanitizeBackgroundImage(profile.background_image);
     return (
       <article className="group flex flex-col sm:flex-row overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-lg shadow-gray-200/50 hover:shadow-xl hover:shadow-primary/5 hover:border-primary/30 transition-all duration-300">
         <div

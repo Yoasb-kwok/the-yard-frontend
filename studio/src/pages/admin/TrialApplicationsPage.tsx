@@ -142,6 +142,59 @@ const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
 /** 用戶可選的四個狀態 */
 const SELECTABLE_STATUSES: TrialApplication['status'][] = ['pending', 'assigned', 'cancelled', 'could_not_assign'];
 
+/**
+ * Normalize a row from the backend into the frontend `TrialApplication` shape.
+ *
+ * The backend returns MySQL BIGINT / INT columns as **strings** (e.g. `id: "9"`,
+ * `assigned_class_id: "1"`), and TINYINT as number (`assigned_lessons: 10`).
+ * `notes` is NULL or string. This helper also tolerates legacy number ids.
+ */
+function normalizeTrialApplicationRow(raw: unknown): TrialApplication | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const idRaw = o.id;
+  const id =
+    typeof idRaw === 'number'
+      ? String(idRaw)
+      : typeof idRaw === 'string' && idRaw.trim() !== ''
+        ? idRaw
+        : null;
+  if (!id) return null;
+
+  const toStr = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
+  const toOptStr = (v: unknown): string | null => {
+    if (v == null) return null;
+    const s = typeof v === 'string' ? v : String(v);
+    return s.trim() === '' ? null : s;
+  };
+  const toOptNum = (v: unknown): number | null => {
+    if (v == null || v === '') return null;
+    const n = typeof v === 'number' ? v : Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  const rawStatus = toStr(o.status) as TrialApplication['status'];
+
+  return {
+    id,
+    applicant_name: toStr(o.applicant_name ?? o.full_name),
+    applicant_email: toStr(o.applicant_email ?? o.email),
+    applicant_phone: toOptStr(o.applicant_phone ?? o.contact_number ?? o.mobile) ?? undefined,
+    residential_district: toOptStr(o.residential_district),
+    trial_class: toStr(o.trial_class ?? o.class_name),
+    preferred_datetime: toOptStr(o.preferred_datetime) ?? undefined,
+    status: rawStatus || 'pending',
+    assigned_class_id: toOptStr(o.assigned_class_id),
+    assigned_class_name: toOptStr(o.assigned_class_name),
+    assigned_lessons: toOptNum(o.assigned_lessons),
+    class_total_lessons: toOptNum(o.class_total_lessons),
+    notes: toStr(o.notes),
+    applied_at: toStr(o.applied_at ?? o.created_at),
+    updated_at: toOptStr(o.updated_at) ?? undefined,
+    trial_date: toOptStr(o.trial_date) ?? undefined,
+  };
+}
+
 /** 後端可能回傳舊狀態，編輯時映射為可選狀態之一（列表顯示仍用原 status） */
 function toSelectableStatus(s: TrialApplication['status']): (typeof SELECTABLE_STATUSES)[number] {
   if (SELECTABLE_STATUSES.includes(s as any)) return s as (typeof SELECTABLE_STATUSES)[number];
@@ -257,9 +310,13 @@ export default function TrialApplicationsPage() {
   async function loadApplications() {
     setLoading(true);
     try {
-      const res = await api.get<{ success?: boolean; data?: TrialApplication[] }>('/admin/trial-applications').catch(() => null);
-      const data = res?.success && Array.isArray((res as any).data) ? (res as any).data : null;
-      const list = data ?? FALLBACK_TRIAL_APPLICATIONS;
+      const res = await api.get<unknown[]>('/admin/trial-applications').catch(() => null);
+      const rawList = res?.success && Array.isArray(res.data) ? res.data : null;
+      const list: TrialApplication[] = rawList
+        ? rawList
+            .map((r) => normalizeTrialApplicationRow(r))
+            .filter((r): r is TrialApplication => r !== null)
+        : FALLBACK_TRIAL_APPLICATIONS;
       setApplications(list);
       const initialNotes: Record<string, string> = {};
       const initialAssigned: Record<string, string> = {};
@@ -307,40 +364,99 @@ export default function TrialApplicationsPage() {
     }
   }
 
-  function saveNotes(id: string) {
-    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, notes: editNotes[id] } : a)));
-    setExpandedId(null);
-  }
-
-  /** 一次儲存：狀態、備註（僅本地）、分配班別與堂數，只打一次 PATCH */
-  function saveAll(id: string) {
+  /**
+   * 一次儲存：狀態、備註、分配班別與堂數。
+   *
+   * 先打 PATCH，成功後才更新本地 state（避免後端失敗但 UI 看起來已儲存的 bug）。
+   * 後端若回非 2xx，會顯示錯誤訊息讓 admin 知道要重試。
+   */
+  async function saveAll(id: string) {
     const app = applications.find((a) => a.id === id);
     if (!app) return;
+
     const classId = editAssignedClassId[id] ? String(editAssignedClassId[id]).trim() : '';
     const lessons = editAssignedLessons[id];
+    const notes = editNotes[id] ?? '';
     const status = toSelectableStatus(editStatus[id] ?? app.status);
-    const payload: { status?: string; assigned_class_id?: number; assigned_lessons?: number } = { status };
-    if (classId) payload.assigned_class_id = Number(classId);
-    else if (app.assigned_class_id) payload.assigned_class_id = Number(app.assigned_class_id);
-    if (lessons !== '' && Number(lessons) >= 1) payload.assigned_lessons = Number(lessons);
-    setApplications((prev) => prev.map((a) => (a.id === id ? { ...a, notes: editNotes[id], status } : a)));
+
+    const payload: {
+      status: string;
+      notes: string;
+      assigned_class_id?: number | null;
+      assigned_lessons?: number | null;
+    } = { status, notes };
+
+    if (classId) {
+      payload.assigned_class_id = Number(classId);
+    } else if (status === 'assigned') {
+      // 狀態要 assigned 但沒選班別 → 明顯資料有問題
+      alert(t('admin.trialApplications.missingClass', '請先選擇分配班別'));
+      return;
+    } else {
+      // 清掉分配班別（admin 改為 pending / cancelled 時）
+      payload.assigned_class_id = null;
+    }
+
+    if (lessons !== '' && Number(lessons) >= 1) {
+      payload.assigned_lessons = Number(lessons);
+    } else if (!classId) {
+      payload.assigned_lessons = null;
+    }
+
     setSavingId(id);
-    api.patch(`/admin/trial-applications/${id}`, payload)
-      .then(() => {
-        const cls = classId ? classes.find((c) => String(c.id) === classId) : null;
-        setApplications((prev) => prev.map((a) => (a.id === id ? {
-          ...a,
-          notes: editNotes[id],
-          status,
-          assigned_class_id: (classId || a.assigned_class_id) ?? undefined,
-          assigned_class_name: (cls?.name ?? (classId ? editAssignedClass[id] : a.assigned_class_name)) ?? undefined,
-          assigned_lessons: payload.assigned_lessons != null ? payload.assigned_lessons : (a.assigned_lessons ?? null),
-        } : a)));
-        if (cls) setEditAssignedClass((prev) => ({ ...prev, [id]: cls.name }));
-        setExpandedId(null);
-      })
-      .catch(() => {})
-      .finally(() => setSavingId(null));
+    try {
+      const res = await api.patch<Record<string, unknown>>(`/admin/trial-applications/${id}`, payload);
+      if (!res.success) {
+        throw new Error(res.msg || 'Update failed');
+      }
+
+      // Prefer the authoritative row returned by the backend (it has the joined
+      // `assigned_class_name`, coerced MySQL types, fresh `updated_at`, etc.).
+      // Fall back to a locally-merged copy if backend omits `data` for some reason.
+      const serverRow = normalizeTrialApplicationRow(res.data);
+      const cls = classId ? classes.find((c) => String(c.id) === classId) : null;
+
+      setApplications((prev) =>
+        prev.map((a) =>
+          a.id === id
+            ? serverRow ?? {
+                ...a,
+                notes,
+                status,
+                assigned_class_id: classId || null,
+                assigned_class_name: cls?.name ?? (classId ? editAssignedClass[id] : null),
+                assigned_lessons: payload.assigned_lessons ?? null,
+                updated_at: new Date().toISOString(),
+              }
+            : a
+        )
+      );
+
+      // Keep the inline editors in sync with whatever was actually persisted.
+      const persisted = serverRow ?? {
+        notes,
+        status,
+        assigned_class_id: classId || null,
+        assigned_class_name: cls?.name ?? null,
+        assigned_lessons: payload.assigned_lessons ?? null,
+      };
+      setEditNotes((prev) => ({ ...prev, [id]: persisted.notes ?? '' }));
+      setEditStatus((prev) => ({ ...prev, [id]: toSelectableStatus(persisted.status) }));
+      setEditAssignedClassId((prev) => ({ ...prev, [id]: persisted.assigned_class_id ?? '' }));
+      setEditAssignedClass((prev) => ({ ...prev, [id]: persisted.assigned_class_name ?? '' }));
+      setEditAssignedLessons((prev) => ({
+        ...prev,
+        [id]: persisted.assigned_lessons != null ? persisted.assigned_lessons : '',
+      }));
+      setExpandedId(null);
+    } catch (err) {
+      console.error('Failed to save trial application', err);
+      const msg =
+        err instanceof Error ? err.message : t('common.error', 'Something went wrong.');
+      alert(t('admin.trialApplications.saveFailed', 'Save failed: {{msg}}', { msg }));
+    } finally {
+      setSavingId(null);
+    }
   }
 
   if (loading) {

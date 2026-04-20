@@ -1,25 +1,62 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
+import { loadSimpleSitePage } from '../../lib/sitePageContent';
+
+type Mode = 'html' | 'legacy';
+
+interface PageState {
+  title: string;
+  html: string;
+  legacy: string;
+  mode: Mode;
+}
 
 export default function TermsPage() {
   const { t } = useTranslation();
-  const [content, setContent] = useState({ title: '', content: '' });
+  const [state, setState] = useState<PageState>({ title: '', html: '', legacy: '', mode: 'legacy' });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadContent();
-  }, [t]);
+    let cancelled = false;
 
-  async function loadContent() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    setContent({
-      title: t('terms.title'),
-      content: t('terms.content'),
-    });
-    setLoading(false);
-  }
+    (async () => {
+      setLoading(true);
+      try {
+        const saved = await loadSimpleSitePage('terms');
+        if (cancelled) return;
+        if (saved && (saved.title || saved.contentHtml)) {
+          setState({
+            title: saved.title || t('terms.title'),
+            html: saved.contentHtml || '',
+            legacy: t('terms.content'),
+            mode: saved.contentHtml && saved.contentHtml.trim() !== '' ? 'html' : 'legacy',
+          });
+        } else {
+          setState({
+            title: t('terms.title'),
+            html: '',
+            legacy: t('terms.content'),
+            mode: 'legacy',
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        setState({
+          title: t('terms.title'),
+          html: '',
+          legacy: t('terms.content'),
+          mode: 'legacy',
+        });
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   if (loading) {
     return (
@@ -34,38 +71,41 @@ export default function TermsPage() {
   return (
     <PublicLayout>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8">{content.title}</h1>
+        <h1 className="text-4xl font-bold text-gray-900 mb-8">{state.title}</h1>
         <div className="bg-white rounded-lg shadow-md p-8">
-          <div className="prose prose-lg max-w-none text-gray-700 whitespace-pre-line leading-relaxed">
-            {content.content.split('\n').map((line, index) => {
-              // Check if line starts with a section letter (A., B., C., D.)
-              if (/^[A-D]\./.test(line.trim())) {
-                return (
-                  <h2 key={index} className="text-2xl font-bold text-gray-900 mt-8 mb-4 first:mt-0">
-                    {line}
-                  </h2>
-                );
-              }
-              // Check if line starts with a number (numbered list items)
-              if (/^\d+\./.test(line.trim())) {
-                return (
-                  <p key={index} className="mb-3 ml-4">
-                    {line}
-                  </p>
-                );
-              }
-              // Regular paragraph
-              if (line.trim()) {
-                return (
-                  <p key={index} className="mb-3">
-                    {line}
-                  </p>
-                );
-              }
-              // Empty line
-              return <br key={index} />;
-            })}
-          </div>
+          {state.mode === 'html' ? (
+            <div
+              className="prose prose-lg max-w-none text-gray-700 leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: state.html }}
+            />
+          ) : (
+            <div className="prose prose-lg max-w-none text-gray-700 whitespace-pre-line leading-relaxed">
+              {state.legacy.split('\n').map((line, index) => {
+                if (/^[A-D]\./.test(line.trim())) {
+                  return (
+                    <h2 key={index} className="text-2xl font-bold text-gray-900 mt-8 mb-4 first:mt-0">
+                      {line}
+                    </h2>
+                  );
+                }
+                if (/^\d+\./.test(line.trim())) {
+                  return (
+                    <p key={index} className="mb-3 ml-4">
+                      {line}
+                    </p>
+                  );
+                }
+                if (line.trim()) {
+                  return (
+                    <p key={index} className="mb-3">
+                      {line}
+                    </p>
+                  );
+                }
+                return <br key={index} />;
+              })}
+            </div>
+          )}
         </div>
       </div>
     </PublicLayout>

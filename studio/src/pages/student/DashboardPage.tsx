@@ -73,17 +73,68 @@ type UpcomingClass = EnrolledClass;
 /** One source of truth: same enrollments as SchedulePage & sidebar so counts match */
 const FALLBACK_UPCOMING_CLASSES: UpcomingClass[] = getFallbackUpcomingClasses();
 
-/** Demo: 試堂／報名記錄 */
+/** 試堂／報名記錄（所有可能的 backend 狀態） */
+type TrialStatus =
+  | 'pending'
+  | 'assigned'
+  | 'confirmed'
+  | 'contacted'
+  | 'attended_trial'
+  | 'converted'
+  | 'cancelled'
+  | 'could_not_assign';
+
 interface TrialApplicationItem {
   id: string;
   class_name: string;
-  status: 'confirmed' | 'pending';
+  status: TrialStatus;
   applied_date?: string;
+  /** Admin 分配後應有此欄位，用於顯示「已分配：兒童爵士 A」 */
+  assigned_class_name?: string | null;
 }
 const FALLBACK_TRIAL_APPLICATIONS: TrialApplicationItem[] = [
-  { id: 't1', class_name: '兒童芭蕾試堂', status: 'confirmed', applied_date: new Date().toISOString() },
+  { id: 't1', class_name: '兒童芭蕾試堂', status: 'assigned', applied_date: new Date().toISOString(), assigned_class_name: '兒童芭蕾 A' },
   { id: 't2', class_name: '兒童爵士試堂', status: 'pending', applied_date: new Date().toISOString() },
 ];
+
+/** 學生 dashboard 對試堂狀態的顯示邏輯 */
+function getTrialStatusLabel(status: TrialStatus, t: (k: string, d?: string) => string): string {
+  switch (status) {
+    case 'assigned':
+    case 'confirmed':
+    case 'contacted':
+    case 'attended_trial':
+      return t('dashboard.trialStatusConfirmed', '已確認');
+    case 'converted':
+      return t('dashboard.trialStatusConverted', '已轉正式');
+    case 'cancelled':
+      return t('dashboard.trialStatusCancelled', '已取消');
+    case 'could_not_assign':
+      return t('dashboard.trialStatusCouldNotAssign', '未能安排');
+    case 'pending':
+    default:
+      return t('dashboard.trialStatusPending', '待確認');
+  }
+}
+
+function getTrialBadgeClass(status: TrialStatus): string {
+  switch (status) {
+    case 'assigned':
+    case 'confirmed':
+    case 'contacted':
+    case 'attended_trial':
+      return 'bg-green-100 text-green-800';
+    case 'converted':
+      return 'bg-blue-100 text-blue-800';
+    case 'cancelled':
+      return 'bg-gray-200 text-gray-600';
+    case 'could_not_assign':
+      return 'bg-red-100 text-red-700';
+    case 'pending':
+    default:
+      return 'bg-amber-100 text-amber-800';
+  }
+}
 
 /** Demo: 代幣使用紀錄 */
 interface TokenUsageItem {
@@ -515,15 +566,24 @@ export default function DashboardPage() {
           ) : (
             <ul className="space-y-2">
               {(trialApplicationsLoaded ? trialApplications : FALLBACK_TRIAL_APPLICATIONS).map((trial) => (
-                <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                  <div>
+                <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-3">
+                  <div className="min-w-0">
                     <span className="font-medium text-gray-900">{trial.class_name}</span>
+                    {trial.assigned_class_name && (
+                      <span className="block text-xs text-green-700 mt-0.5">
+                        {t('dashboard.trialAssignedTo', '已安排：{{name}}', { name: trial.assigned_class_name })}
+                      </span>
+                    )}
                     {trial.applied_date && (
                       <span className="block text-xs text-gray-500 mt-0.5">{formatDate(trial.applied_date, getLocale())}</span>
                     )}
                   </div>
-                  <span className={`text-sm font-medium px-2 py-0.5 rounded ${trial.status === 'confirmed' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                    {trial.status === 'confirmed' ? t('dashboard.trialStatusConfirmed') : t('dashboard.trialStatusPending')}
+                  <span
+                    className={`flex-shrink-0 text-sm font-medium px-2 py-0.5 rounded ${getTrialBadgeClass(
+                      trial.status
+                    )}`}
+                  >
+                    {getTrialStatusLabel(trial.status, t)}
                   </span>
                 </li>
               ))}
