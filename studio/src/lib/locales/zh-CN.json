@@ -28,6 +28,7 @@
     "tokenPackageManagement": "代币套票管理",
     "adminContact": "联络我们",
     "adminFaq": "常见问题",
+    "adminTags": "标签管理",
     "adminTerms": "条款与细则",
     "adminPrivacy": "隐私政策",
     "refundRecords": "退款记录",
@@ -746,7 +747,7 @@
       "noData": "暂无数据",
       "sectionConversionFunnel": "新生转化漏斗",
       "conversionFunnel": "新生转化漏斗报表",
-      "conversionFunnelDesc": "试堂人数 → 报名人数。转化率显示有多少试堂转为付费报读。",
+      "conversionFunnelDesc": "试堂人数 → 报名人数。学员完成试堂申请后，若继续报读同一门课程，即计为成功转化。",
       "funnelStage": {
         "trial": "试堂",
         "enrolled": "报读"
@@ -893,6 +894,7 @@
       "entryLevel": "入门级",
       "intermediateLevel": "中级",
       "advancedLevel": "高级",
+      "levelManagedByTags": "可在「标签管理」新增或修改程度标签",
       "firstLessonDate": "第一堂课日期",
       "firstLessonDateHint": "第一堂课的日期（单堂课程即该课日期）。",
       "dateAndTimeRequired": "请选择日期与开始/结束时间。",
@@ -1280,6 +1282,58 @@
       "remove": "删除",
       "missingTitle": "请先输入页面标题",
       "confirmEmptyQuestions": "有未填问题的项目，将一并保存。是否继续？"
+    },
+    "tags": {
+      "title": "标签管理",
+      "description": "在此管理课程的标签分类。修改后需要点击「保存」才会套用到所有前端页面。",
+      "typeLevel": "程度",
+      "typeAge": "年龄",
+      "typeCategory": "课程分类",
+      "col": {
+        "order": "顺序",
+        "code": "代码",
+        "labelZhTw": "繁体中文",
+        "labelZhCn": "简体中文",
+        "labelEn": "English",
+        "active": "启用",
+        "actions": "操作"
+      },
+      "add": "新增标签",
+      "addType": "新增主题",
+      "manageTypes": "管理主题",
+      "typesModalTitle": "标签主题管理",
+      "typesModalDescription": "新增、重命名、停用或删除标签主题。系统内建主题（程度、年龄、课程分类）只能重命名或停用，无法删除。",
+      "typesModalHint": "主题 code 作为数据库键值（例如 level / age / dance_style），建议使用英文小写、数字、- 或 _。",
+      "typesSaved": "主题已更新",
+      "systemBadge": "系统内建",
+      "cannotDeleteSystem": "系统内建主题无法删除，只能停用或重命名。",
+      "confirmDeleteTypeWithTags": "主题「{{name}}」下仍有 {{count}} 个标签，删除主题会一并移除这些标签。仍要继续？",
+      "tagCount": "{{count}} 个标签",
+      "noTypes": "目前没有任何标签主题，请点击「管理主题」新增第一个主题。",
+      "inactive": "停用",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "deleteRow": "删除",
+      "empty": "此分类暂无标签，请新增",
+      "reset": "还原",
+      "saved": "已保存",
+      "saveFailed": "保存失败：{{msg}}",
+      "confirmReset": "放弃所有未保存的更改？",
+      "hintTitle": "使用提示",
+      "hint": {
+        "code": "代码 (code) 是课程数据存储用的稳定标识符，建议使用英文小写、数字、- 或 _。",
+        "active": "停用（取消启用）会把标签从前台菜单隐藏，但仍保留在已有课程上。",
+        "delete": "若标签已被课程使用，后端会拒绝删除；请改为停用。",
+        "types": "需要更多主题（例如舞种、难度）？请点击右上角「管理主题」新增。"
+      },
+      "error": {
+        "code_required": "代码不能为空",
+        "code_too_long": "代码过长",
+        "code_invalid": "代码只能包含英文小写、数字、- 或 _（主题 code 需以英文字母开头）",
+        "code_duplicate": "已有相同代码",
+        "label_required": "繁体中文名称不能为空",
+        "label_too_long": "名称过长（最多 128 字符）"
+      }
     },
     "tokenPackages": {
       "title": "代币套票管理",

@@ -10,6 +10,7 @@ import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users 
 import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, useAuth } from '../../contexts/AuthContext';
 import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
+import { useClassTags } from '../../lib/useClassTags';
 
 interface Class {
   id: string;
@@ -108,6 +109,8 @@ export default function ClassesPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { getHolidayName, holidayDatesSet } = useHolidays();
+  const { tagsByType: classTagsByType } = useClassTags();
+  const levelOptions = classTagsByType.level ?? [];
   const [classes, setClasses] = useState<Class[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2137,10 +2140,24 @@ export default function ClassesPage() {
                   onChange={(e) => setForm({ ...form, level: e.target.value as CourseLevel })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 >
-                  <option value="entry">{t('admin.classes.entryLevel')}</option>
-                  <option value="intermediate">{t('admin.classes.intermediateLevel')}</option>
-                  <option value="advanced">{t('admin.classes.advancedLevel')}</option>
+                  {levelOptions.map((opt) => {
+                    const lang = (i18n.language || 'zh-TW').toLowerCase();
+                    const label =
+                      (lang.startsWith('zh-cn') || lang === 'zh-hans')
+                        ? (opt.label_zh_cn || opt.label_zh_tw || opt.code)
+                        : lang.startsWith('en')
+                          ? (opt.label_en || opt.label_zh_tw || opt.code)
+                          : (opt.label_zh_tw || opt.label_en || opt.code);
+                    return (
+                      <option key={String(opt.id)} value={opt.code}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {t('admin.classes.levelManagedByTags', '可在「標籤管理」新增或修改程度標籤')}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.ageRange', '適合年齡')}</label>

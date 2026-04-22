@@ -2,7 +2,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { Home, Calendar, User, LogOut, Users, Info, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare, KeyRound, ScrollText, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Home, Calendar, User, LogOut, Users, Info, Menu, X, PanelLeft, ChevronDown, Receipt, Newspaper, Package, Phone, Mail, Facebook, Instagram, Tag, Tags, GraduationCap, LayoutDashboard, CalendarOff, Check, RotateCcw, ClipboardList, BookOpen, FileText, DollarSign, Target, UserMinus, ListChecks, Bell, MessageSquare, KeyRound, ScrollText, ShieldCheck, HelpCircle } from 'lucide-react';
 import LanguageSwitcher from './LanguageSwitcher';
 import StudentSidebarSchedule from './StudentSidebarSchedule';
 import ClassNoticePopup from './ClassNoticePopup';
@@ -100,6 +100,7 @@ export default function Layout({ children }: LayoutProps) {
         { path: '/admin/purchase-history', icon: Receipt, label: t('nav.tokenPurchaseHistory') },
         { path: '/admin/token-packages', icon: Package, label: t('nav.tokenPackageManagement', '代幣套票管理') },
         { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
+        { path: '/admin/tags', icon: Tags, label: t('nav.adminTags', '標籤管理') },
         { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },
         { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
         { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },

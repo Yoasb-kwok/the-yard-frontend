@@ -4,7 +4,18 @@ import Layout from '../../components/Layout';
 import { formatCurrency } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { PieChart as PieChartIcon, Calendar, TrendingUp, TrendingDown, Minus } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from 'recharts';
 import {
   FALLBACK_FINANCIAL,
   CHART_COLORS,
@@ -239,28 +250,52 @@ export default function AdminFinancialPage() {
             </div>
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.revenueByPackage')}</h3>
-              {financial.revenueByPackage.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie
-                      data={financial.revenueByPackage}
-                      dataKey="total"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {financial.revenueByPackage.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
-              ) : (
-                <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>
-              )}
+              {(() => {
+                // Sorted desc so the top earners sit at the top of the bar chart.
+                // Height scales with row count so the chart stays readable as new
+                // dance courses are added to the catalog; the wrapping div scrolls
+                // once we exceed a comfortable on-screen size.
+                const rows = [...financial.revenueByPackage].sort((a, b) => b.total - a.total);
+                if (rows.length === 0) {
+                  return (
+                    <p className="text-gray-500 text-sm py-8 text-center">{t('admin.dashboard.noData')}</p>
+                  );
+                }
+                const chartHeight = Math.max(220, rows.length * 36 + 40);
+                return (
+                  <div className="max-h-[420px] overflow-y-auto pr-1">
+                    <ResponsiveContainer width="100%" height={chartHeight}>
+                      <BarChart
+                        data={rows}
+                        layout="vertical"
+                        margin={{ top: 8, right: 24, bottom: 8, left: 8 }}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+                        <XAxis
+                          type="number"
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(v) => `$${v}`}
+                        />
+                        <YAxis
+                          type="category"
+                          dataKey="name"
+                          tick={{ fontSize: 11 }}
+                          width={120}
+                          interval={0}
+                        />
+                        <Tooltip
+                          formatter={(v: number) => [formatCurrency(v), t('admin.dashboard.revenueByPackage')]}
+                        />
+                        <Bar dataKey="total" radius={[0, 4, 4, 0]}>
+                          {rows.map((_, i) => (
+                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -281,24 +316,31 @@ export default function AdminFinancialPage() {
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.paymentMethodDistribution')}</h3>
               {financial.paymentMethodDistribution.length > 0 ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <PieChart>
-                    <Pie
-                      data={financial.paymentMethodDistribution.map((d) => ({ name: d.method || 'other', value: d.total }))}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={60}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {financial.paymentMethodDistribution.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
+                (() => {
+                  const rows = financial.paymentMethodDistribution
+                    .map((d) => ({ name: d.method || 'other', value: d.total }))
+                    .sort((a, b) => b.value - a.value);
+                  return (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={rows} margin={{ top: 8, right: 12, bottom: 8, left: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                        <YAxis
+                          tick={{ fontSize: 11 }}
+                          tickFormatter={(v) => `$${v}`}
+                        />
+                        <Tooltip
+                          formatter={(v: number) => [formatCurrency(v), t('admin.dashboard.paymentMethodDistribution')]}
+                        />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                          {rows.map((_, i) => (
+                            <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  );
+                })()
               ) : (
                 <p className="text-gray-500 text-sm py-6 text-center">{t('admin.dashboard.noData')}</p>
               )}

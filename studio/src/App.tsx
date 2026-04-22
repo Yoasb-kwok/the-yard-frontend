@@ -62,6 +62,7 @@ import AdminContactPage from './pages/admin/AdminContactPage';
 import AdminTermsPage from './pages/admin/AdminTermsPage';
 import AdminPrivacyPage from './pages/admin/AdminPrivacyPage';
 import AdminFaqPage from './pages/admin/AdminFaqPage';
+import AdminTagsPage from './pages/admin/AdminTagsPage';
 
 function App() {
   return (
@@ -405,6 +406,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <AdminFaqPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/tags"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminTagsPage />
               </ProtectedRoute>
             }
           />

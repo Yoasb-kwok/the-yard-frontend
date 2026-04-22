@@ -28,6 +28,7 @@
     "tokenPackageManagement": "Token Packages",
     "adminContact": "Contact Page",
     "adminFaq": "FAQ Page",
+    "adminTags": "Tag Management",
     "adminTerms": "Terms & Conditions",
     "adminPrivacy": "Privacy Policy",
     "refundRecords": "Refund Records",
@@ -761,7 +762,7 @@
       "noData": "No data",
       "sectionConversionFunnel": "Conversion Funnel",
       "conversionFunnel": "New Student Conversion Funnel",
-      "conversionFunnelDesc": "Trial count → Enrolled count. Conversion % shows how many trials become paid enrollments.",
+      "conversionFunnelDesc": "Trial count → Enrolled count. A trial counts as converted when the same student enrolls in the same course after the trial application.",
       "funnelStage": {
         "trial": "Trials",
         "enrolled": "Enrolled"
@@ -908,6 +909,7 @@
       "entryLevel": "Entry Level",
       "intermediateLevel": "Intermediate Level",
       "advancedLevel": "Advanced Level",
+      "levelManagedByTags": "Add or edit level tags in Tag Management",
       "firstLessonDate": "First lesson date",
       "firstLessonDateHint": "Date of the first lesson (or the only lesson for single class).",
       "dateAndTimeRequired": "Please select date and start/end time.",
@@ -1304,6 +1306,58 @@
       "remove": "Delete",
       "missingTitle": "Please enter a page title first",
       "confirmEmptyQuestions": "Some items have no question text. Save anyway?"
+    },
+    "tags": {
+      "title": "Tag Management",
+      "description": "Manage the tag options used on classes. Changes only apply across the app after clicking Save.",
+      "typeLevel": "Level",
+      "typeAge": "Age",
+      "typeCategory": "Category",
+      "col": {
+        "order": "Order",
+        "code": "Code",
+        "labelZhTw": "Traditional Chinese",
+        "labelZhCn": "Simplified Chinese",
+        "labelEn": "English",
+        "active": "Active",
+        "actions": "Actions"
+      },
+      "add": "Add tag",
+      "addType": "Add type",
+      "manageTypes": "Manage types",
+      "typesModalTitle": "Tag Types",
+      "typesModalDescription": "Add, rename, deactivate, or delete tag types (dimensions). Built-in types (Level, Age, Category) can be renamed or deactivated but not deleted.",
+      "typesModalHint": "The type code is used as a database key (e.g. level / age / dance_style). Use lowercase letters, digits, - or _.",
+      "typesSaved": "Tag types updated",
+      "systemBadge": "Built-in",
+      "cannotDeleteSystem": "Built-in tag types cannot be deleted — rename or deactivate them instead.",
+      "confirmDeleteTypeWithTags": "Type \"{{name}}\" still has {{count}} tag(s). Deleting the type will remove them as well. Continue?",
+      "tagCount": "{{count}} tag(s)",
+      "noTypes": "No tag types yet. Click \"Manage types\" to add the first one.",
+      "inactive": "Inactive",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "deleteRow": "Delete",
+      "empty": "No tags in this category yet — add one below.",
+      "reset": "Reset",
+      "saved": "Saved",
+      "saveFailed": "Save failed: {{msg}}",
+      "confirmReset": "Discard all unsaved changes?",
+      "hintTitle": "Tips",
+      "hint": {
+        "code": "Code is the stable slug stored with each class. Use lowercase letters, digits, - or _.",
+        "active": "Inactive tags are hidden from public dropdowns but stay attached to existing classes.",
+        "delete": "If a tag is already used by a class, the backend will refuse deletion — deactivate it instead.",
+        "types": "Need more dimensions (e.g. dance style, difficulty)? Click \"Manage types\" at the top right to add them."
+      },
+      "error": {
+        "code_required": "Code is required",
+        "code_too_long": "Code is too long",
+        "code_invalid": "Code may only contain lowercase letters, digits, - or _ (type codes must start with a letter)",
+        "code_duplicate": "Another entry already uses this code",
+        "label_required": "Traditional Chinese label is required",
+        "label_too_long": "Label is too long (max 128 characters)"
+      }
     },
     "tokenPackages": {
       "title": "Token Package Management",

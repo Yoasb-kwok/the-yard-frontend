@@ -13,8 +13,7 @@ import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { getFallbackCalendarLessons } from '../../lib/demoCourses';
 import { useModalA11y } from '../../lib/useModalA11y';
-import { LEVELS, AGE_TAGS, COURSE_TYPES } from '../../lib/coursesData';
-import type { CourseType } from '../../lib/coursesData';
+import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 
 interface Lesson {
   id: string;
@@ -103,9 +102,13 @@ export default function CalendarPage() {
   const [showLessonModal, setShowLessonModal] = useState(false);
   const [slotPicker, setSlotPicker] = useState<{ lessons: Lesson[]; timeLabel: string } | null>(null);
   const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
-  const [filterLevel, setFilterLevel] = useState<CourseLevel | null>(null);
+  const [filterLevel, setFilterLevel] = useState<string | null>(null);
   const [filterAge, setFilterAge] = useState<string | null>(null);
-  const [filterCategory, setFilterCategory] = useState<CourseType | null>(null);
+  const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const { tagsByType: classTagsByType, getTypeLabel: getTagTypeLabel } = useClassTags();
+  const levelTagOptions = classTagsByType.level ?? [];
+  const ageTagOptions = classTagsByType.age ?? [];
+  const categoryTagOptions = classTagsByType.category ?? [];
   const [isNarrowScreen, setIsNarrowScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const lessonModalRef = useRef<HTMLDivElement>(null);
   const slotPickerRef = useRef<HTMLDivElement>(null);
@@ -400,45 +403,55 @@ export default function CalendarPage() {
     return blocks;
   };
 
-  // Get level tag styling
-  const getLevelTag = (level: CourseLevel) => {
-    const levelConfig = {
-      entry: {
-        label: t('calendar.level.entry'),
-        className: 'bg-blue-100 text-blue-800 border-blue-200',
-      },
-      intermediate: {
-        label: t('calendar.level.intermediate'),
-        className: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      },
-      advanced: {
-        label: t('calendar.level.advanced'),
-        className: 'bg-purple-100 text-purple-800 border-purple-200',
-      },
+  // Map a level/age code → chip background colors. Built-in codes keep their
+  // original colors; admin-created codes get a deterministic neutral palette
+  // so new tags still look distinct.
+  const LEVEL_COLOR_MAP: Record<string, string> = {
+    entry: 'bg-blue-100 text-blue-800 border-blue-200',
+    intermediate: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    advanced: 'bg-purple-100 text-purple-800 border-purple-200',
+  };
+  const AGE_COLOR_MAP: Record<string, string> = {
+    '5-8': 'bg-teal-100 text-teal-800 border-teal-200',
+    '9-12': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+    '13-16': 'bg-indigo-100 text-indigo-800 border-indigo-200',
+  };
+  const FALLBACK_TAG_COLORS = [
+    'bg-rose-100 text-rose-800 border-rose-200',
+    'bg-emerald-100 text-emerald-800 border-emerald-200',
+    'bg-amber-100 text-amber-800 border-amber-200',
+    'bg-sky-100 text-sky-800 border-sky-200',
+    'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200',
+  ];
+  const colorForCode = (code: string, presets: Record<string, string>): string => {
+    if (presets[code]) return presets[code];
+    let hash = 0;
+    for (let i = 0; i < code.length; i++) hash = (hash * 31 + code.charCodeAt(i)) | 0;
+    return FALLBACK_TAG_COLORS[Math.abs(hash) % FALLBACK_TAG_COLORS.length];
+  };
+
+  // Get level tag styling — label comes from CMS first, then i18n key, then code itself.
+  const getLevelTag = (level: string) => {
+    const cmsRow = levelTagOptions.find((r) => r.code === level);
+    const cmsLabel = cmsRow ? localizeTagLabel(cmsRow, i18n.language || 'zh-TW') : '';
+    const fallbackLabel = level ? t(`calendar.level.${level}`, level) : '';
+    return {
+      label: cmsLabel || fallbackLabel,
+      className: colorForCode(level, LEVEL_COLOR_MAP),
     };
-    return levelConfig[level];
   };
 
   // Get age tag styling (supports preset 5-8, 9-12, 13-16 or any "X-Y" range from admin)
   const getAgeTag = (ageTag: string) => {
-    const ageConfig: Record<string, { label: string; className: string }> = {
-      '5-8': {
-        label: t('calendar.ageTag.5-8'),
-        className: 'bg-teal-100 text-teal-800 border-teal-200',
-      },
-      '9-12': {
-        label: t('calendar.ageTag.9-12'),
-        className: 'bg-cyan-100 text-cyan-800 border-cyan-200',
-      },
-      '13-16': {
-        label: t('calendar.ageTag.13-16'),
-        className: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-      },
-    };
-    if (ageTag && ageConfig[ageTag]) return ageConfig[ageTag];
+    if (!ageTag) return { label: '', className: 'bg-gray-100 text-gray-800 border-gray-200' };
+    const cmsRow = ageTagOptions.find((r) => r.code === ageTag);
+    const cmsLabel = cmsRow ? localizeTagLabel(cmsRow, i18n.language || 'zh-TW') : '';
+    const fallbackLabel =
+      cmsLabel ||
+      t(`calendar.ageTag.${ageTag}`, `${ageTag}${t('calendar.ageTag.yearsOld', '歲')}`);
     return {
-      label: ageTag ? `${ageTag}${t('calendar.ageTag.yearsOld', '歲')}` : '',
-      className: 'bg-gray-100 text-gray-800 border-gray-200',
+      label: fallbackLabel,
+      className: colorForCode(ageTag, AGE_COLOR_MAP),
     };
   };
 
@@ -1142,59 +1155,80 @@ export default function CalendarPage() {
             </div>
           )}
 
-          {/* 分類 tag：程度、年齡、課程分類 */}
+          {/* 分類 tag：程度、年齡、課程分類 — 由「標籤管理」CMS 動態驅動 */}
           <div className="mb-4 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 shrink-0">{t('courses.filterByLevel', '程度')}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {LEVELS.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setFilterLevel((prev) => (prev === level ? null : level))}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      filterLevel === level ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
-                    }`}
-                  >
-                    {t(`calendar.level.${level}`)}
-                  </button>
-                ))}
+            {levelTagOptions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 shrink-0">
+                  {getTagTypeLabel('level') || t('courses.filterByLevel', '程度')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {levelTagOptions.map((opt) => {
+                    const label = localizeTagLabel(opt, i18n.language || 'zh-TW');
+                    return (
+                      <button
+                        key={String(opt.id)}
+                        type="button"
+                        onClick={() => setFilterLevel((prev) => (prev === opt.code ? null : opt.code))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          filterLevel === opt.code ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 shrink-0">{t('courses.filterByAge', '年齡')}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {AGE_TAGS.map((age) => (
-                  <button
-                    key={age}
-                    type="button"
-                    onClick={() => setFilterAge((prev) => (prev === age ? null : age))}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      filterAge === age ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
-                    }`}
-                  >
-                    {getAgeTag(age).label}
-                  </button>
-                ))}
+            )}
+            {ageTagOptions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 shrink-0">
+                  {getTagTypeLabel('age') || t('courses.filterByAge', '年齡')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ageTagOptions.map((opt) => {
+                    const label = localizeTagLabel(opt, i18n.language || 'zh-TW');
+                    return (
+                      <button
+                        key={String(opt.id)}
+                        type="button"
+                        onClick={() => setFilterAge((prev) => (prev === opt.code ? null : opt.code))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          filterAge === opt.code ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-gray-500 shrink-0">{t('courses.filterByCategory', '課程分類')}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {COURSE_TYPES.map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setFilterCategory((prev) => (prev === type ? null : type))}
-                    className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                      filterCategory === type ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
-                    }`}
-                  >
-                    {t(`calendar.courseType.${type}`, t(`courses.courseType.${type}`))}
-                  </button>
-                ))}
+            )}
+            {categoryTagOptions.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-gray-500 shrink-0">
+                  {getTagTypeLabel('category') || t('courses.filterByCategory', '課程分類')}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {categoryTagOptions.map((opt) => {
+                    const label = localizeTagLabel(opt, i18n.language || 'zh-TW');
+                    return (
+                      <button
+                        key={String(opt.id)}
+                        type="button"
+                        onClick={() => setFilterCategory((prev) => (prev === opt.code ? null : opt.code))}
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                          filterCategory === opt.code ? 'bg-primary text-white border border-primary' : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
         </div>
