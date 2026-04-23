@@ -8,6 +8,8 @@
  * to set `Content-Type` (with boundary) automatically.
  */
 
+import { isDemoMode } from './mock';
+
 const DEFAULT_PROD_API_URL = 'https://theyardapis.01tech.work/api';
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ??
@@ -46,6 +48,13 @@ export function resolveUploadUrl(url: string | null | undefined): string {
  * Returns the URL string to store in DB (relative or absolute, as returned by backend).
  */
 export async function uploadImage(file: File, purpose?: string): Promise<string> {
+  if (isDemoMode()) {
+    // Use a stable placeholder URL tied to the file name so the image persists
+    // across reloads and feels real.
+    const seed = encodeURIComponent(`${purpose || 'demo'}-${file.name}-${file.size}`);
+    await new Promise((r) => setTimeout(r, 300));
+    return `https://picsum.photos/seed/${seed}/1000/600`;
+  }
   const form = new FormData();
   form.append('file', file);
   if (purpose) form.append('purpose', purpose);
