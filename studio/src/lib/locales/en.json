@@ -359,7 +359,7 @@
     "dontHaveAccount": "Don't have an account?",
     "register": "Register",
     "forgotPassword": "Forgot Password?",
-    "demoHint": "Demo (no backend): student@student.com / student123 · admin@admin.com / admin123"
+    "demoHint": "Demo (no backend): student@demo.com / demo1234 · admin@demo.com / demo1234"
   },
   "forgotPassword": {
     "title": "Forgot Password",

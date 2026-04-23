@@ -8,7 +8,7 @@ import { ClipboardList, Eye, X, FileText, Check, Ban, Filter, RefreshCw } from '
 type Application = {
   id: string;
   rawType?: 'extension' | 'sick_leave';
-  rawId?: number;
+  rawId?: string;
   studentName: string;
   className: string;
   type: 'reschedule' | 'sickLeave';
@@ -23,7 +23,16 @@ function normaliseApplications(data: unknown): Application[] {
     return data.map((a: Record<string, unknown>) => ({
       id: String(a.id ?? ''),
       rawType: (a.rawType ?? a.raw_type) as 'extension' | 'sick_leave',
-      rawId: typeof a.rawId === 'number' ? a.rawId : (typeof a.raw_id === 'number' ? a.raw_id : undefined),
+      rawId:
+        typeof a.rawId === 'string'
+          ? a.rawId
+          : typeof a.rawId === 'number'
+            ? String(a.rawId)
+            : typeof a.raw_id === 'string'
+              ? a.raw_id
+              : typeof a.raw_id === 'number'
+                ? String(a.raw_id)
+                : undefined,
       studentName: String(a.studentName ?? a.student_name ?? ''),
       className: String(a.className ?? a.class_name ?? ''),
       type: (a.type === 'reschedule' ? 'reschedule' : 'sickLeave') as 'reschedule' | 'sickLeave',
@@ -40,7 +49,7 @@ function normaliseApplications(data: unknown): Application[] {
         out.push({
           id: `sick_leave_${r.id}`,
           rawType: 'sick_leave',
-          rawId: typeof r.id === 'number' ? r.id : undefined,
+          rawId: r.id != null ? String(r.id) : undefined,
           studentName: String(r.student_name ?? r.studentName ?? ''),
           className: String(r.class_name ?? r.className ?? ''),
           type: 'sickLeave',
@@ -56,7 +65,7 @@ function normaliseApplications(data: unknown): Application[] {
         out.push({
           id: `extension_${r.id}`,
           rawType: 'extension',
-          rawId: typeof r.id === 'number' ? r.id : undefined,
+          rawId: r.id != null ? String(r.id) : undefined,
           studentName: String(r.student_name ?? r.studentName ?? ''),
           className: String(r.class_name ?? r.className ?? ''),
           type: 'reschedule',
@@ -148,9 +157,9 @@ export default function PendingApplicationsPage() {
     }
   }
   async function patchApplication(app: Application, status: 'approved' | 'rejected', rejectionReason?: string) {
-    if (app.rawType === 'extension' && app.rawId != null) {
+    if (app.rawType === 'extension' && app.rawId) {
       await api.patch(`/admin/extension-requests/${app.rawId}`, { status, rejection_reason: rejectionReason ?? undefined });
-    } else if (app.rawType === 'sick_leave' && app.rawId != null) {
+    } else if (app.rawType === 'sick_leave' && app.rawId) {
       await api.patch(`/admin/sick-leave-requests/${app.rawId}`, { status, rejection_reason: rejectionReason ?? undefined });
     }
   }

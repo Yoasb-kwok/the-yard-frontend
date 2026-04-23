@@ -100,9 +100,20 @@ function normalizeBranch(raw: unknown): ContactBranch | null {
 function normalizeSettings(raw: unknown): { title: string; intro: string } {
   if (!raw || typeof raw !== 'object') return { title: '', intro: '' };
   const o = raw as Record<string, unknown>;
+  const settings =
+    o.settings && typeof o.settings === 'object'
+      ? (o.settings as Record<string, unknown>)
+      : o;
   return {
-    title: typeof o.title === 'string' ? o.title : '',
-    intro: typeof o.intro === 'string' ? o.intro : '',
+    title: typeof settings.title === 'string' ? settings.title : '',
+    intro:
+      typeof settings.intro === 'string'
+        ? settings.intro
+        : typeof settings.intro_html === 'string'
+          ? settings.intro_html
+          : typeof o.intro === 'string'
+            ? o.intro
+            : '',
   };
 }
 
@@ -116,6 +127,7 @@ export async function loadPublicContact(): Promise<ContactContent> {
     const res = await api.get<{
       title?: string;
       intro?: string;
+      settings?: { title?: string; intro?: string; intro_html?: string };
       branches?: unknown[];
     }>('/contact');
     if (res.success && res.data) {
@@ -125,9 +137,22 @@ export async function loadPublicContact(): Promise<ContactContent> {
         const n = normalizeBranch(b);
         if (n) branches.push(n);
       }
+      const settings = res.data.settings && typeof res.data.settings === 'object' ? res.data.settings : undefined;
       return {
-        title: typeof res.data.title === 'string' ? res.data.title : '',
-        intro: typeof res.data.intro === 'string' ? res.data.intro : '',
+        title:
+          typeof res.data.title === 'string'
+            ? res.data.title
+            : typeof settings?.title === 'string'
+              ? settings.title
+              : '',
+        intro:
+          typeof res.data.intro === 'string'
+            ? res.data.intro
+            : typeof settings?.intro === 'string'
+              ? settings.intro
+              : typeof settings?.intro_html === 'string'
+                ? settings.intro_html
+                : '',
         branches,
       };
     }
@@ -187,7 +212,7 @@ function branchPayload(b: ContactBranch): Record<string, unknown> {
  *   { data: { branch: { id: 2 } } } ← nested wrapper
  *   { data: { insertId: 2 } }       ← raw mysql2 result
  */
-function extractId(res: { data?: unknown } & Record<string, unknown>): number | null {
+function extractId(res: { data?: unknown; id?: unknown; insertId?: unknown }): number | null {
   const candidates: unknown[] = [];
   const data = res.data as Record<string, unknown> | undefined;
   if (data) {
@@ -199,7 +224,7 @@ function extractId(res: { data?: unknown } & Record<string, unknown>): number | 
       }
     }
   }
-  candidates.push(res.id, (res as Record<string, unknown>).insertId);
+  candidates.push(res.id, res.insertId);
   for (const c of candidates) {
     if (typeof c === 'number' && Number.isFinite(c)) return c;
     if (typeof c === 'string' && /^\d+$/.test(c)) return Number(c);

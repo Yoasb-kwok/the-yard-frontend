@@ -1,0 +1,195 @@
+Dijkstra's Algorithm for Routing Table Design
+15-Minute Presentation Speech Script
+
+Slide 1 - Title (about 1 minute)
+Good morning/afternoon everyone.
+Today I will present Dijkstra's Algorithm for Routing Table Design, focusing on how shortest-path algorithms are used in real networks to find least-cost routes.
+
+In modern communication systems, routing is one of the most critical tasks. Routers must continuously decide how to forward packets efficiently, even when the network has many nodes and links. If routing decisions are poor, we get higher delay, congestion, and packet loss. If routing decisions are optimized, we get faster and more reliable communication.
+
+This is where Dijkstra's algorithm becomes important.
+It provides a systematic and mathematically correct way to compute shortest paths from one source node to all other nodes in a graph. Because of this, it is a core building block of link-state routing protocols such as OSPF and IS-IS, which are widely used in enterprise and ISP networks.
+
+In this presentation, I will explain the problem, key concepts, algorithm steps, a worked example, and finally how shortest paths are converted into routing table entries.
+
+
+Slide 2 - Student Information (about 20-30 seconds)
+Before we begin the technical part, here is my student information:
+My name is Kwok Chi Wa Jason,
+Student ID 23041612D,
+and this work is for EIE4113 Wireless and Mobile Systems.
+
+Now I will move to the problem definition.
+
+
+Slide 3 - Problem Definition (about 1.5 minutes)
+Let us start with the routing challenge.
+
+In a real network, routers are connected in complex topologies. Between any two points, there may be multiple possible paths. These paths can differ in delay, bandwidth, link quality, and reliability. So routers need an intelligent method to select the best path, not just any path.
+
+Dijkstra's algorithm solves this by addressing the single-source shortest path problem.
+Given one source router, it finds the least-cost path to every other router in polynomial time. This makes it practical for real routing systems.
+
+Another important point is that cost is flexible.
+Cost can represent hop count, delay, bandwidth-based metrics, or a composite value defined by network policy. This flexibility allows administrators to tune routing behavior according to business goals, for example minimizing latency for voice traffic or balancing load for data traffic.
+
+Finally, this is not only a theoretical algorithm.
+Protocols like OSPF and IS-IS use this logic in operational networks worldwide. So understanding Dijkstra means understanding the foundation of modern link-state routing.
+
+
+Slide 4 - Key Concepts and Assumptions (about 1.5 minutes)
+Now let us review the core assumptions behind the algorithm.
+
+First, we model the network as a graph:
+- Vertices are routers.
+- Edges are links between routers.
+- Edge weights are link costs.
+
+Second, Dijkstra requires non-negative edge weights.
+If negative weights are present, the algorithm may produce incorrect results. In routing contexts, this is usually fine because link costs are naturally non-negative.
+
+Third, Dijkstra uses a greedy strategy.
+At each step, it permanently selects the unvisited node with the smallest known distance from the source. Then it relaxes edges from that node to improve tentative distances of neighbors.
+
+Fourth, this greedy process is not just heuristic, it is provably correct under the non-negative weight assumption.
+So when the algorithm finishes, all computed shortest paths are globally optimal.
+
+This combination of efficiency, clarity, and guaranteed optimality is why it is so suitable for routing computation.
+
+
+Slide 5 - Core Steps and Pseudocode (about 2 minutes)
+Now I will explain the algorithm flow in five practical steps.
+
+Step 1: Initialization
+Set the source node distance to 0.
+Set all other node distances to infinity.
+Mark all nodes as unvisited.
+
+Step 2: Selection
+Choose the unvisited node with the smallest current distance.
+This node is the current processing node.
+
+Step 3: Relaxation
+For each unvisited neighbor of the current node, compute a new tentative distance:
+current distance plus edge cost.
+If this new value is smaller than the previously known distance, update that neighbor's distance and predecessor.
+
+Step 4: Marking
+Mark the current node as visited.
+After this point, its shortest distance is finalized and will not change.
+
+Step 5: Termination
+Repeat steps 2 to 4 until all nodes are visited, or until the destination of interest is finalized.
+
+At the end, we get two useful outputs:
+1) The shortest cost to each destination.
+2) The predecessor chain, which allows us to reconstruct full paths.
+
+For routing tables, we usually care most about destination, cost, and next hop.
+
+
+Slide 6 - Example Setup and Initialization (about 1.5 minutes)
+Let us apply this to a concrete 5-node graph with source node A.
+
+Nodes are A, B, C, D, and E.
+Initially, distances are:
+- A equals 0, because it is the source.
+- B, C, D, and E are infinity, because we have not discovered routes yet.
+
+The predecessor array is empty at the start.
+And the unvisited set is all nodes: A, B, C, D, E.
+
+This initialization is important because it defines our baseline knowledge:
+only the source is known with certainty, and everything else must be discovered through edge relaxation.
+
+Now we can run iterations to progressively improve distance estimates until all are finalized.
+
+
+Slide 7 - First Three Iterations (about 2.5 minutes)
+Now let us walk through the first three iterations.
+
+Iteration 1: Process A
+From A, we compute distances to neighbors:
+- To B: 0 + 4 = 4
+- To C: 0 + 2 = 2
+So we update B to 4 and C to 2.
+A becomes visited.
+Among unvisited nodes, C has the smallest distance, so C is selected next.
+
+Iteration 2: Process C
+Current shortest known distance to C is 2.
+Now relax C's neighbors:
+- B can be improved from 4 to 3 through A -> C -> B
+- D becomes 10
+- E becomes 12
+So we update those values and predecessors accordingly.
+Now visited set is A and C.
+Next minimum unvisited node is B with distance 3.
+
+Iteration 3: Process B
+From B at distance 3:
+- D can be improved from 10 to 8 via A -> C -> B -> D
+- E can be improved from 12 to 9 via A -> C -> B -> E
+Both values are updated.
+Visited set becomes A, C, B.
+Next minimum is D with distance 8.
+
+At this stage, we already see how the algorithm refines earlier estimates and discovers better routes through intermediate nodes.
+
+
+Slide 8 - Final Iterations and Final Paths (about 2 minutes)
+Now we finish the process.
+
+Process D with distance 8:
+Check edge to E.
+New candidate distance to E is 8 + 2 = 10.
+Current best for E is already 9, so no update is made.
+Mark D visited.
+
+Process E with distance 9:
+No meaningful unvisited neighbors remain.
+Algorithm terminates.
+
+Final shortest results from source A are:
+- A: cost 0, direct
+- C: cost 2, path A -> C
+- B: cost 3, path A -> C -> B
+- D: cost 8, path A -> C -> B -> D
+- E: cost 9, path A -> C -> B -> E
+
+These are the optimal paths under given edge costs.
+Notice a key point: even though there may be direct-looking options, the cheapest route often goes through intermediate nodes.
+
+
+Slide 9 - From Shortest Paths to Routing Table (about 2 minutes)
+Now we connect algorithm output to actual router behavior.
+
+Routers do not forward packets using full end-to-end path strings.
+They forward based on next hop entries in the routing table.
+
+So we convert shortest-path results into a forwarding table with columns like:
+Destination, Next Hop, Cost, and optionally Full Path for analysis.
+
+In the 6-node example shown for router u, most destinations use w as next hop.
+This demonstrates route concentration through the best adjacent neighbor.
+For example, from u to x, y, and z, the optimal first move is to send packets to w.
+
+This is exactly how link-state protocols operate in practice:
+- Routers exchange topology information.
+- Each router builds an identical link-state database.
+- Then each router independently runs Dijkstra from itself as source.
+- Finally, each router installs computed next hops into its own forwarding table.
+
+So Dijkstra is not only an offline design tool, it is a live operational mechanism in real IP networks.
+
+
+Slide 10 - Conclusion and Thank You (about 1 minute)
+To conclude:
+
+Dijkstra's algorithm is a foundational method for routing optimization.
+It gives guaranteed shortest paths under non-negative costs, scales efficiently for many practical topologies, and directly supports real routing protocols like OSPF and IS-IS.
+
+By understanding its graph model, greedy relaxation process, and path-to-table conversion, we gain strong insight into how routers make forwarding decisions in modern networks.
+
+Thank you for your attention.
+I am happy to take any questions.

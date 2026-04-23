@@ -359,7 +359,7 @@
     "dontHaveAccount": "还没有账户？",
     "register": "注册",
     "forgotPassword": "忘记密码？",
-    "demoHint": "演示账号（无需后端）：student@student.com / student123 · admin@admin.com / admin123"
+    "demoHint": "演示账号（无需后端）：student@demo.com / demo1234 · admin@demo.com / demo1234"
   },
   "forgotPassword": {
     "title": "忘记密码",

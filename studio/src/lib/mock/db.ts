@@ -29,6 +29,7 @@ export interface DemoUser {
   residential_district?: string | null;
   has_joined_courses?: boolean | null;
   level?: string | null;
+  must_change_password?: boolean;
   created_at: string;
 }
 
@@ -71,6 +72,9 @@ export interface DemoClass {
   description?: string;
   image_url?: string | null;
   is_active?: boolean;
+  lesson_number?: number;
+  is_internal?: boolean;
+  is_cancelled?: boolean;
 }
 
 export interface DemoEnrollment {

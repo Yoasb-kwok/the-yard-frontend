@@ -359,7 +359,7 @@
     "dontHaveAccount": "還沒有帳戶？",
     "register": "註冊",
     "forgotPassword": "忘記密碼？",
-    "demoHint": "示範帳號（無需後端）：student@student.com / student123 · admin@admin.com / admin123"
+    "demoHint": "示範帳號（無需後端）：student@demo.com / demo1234 · admin@demo.com / demo1234"
   },
   "forgotPassword": {
     "title": "忘記密碼",

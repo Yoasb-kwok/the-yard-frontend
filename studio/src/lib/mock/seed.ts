@@ -174,7 +174,9 @@ export function buildSeed(): DemoDb {
   ];
 
   baseClasses.forEach((b, idx) => {
-    // Create instances for each of the next 8 weeks on the weekday
+    // Create instances for each of the next 8 weeks on the weekday.
+    // Use numeric string IDs (MySQL-style) so the admin frontend's
+    // `Number(classId)` parsing works.
     for (let week = 0; week < 8; week += 1) {
       const d = new Date();
       const diff = (b.weekday - d.getDay() + 7) % 7;
@@ -184,8 +186,10 @@ export function buildSeed(): DemoDb {
       const end = new Date(d);
       end.setHours(end.getHours() + 1);
       end.setMinutes(end.getMinutes() + 30);
+      const numericId = String(idx * 8 + week + 1); // 1..72
       classes.push({
-        id: `cls_${idx}_${week}`,
+        id: numericId,
+        lesson_number: week + 1,
         name: b.name,
         name_zh_tw: b.name,
         name_zh_cn: b.name,
@@ -217,7 +221,7 @@ export function buildSeed(): DemoDb {
   const enrollments: DemoDb['enrollments'] = [
     {
       id: 'enr_001',
-      class_id: 'cls_0_0',
+      class_id: '1',
       user_id: 'user_001',
       student_name: '陳小美',
       status: 'enrolled',
@@ -228,7 +232,7 @@ export function buildSeed(): DemoDb {
     },
     {
       id: 'enr_002',
-      class_id: 'cls_1_0',
+      class_id: '9',
       user_id: 'user_001',
       student_name: '陳小美',
       status: 'enrolled',
@@ -239,7 +243,7 @@ export function buildSeed(): DemoDb {
     },
     {
       id: 'enr_003',
-      class_id: 'cls_3_0',
+      class_id: '25',
       user_id: 'user_002',
       student_name: '黃先生',
       status: 'enrolled',
@@ -250,7 +254,7 @@ export function buildSeed(): DemoDb {
     },
     {
       id: 'enr_004',
-      class_id: 'cls_4_0',
+      class_id: '33',
       user_id: 'user_004',
       student_name: 'Leo 林',
       status: 'enrolled',
@@ -286,7 +290,7 @@ export function buildSeed(): DemoDb {
       preferred_date: iso(daysFromNow(3)),
       preferred_location: 'causewaybay',
       preferred_program: 'HH-T',
-      assigned_class_id: 'cls_3_0',
+      assigned_class_id: '25',
       assigned_class_name: 'Hip-hop 青少年',
       assigned_lessons: 16,
       status: 'assigned',
@@ -302,7 +306,7 @@ export function buildSeed(): DemoDb {
       preferred_date: iso(daysFromNow(-7)),
       preferred_location: 'causewaybay',
       preferred_program: 'CTMP',
-      assigned_class_id: 'cls_5_0',
+      assigned_class_id: '41',
       assigned_class_name: '當代舞中級',
       assigned_lessons: 16,
       status: 'converted',

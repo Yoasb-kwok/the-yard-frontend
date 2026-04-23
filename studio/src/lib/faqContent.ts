@@ -91,9 +91,20 @@ function normalizeItem(raw: unknown): FaqItem | null {
 function normalizeSettings(raw: unknown): { title: string; intro: string } {
   if (!raw || typeof raw !== 'object') return { title: '', intro: '' };
   const o = raw as Record<string, unknown>;
+  const settings =
+    o.settings && typeof o.settings === 'object'
+      ? (o.settings as Record<string, unknown>)
+      : o;
   return {
-    title: typeof o.title === 'string' ? o.title : '',
-    intro: typeof o.intro === 'string' ? o.intro : '',
+    title: typeof settings.title === 'string' ? settings.title : '',
+    intro:
+      typeof settings.intro === 'string'
+        ? settings.intro
+        : typeof settings.intro_html === 'string'
+          ? settings.intro_html
+          : typeof o.intro === 'string'
+            ? o.intro
+            : '',
   };
 }
 
@@ -107,6 +118,7 @@ export async function loadPublicFaq(): Promise<FaqContent | null> {
     const res = await api.get<{
       title?: string;
       intro?: string;
+      settings?: { title?: string; intro?: string; intro_html?: string };
       items?: unknown[];
     }>('/faq');
     if (res.success && res.data) {
@@ -116,8 +128,21 @@ export async function loadPublicFaq(): Promise<FaqContent | null> {
         const n = normalizeItem(it);
         if (n) items.push(n);
       }
-      const title = typeof res.data.title === 'string' ? res.data.title : '';
-      const intro = typeof res.data.intro === 'string' ? res.data.intro : '';
+      const settings = res.data.settings && typeof res.data.settings === 'object' ? res.data.settings : undefined;
+      const title =
+        typeof res.data.title === 'string'
+          ? res.data.title
+          : typeof settings?.title === 'string'
+            ? settings.title
+            : '';
+      const intro =
+        typeof res.data.intro === 'string'
+          ? res.data.intro
+          : typeof settings?.intro === 'string'
+            ? settings.intro
+            : typeof settings?.intro_html === 'string'
+              ? settings.intro_html
+              : '';
       if (items.length > 0 || title.trim() !== '' || intro.trim() !== '') {
         return { title, intro, items };
       }
@@ -165,7 +190,7 @@ function itemPayload(it: FaqItem): Record<string, unknown> {
 }
 
 /** Tolerant id extraction — see contactContent.ts for rationale. */
-function extractId(res: { data?: unknown } & Record<string, unknown>): number | null {
+function extractId(res: { data?: unknown; id?: unknown; insertId?: unknown }): number | null {
   const candidates: unknown[] = [];
   const data = res.data as Record<string, unknown> | undefined;
   if (data) {
@@ -177,7 +202,7 @@ function extractId(res: { data?: unknown } & Record<string, unknown>): number | 
       }
     }
   }
-  candidates.push(res.id, (res as Record<string, unknown>).insertId);
+  candidates.push(res.id, res.insertId);
   for (const c of candidates) {
     if (typeof c === 'number' && Number.isFinite(c)) return c;
     if (typeof c === 'string' && /^\d+$/.test(c)) return Number(c);

@@ -44,6 +44,10 @@ export interface MockResponse {
   token?: string;
   user?: unknown;
   profile?: unknown;
+  profiles?: unknown;
+  requirePasswordChange?: boolean;
+  // Extra fields used by specific endpoints (trial signup, etc.).
+  [key: string]: unknown;
 }
 
 // ------------------------------------------------------------------ Helpers
@@ -204,18 +208,34 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
 
   if (method === 'GET' && path === '/auth/me') {
     if (!actor) return err('Unauthorized');
-    return ok(undefined, {
-      user: {
-        ID: actor.id,
-        id: actor.id,
-        username: actor.email.split('@')[0],
-        name: actor.name,
-        email: actor.email,
-        role: actor.role,
-        mobile: actor.mobile,
+    const userPayload = {
+      ID: actor.id,
+      id: actor.id,
+      username: actor.email.split('@')[0],
+      name: actor.name,
+      email: actor.email,
+      role: actor.role,
+      mobile: actor.mobile,
+    };
+    const prof = profileFromUser(actor);
+    return {
+      success: true,
+      data: {
+        user: userPayload,
+        profiles: [prof],
+        requirePasswordChange: false,
       },
-      profile: profileFromUser(actor),
-    });
+      user: userPayload,
+      profiles: [prof],
+      profile: prof,
+      requirePasswordChange: false,
+    } as MockResponse;
+  }
+
+  // Health check — AuthContext pings this on startup; returning a stable
+  // serverId prevents it from logging the user out on page refresh.
+  if (method === 'GET' && path === '/health') {
+    return ok({ ok: true, serverId: 'demo-server-v1' });
   }
 
   if (method === 'POST' && path === '/user/forgot-password') {
@@ -324,11 +344,24 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   if (method === 'GET' && path === '/contact') {
     const db = getDb();
-    return ok({ settings: db.contactSettings, branches: db.contactBranches });
+    return ok({
+      ...db.contactSettings,
+      intro:
+        (db.contactSettings as Record<string, unknown>).intro ??
+        (db.contactSettings as Record<string, unknown>).intro_html ??
+        '',
+      settings: db.contactSettings,
+      branches: db.contactBranches,
+    });
   }
   if (method === 'GET' && path === '/faq') {
     const db = getDb();
     return ok({
+      ...db.faqSettings,
+      intro:
+        (db.faqSettings as Record<string, unknown>).intro ??
+        (db.faqSettings as Record<string, unknown>).intro_html ??
+        '',
       settings: db.faqSettings,
       items: db.faqItems.filter((i) => i.is_active).sort((a, b) => a.display_order - b.display_order),
     });
@@ -339,7 +372,10 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && path === '/privacy') {
     return ok(getDb().privacy);
   }
-  if (method === 'POST' && path === '/trial-applications') {
+  if (
+    method === 'POST' &&
+    (path === '/trial-applications' || path === '/trial-application')
+  ) {
     return createTrialApplication(req);
   }
 
@@ -374,6 +410,28 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     if (!actor) return ok([]);
     const db = getDb();
     return ok(db.notifications.filter((n) => n.user_id === actor.id));
+  }
+  if (method === 'GET' && path === '/student/trial-applications') {
+    if (!actor) return ok([]);
+    const db = getDb();
+    const mine = db.trialApplications.filter(
+      (t) => t.user_id === actor.id || t.email.toLowerCase() === actor.email.toLowerCase(),
+    );
+    return ok(
+      mine.map((t) => {
+        const cls = t.assigned_class_id
+          ? db.classes.find((c) => String(c.id) === String(t.assigned_class_id))
+          : null;
+        return {
+          id: t.id,
+          class_name:
+            t.assigned_class_name || cls?.name || t.preferred_program || '試堂申請',
+          status: t.status,
+          applied_date: t.created_at,
+          assigned_class_name: t.assigned_class_name ?? cls?.name ?? null,
+        };
+      }),
+    );
   }
   if (method === 'POST' && path === '/student/sick-leave-request') {
     const b = body as { enrollmentId?: string; reason?: string };
@@ -563,7 +621,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   if (method === 'POST' && path === '/admin/classes') {
     const patch = body as Partial<DemoClass>;
-    const id = nextId('cls');
+    const id = String(nextNumId());
     const now = new Date();
     const created: DemoClass = {
       id,
@@ -586,6 +644,59 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       d.classes.push(created);
     });
     appendAudit(actor?.name || 'admin', 'create', 'class', created.id, created.name);
+    return ok(created);
+  }
+
+  // Bulk create a recurring series (e.g. 16 weekly lessons from a first date).
+  if (
+    method === 'POST' &&
+    (path === '/admin/classes/recurring' || path === 'admin/classes/recurring')
+  ) {
+    const b = (body ?? {}) as Record<string, any>;
+    const firstDate = b.first_date || new Date().toISOString().split('T')[0];
+    const startTime = b.start_time || '16:00';
+    const endTime = b.end_time || '17:00';
+    const n = Math.max(1, Math.min(52, Number(b.number_of_lessons) || 1));
+    const base = new Date(`${firstDate}T${startTime}:00`);
+    const end = new Date(`${firstDate}T${endTime}:00`);
+    const weekday = base.getDay();
+    const created: DemoClass[] = [];
+    mutate((d) => {
+      for (let i = 0; i < n; i++) {
+        const s = new Date(base);
+        s.setDate(base.getDate() + i * 7);
+        const e = new Date(end);
+        e.setDate(end.getDate() + i * 7);
+        const id = String(nextNumId());
+        const c: DemoClass = {
+          id,
+          name: b.name || 'New class',
+          name_zh_tw: b.name_zh_tw,
+          name_zh_cn: b.name_zh_cn,
+          name_en: b.name_en,
+          instructor: b.instructor || '',
+          start_time: s.toISOString(),
+          end_time: e.toISOString(),
+          location: b.location || 'sanpokong',
+          program_code: b.program_code || 'NEW',
+          level: b.level || 'entry',
+          age_tag: b.age_group || b.age_tag || '10-12',
+          capacity: Number(b.capacity) || 12,
+          enrolled_count: 0,
+          weekday,
+          total_lessons: n,
+          lesson_number: i + 1,
+          is_internal: b.is_internal === 1 || b.is_internal === true,
+          is_cancelled: false,
+          allow_trial: b.allow_trial === 1 || b.allow_trial === true,
+          is_active: true,
+        } as DemoClass;
+        d.classes.push(c);
+        created.push(c);
+      }
+    });
+    appendAudit(actor?.name || 'admin', 'bulk_create', 'class', '', `${n} lessons`);
+    // Frontend reads res.data as array.
     return ok(created);
   }
   if (method === 'PATCH' && adminClassId) {
@@ -632,25 +743,68 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
 
   // ---- Trial applications
+  // Map internal `DemoTrialApplication` to the shape `TrialApplicationsPage`
+  // expects (backend MySQL-style columns).
+  function toAdminTrialRow(t: DemoTrialApplication) {
+    const d = getDb();
+    const cls = t.assigned_class_id
+      ? d.classes.find((c) => String(c.id) === String(t.assigned_class_id))
+      : null;
+    return {
+      id: t.id,
+      applicant_name: t.student_name,
+      full_name: t.student_name,
+      applicant_email: t.email,
+      email: t.email,
+      applicant_phone: t.mobile,
+      mobile: t.mobile,
+      contact_number: t.mobile,
+      residential_district: null,
+      trial_class: t.assigned_class_name || cls?.name || t.preferred_program || '',
+      class_name: t.assigned_class_name || cls?.name || '',
+      preferred_datetime: t.preferred_date,
+      preferred_date: t.preferred_date,
+      trial_date: cls?.start_time || t.preferred_date,
+      status: t.status,
+      assigned_class_id: t.assigned_class_id ?? null,
+      assigned_class_name: t.assigned_class_name ?? cls?.name ?? null,
+      assigned_lessons: t.assigned_lessons ?? null,
+      class_total_lessons: cls?.total_lessons ?? null,
+      notes: t.notes ?? '',
+      applied_at: t.created_at,
+      created_at: t.created_at,
+      updated_at: t.created_at,
+    };
+  }
+
   if (method === 'GET' && path === '/admin/trial-applications') {
     const db = getDb();
-    return ok(db.trialApplications);
+    return ok(db.trialApplications.map(toAdminTrialRow));
   }
   const adminTrialId = matches('/admin/trial-applications/:id', path);
   if (method === 'PATCH' && adminTrialId) {
-    const patch = body as Partial<DemoTrialApplication>;
+    const patch = body as Partial<DemoTrialApplication> & { assigned_class_id?: unknown };
     const updated = mutate((d) => {
-      const t = d.trialApplications.find((x) => x.id === adminTrialId.id);
+      const t = d.trialApplications.find(
+        (x) => String(x.id) === String(adminTrialId.id),
+      );
       if (!t) return null;
-      if (patch.assigned_class_id) {
-        const c = d.classes.find((x) => x.id === patch.assigned_class_id);
-        if (c) patch.assigned_class_name = c.name;
+      // Frontend sends assigned_class_id as Number; compare loosely.
+      if (patch.assigned_class_id != null && patch.assigned_class_id !== '') {
+        const cid = String(patch.assigned_class_id);
+        const c = d.classes.find((x) => String(x.id) === cid);
+        if (c) {
+          patch.assigned_class_id = c.id;
+          patch.assigned_class_name = c.name;
+        }
+      } else if (patch.assigned_class_id === null) {
+        patch.assigned_class_name = null;
       }
       Object.assign(t, patch);
       return t;
     });
     if (!updated) return err('Trial application not found');
-    return ok(updated);
+    return ok(toAdminTrialRow(updated));
   }
 
   // ---- Instructors
@@ -837,6 +991,22 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     });
     return ok(created);
   }
+  const adminHolidayPostpone =
+    matches('/admin/holidays/:id/postpone', path) ||
+    matches('admin/holidays/:id/postpone', path);
+  if (method === 'POST' && adminHolidayPostpone) {
+    // Demo: "postpone" just marks holiday as moved; we don't actually re-schedule classes.
+    const patch = (body ?? {}) as { new_date?: string; note?: string };
+    const updated = mutate((d) => {
+      const h = d.holidays.find((x) => x.id === adminHolidayPostpone.id);
+      if (!h) return null;
+      if (patch.new_date) h.date = patch.new_date;
+      if (patch.note) h.remark = patch.note;
+      return h;
+    });
+    if (!updated) return err('Holiday not found');
+    return ok({ holiday: updated, affected_classes: 0 });
+  }
   const adminHolidayId = matches('/admin/holidays/:id', path) || matches('admin/holidays/:id', path);
   if (method === 'PATCH' && adminHolidayId) {
     const patch = body as Partial<DemoHoliday>;
@@ -900,7 +1070,15 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   // ---- Contact CMS
   if (method === 'GET' && path === '/admin/contact/settings') {
     const db = getDb();
-    return ok({ settings: db.contactSettings, branches: db.contactBranches });
+    return ok({
+      ...db.contactSettings,
+      intro:
+        (db.contactSettings as Record<string, unknown>).intro ??
+        (db.contactSettings as Record<string, unknown>).intro_html ??
+        '',
+      settings: db.contactSettings,
+      branches: db.contactBranches,
+    });
   }
   if (method === 'PATCH' && path === '/admin/contact/settings') {
     const patch = body as Record<string, unknown>;
@@ -908,6 +1086,14 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       Object.assign(d.contactSettings, patch);
     });
     return ok(getDb().contactSettings);
+  }
+  if (method === 'GET' && path === '/admin/contact/branches') {
+    const db = getDb();
+    return ok(
+      db.contactBranches
+        .slice()
+        .sort((a, b) => (a.order_no ?? 0) - (b.order_no ?? 0)),
+    );
   }
   if (method === 'POST' && path === '/admin/contact/branches') {
     const patch = body as Record<string, any>;
@@ -938,12 +1124,21 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     return ok({ deleted: true });
   }
   if (method === 'POST' && path === '/admin/contact/branches/reorder') {
-    const b = body as { order?: Array<string | number> };
+    const b = body as {
+      order?: Array<string | number | { id?: string | number; display_order?: number }>;
+    };
     mutate((d) => {
       if (Array.isArray(b.order)) {
-        b.order.forEach((id, idx) => {
+        b.order.forEach((entry, idx) => {
+          const id = typeof entry === 'object' && entry !== null ? entry.id : entry;
+          const orderNo =
+            typeof entry === 'object' &&
+            entry !== null &&
+            typeof entry.display_order === 'number'
+              ? entry.display_order
+              : idx;
           const br = d.contactBranches.find((x) => String(x.id) === String(id));
-          if (br) br.order_no = idx;
+          if (br) br.order_no = orderNo;
         });
       }
     });
@@ -953,13 +1148,28 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   // ---- FAQ CMS
   if (method === 'GET' && path === '/admin/faq/settings') {
     const db = getDb();
-    return ok({ settings: db.faqSettings, items: db.faqItems });
+    return ok({
+      ...db.faqSettings,
+      intro:
+        (db.faqSettings as Record<string, unknown>).intro ??
+        (db.faqSettings as Record<string, unknown>).intro_html ??
+        '',
+      settings: db.faqSettings,
+      items: db.faqItems,
+    });
   }
   if (method === 'PATCH' && path === '/admin/faq/settings') {
     mutate((d) => {
       Object.assign(d.faqSettings, body as object);
     });
     return ok(getDb().faqSettings);
+  }
+  if (method === 'GET' && path === '/admin/faq/items') {
+    return ok(
+      getDb()
+        .faqItems.slice()
+        .sort((a, b) => a.display_order - b.display_order),
+    );
   }
   if (method === 'POST' && path === '/admin/faq/items') {
     const id = nextNumId();
@@ -1023,6 +1233,16 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
 
   // ---- Site content (key-value CMS)
+  if (method === 'GET' && path === '/admin/site-content') {
+    // List-all shape used by SettingsPage: [{ page_key, title, content }]
+    const db = getDb();
+    return ok(
+      Object.entries(db.siteContent).map(([page_key, v]) => ({
+        page_key,
+        ...(v as object),
+      })),
+    );
+  }
   const siteKey = matches('/admin/site-content/:key', path);
   if (method === 'GET' && siteKey) {
     const db = getDb();
@@ -1204,6 +1424,35 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
 
   // ---- Pending applications (extension / sick leave)
+  if (method === 'GET' && path === '/admin/pending-applications') {
+    const db = getDb();
+    const extensionRows = db.extensionRequests
+      .filter((r) => r.status === 'pending')
+      .map((r) => ({
+        id: `extension_${r.id}`,
+        raw_type: 'extension',
+        raw_id: r.id,
+        student_name: r.user_name ?? '',
+        class_name: r.class_name ?? '',
+        type: 'reschedule',
+        reason: r.reason,
+        document_url: null,
+      }));
+    const sickRows = db.sickLeaveRequests
+      .filter((r) => r.status === 'pending')
+      .map((r) => ({
+        id: `sick_leave_${r.id}`,
+        raw_type: 'sick_leave',
+        raw_id: r.id,
+        student_name: r.user_name ?? '',
+        class_name: r.class_name ?? '',
+        type: 'sickLeave',
+        leave_type: 'sick',
+        reason: r.reason,
+        document_url: null,
+      }));
+    return ok([...sickRows, ...extensionRows]);
+  }
   if (method === 'GET' && path === '/admin/extension-requests') {
     return ok(getDb().extensionRequests);
   }
@@ -1244,7 +1493,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && path === '/admin/financial') {
     return ok(computeFinancial());
   }
-  if (method === 'GET' && path === '/admin/funnel') {
+  if (method === 'GET' && (path === '/admin/funnel' || path === '/admin/conversion-funnel')) {
     return ok(computeFunnel());
   }
   if (method === 'GET' && path === '/admin/class-health') {
@@ -1320,22 +1569,42 @@ function createOrder(req: MockRequest): MockResponse {
 }
 
 function createTrialApplication(req: MockRequest): MockResponse {
-  const b = req.body as Partial<DemoTrialApplication>;
-  if (!b.email || !b.student_name) return err('Missing fields');
+  // Accept both snake_case (admin-style payload) and camelCase (public TrialPage
+  // payload) so the same endpoint works for both flows.
+  const raw = (req.body ?? {}) as Record<string, any>;
+  const studentName: string = raw.student_name ?? raw.fullName ?? raw.name ?? '';
+  const email: string = (raw.email ?? '').toString().trim().toLowerCase();
+  const mobile: string = raw.mobile ?? raw.contactNumber ?? '';
+  const countryCode: string | undefined = raw.country_code ?? raw.countryCode;
+  const dateOfBirth: string | undefined = raw.date_of_birth ?? raw.dateOfBirth;
+  const classId: string | undefined = raw.classId ?? raw.class_id;
+  const preferredDate: string =
+    raw.preferred_date ?? raw.preferredDate ?? new Date().toISOString();
+  const preferredLocation: string | undefined =
+    raw.preferred_location ?? raw.preferredLocation;
+  const preferredProgram: string | undefined =
+    raw.preferred_program ?? raw.preferredProgram;
+  const notes: string | undefined = raw.notes ?? raw.howDidYouHear;
+
+  if (!email || !studentName) return err('Missing fields: email, fullName');
+
   const db = getDb();
-  // auto-create user if not exists (mimics TRIAL_SIGNUP_EMAIL_SPEC)
-  let u = db.users.find((x) => x.email.toLowerCase() === b.email!.toLowerCase());
+  const existing = db.users.find((x) => x.email.toLowerCase() === email);
+  const accountCreated = !existing;
+  let u = existing;
   if (!u) {
     u = {
       id: nextId('user'),
-      email: b.email,
+      email,
+      // Demo: new trial accounts share the standard demo password.
       password: 'demo1234',
-      name: b.student_name,
+      name: studentName,
       role: 'student',
-      mobile: b.mobile,
-      country_code: b.country_code ?? '852',
+      mobile,
+      country_code: countryCode ?? '852',
       student_id: `std${100000 + Math.floor(Math.random() * 899999)}`,
-      date_of_birth: b.date_of_birth,
+      date_of_birth: dateOfBirth,
+      must_change_password: true,
       created_at: new Date().toISOString(),
     };
     mutate((d) => {
@@ -1344,22 +1613,33 @@ function createTrialApplication(req: MockRequest): MockResponse {
   }
   const created: DemoTrialApplication = {
     id: nextId('trial'),
-    student_name: b.student_name!,
-    email: b.email!,
-    mobile: b.mobile || '',
-    country_code: b.country_code,
-    date_of_birth: b.date_of_birth,
-    preferred_date: b.preferred_date || new Date().toISOString(),
-    preferred_location: b.preferred_location,
-    preferred_program: b.preferred_program,
+    student_name: studentName,
+    email,
+    mobile: mobile || '',
+    country_code: countryCode,
+    date_of_birth: dateOfBirth,
+    preferred_date: preferredDate,
+    preferred_location: preferredLocation,
+    preferred_program: preferredProgram ?? classId,
     status: 'pending',
     user_id: u.id,
+    notes: notes ?? null,
     created_at: new Date().toISOString(),
   };
   mutate((d) => {
     d.trialApplications.unshift(created);
   });
-  return ok({ ...created, temp_password: 'demo1234', user_id: u.id });
+  return {
+    success: true,
+    applicationId: Number(created.id.replace(/\D/g, '')) || Date.now(),
+    existingUser: !accountCreated,
+    accountCreated,
+    emailSent: accountCreated,
+    message: accountCreated
+      ? '已建立新帳號；臨時密碼已寄到 email（demo 模式：demo1234）'
+      : '試堂申請已紀錄，請用你原本的帳號登入查看。',
+    data: created,
+  } as MockResponse;
 }
 
 // ------------------------------------------------------- Dashboard calcs
