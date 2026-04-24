@@ -4,7 +4,12 @@ import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
 import { downloadCsv } from '../../lib/utils';
 import { ClipboardList, Calendar, Download } from 'lucide-react';
-import { FALLBACK_ATTENDANCE_ANOMALY, reportMonthOptions, type AttendanceAnomalyData } from '../../lib/adminReportData';
+import {
+  FALLBACK_ATTENDANCE_ANOMALY,
+  normalizeAttendanceAnomalyPayload,
+  reportMonthOptions,
+  type AttendanceAnomalyData,
+} from '../../lib/adminReportData';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export default function AdminAttendanceAnomalyPage() {
@@ -20,8 +25,11 @@ export default function AdminAttendanceAnomalyPage() {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
     api.get<AttendanceAnomalyData>(`/admin/attendance-anomaly?demo=1${monthParam}`)
       .then((res: any) => {
-        if (res?.success && res?.data) setData(res.data);
-        else setData(FALLBACK_ATTENDANCE_ANOMALY);
+        if (res?.success && res?.data != null) {
+          setData(normalizeAttendanceAnomalyPayload(res.data));
+        } else {
+          setData(FALLBACK_ATTENDANCE_ANOMALY);
+        }
       })
       .catch(() => setData(FALLBACK_ATTENDANCE_ANOMALY))
       .finally(() => setLoading(false));
@@ -57,14 +65,22 @@ export default function AdminAttendanceAnomalyPage() {
   }
 
   const exportCsv = () => {
+    const lowClasses = data.lowAttendanceRateClasses ?? [];
+    const consec = data.consecutiveAbsenceStudents ?? [];
     const rows: (string | number)[][] = [
       [t('admin.dashboard.lowAttendanceRateClasses')],
       [t('admin.dashboard.className'), t('admin.dashboard.programCode'), t('admin.dashboard.instructor'), t('admin.dashboard.attendanceRate'), t('admin.dashboard.enrolledCount')],
-      ...data.lowAttendanceRateClasses.map((r) => [r.className, r.programCode, r.instructor, `${r.attendanceRate.toFixed(1)}%`, r.enrolledCount]),
+      ...lowClasses.map((r) => [
+        r.className,
+        r.programCode,
+        r.instructor,
+        `${Number(r.attendanceRate).toFixed(1)}%`,
+        r.enrolledCount,
+      ]),
       [],
       [t('admin.dashboard.consecutiveAbsenceStudents')],
       [t('admin.dashboard.name'), t('admin.dashboard.mobile'), t('admin.dashboard.consecutiveAbsences'), t('admin.dashboard.lastClassDate'), t('admin.dashboard.className')],
-      ...data.consecutiveAbsenceStudents.map((r) => [r.full_name, r.mobile, r.consecutiveAbsences, r.lastClassDate, r.className]),
+      ...consec.map((r) => [r.full_name, r.mobile, r.consecutiveAbsences, r.lastClassDate, r.className]),
     ];
     downloadCsv(rows, `attendance-anomaly-${reportMonth}.csv`);
   };
@@ -103,17 +119,21 @@ export default function AdminAttendanceAnomalyPage() {
         <div className="grid md:grid-cols-2 gap-4">
           <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
             <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.overallMonthlyAttendanceRate')}</h3>
-            <div className="text-2xl font-bold text-primary mt-1">{data.overallMonthlyAttendanceRate.toFixed(1)}%</div>
+            <div className="text-2xl font-bold text-primary mt-1">
+              {Number(data.overallMonthlyAttendanceRate ?? 0).toFixed(1)}%
+            </div>
           </div>
           <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
             <h3 className="text-sm font-medium text-gray-600">{t('admin.dashboard.lowAttendanceRateThreshold')}</h3>
-            <div className="text-2xl font-bold text-amber-600 mt-1">&lt; {data.lowAttendanceRateThreshold}%</div>
+            <div className="text-2xl font-bold text-amber-600 mt-1">
+              &lt; {Number(data.lowAttendanceRateThreshold ?? 0).toFixed(0)}%
+            </div>
           </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-amber-400">
           <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.lowAttendanceRateClasses')}</h3>
-          {data.lowAttendanceRateClasses.length > 0 ? (
+          {(data.lowAttendanceRateClasses ?? []).length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -131,7 +151,7 @@ export default function AdminAttendanceAnomalyPage() {
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.className}</td>
                       <td className="py-2 pr-4">{row.programCode}</td>
                       <td className="py-2 pr-4">{row.instructor}</td>
-                      <td className="py-2 pr-4">{row.attendanceRate.toFixed(1)}%</td>
+                      <td className="py-2 pr-4">{Number(row.attendanceRate).toFixed(1)}%</td>
                       <td className="py-2">{row.enrolledCount}</td>
                     </tr>
                   ))}
@@ -152,9 +172,10 @@ export default function AdminAttendanceAnomalyPage() {
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-700 mb-3">
-            {t('admin.dashboard.consecutiveAbsenceStudents')} ({t('admin.dashboard.consecutiveAbsenceThreshold')} ≥ {data.consecutiveAbsenceThreshold})
+            {t('admin.dashboard.consecutiveAbsenceStudents')} ({t('admin.dashboard.consecutiveAbsenceThreshold')} ≥{' '}
+            {Number(data.consecutiveAbsenceThreshold ?? 0)})
           </h3>
-          {data.consecutiveAbsenceStudents.length > 0 ? (
+          {(data.consecutiveAbsenceStudents ?? []).length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

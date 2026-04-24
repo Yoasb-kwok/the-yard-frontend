@@ -4,7 +4,12 @@ import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
 import { downloadCsv } from '../../lib/utils';
 import { BookOpen, Calendar, Download } from 'lucide-react';
-import { FALLBACK_CLASS_HEALTH, reportMonthOptions, type ClassHealthData } from '../../lib/adminReportData';
+import {
+  FALLBACK_CLASS_HEALTH,
+  normalizeClassHealthPayload,
+  reportMonthOptions,
+  type ClassHealthData,
+} from '../../lib/adminReportData';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 export default function AdminClassHealthPage() {
@@ -20,8 +25,11 @@ export default function AdminClassHealthPage() {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
     api.get<ClassHealthData>(`/admin/class-health?demo=1${monthParam}`)
       .then((res: any) => {
-        if (res?.success && res?.data) setData(res.data);
-        else setData(FALLBACK_CLASS_HEALTH);
+        if (res?.success && res?.data != null) {
+          setData(normalizeClassHealthPayload(res.data));
+        } else {
+          setData(FALLBACK_CLASS_HEALTH);
+        }
       })
       .catch(() => setData(FALLBACK_CLASS_HEALTH))
       .finally(() => setLoading(false));
@@ -67,18 +75,21 @@ export default function AdminClassHealthPage() {
 
   const exportCsv = () => {
     const headers = [t('admin.dashboard.className'), t('admin.dashboard.programCode'), t('admin.dashboard.instructor'), t('admin.dashboard.avgAttendance'), t('admin.dashboard.capacity'), t('admin.dashboard.fillRate')];
+    const byClass = data.byClass ?? [];
+    const low = data.lowAttendanceClasses ?? [];
+    const byInst = data.byInstructor ?? [];
     const rows: (string | number)[][] = [
       [t('admin.dashboard.classFillRateChart')],
       headers,
-      ...data.byClass.map((r) => [r.className, r.programCode, r.instructor, r.avgAttendance, r.capacity, `${r.fillRate.toFixed(1)}%`]),
+      ...byClass.map((r) => [r.className, r.programCode, r.instructor, r.avgAttendance, r.capacity, `${r.fillRate.toFixed(1)}%`]),
       [],
       [t('admin.dashboard.lowAttendanceClasses')],
       headers,
-      ...data.lowAttendanceClasses.map((r) => [r.className, r.programCode, r.instructor, r.avgAttendance, r.capacity, `${r.fillRate.toFixed(1)}%`]),
+      ...low.map((r) => [r.className, r.programCode, r.instructor, r.avgAttendance, r.capacity, `${r.fillRate.toFixed(1)}%`]),
       [],
       [t('admin.dashboard.instructorClassCount')],
       [t('admin.dashboard.instructor'), t('admin.dashboard.classCount'), t('admin.dashboard.totalStudents')],
-      ...data.byInstructor.map((r) => [r.instructor, r.classCount, r.totalStudents]),
+      ...byInst.map((r) => [r.instructor, r.classCount, r.totalStudents]),
     ];
     downloadCsv(rows, `class-health-${reportMonth}.csv`);
   };
@@ -116,7 +127,7 @@ export default function AdminClassHealthPage() {
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.classFillRateChart')}</h3>
-          {data.byClass.length > 0 ? (
+          {(data.byClass ?? []).length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -159,7 +170,7 @@ export default function AdminClassHealthPage() {
           <h3 className="text-sm font-medium text-gray-700 mb-2">
             {t('admin.dashboard.lowAttendanceClasses')} ({t('admin.dashboard.lowAttendanceThreshold')} &lt; {data.lowAttendanceThreshold})
           </h3>
-          {data.lowAttendanceClasses.length > 0 ? (
+          {(data.lowAttendanceClasses ?? []).length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -198,7 +209,7 @@ export default function AdminClassHealthPage() {
 
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-sm font-medium text-gray-700 mb-3">{t('admin.dashboard.instructorClassCount')}</h3>
-          {data.byInstructor.length > 0 ? (
+          {(data.byInstructor ?? []).length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>

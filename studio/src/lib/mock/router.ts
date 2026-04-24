@@ -28,6 +28,7 @@ import {
   type DemoClassNotice,
   type DemoSimpleContent,
 } from './db';
+import { normalizeClassHealthPayload } from '../adminReportData';
 
 export interface MockRequest {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -1699,6 +1700,7 @@ function computeClassHealth() {
     const attended = enrollments.filter((e) => e.status === 'attended').length;
     const attendanceRate = enrollments.length ? (attended / enrollments.length) * 100 : 0;
     const fillRate = c.capacity ? ((c.enrolled_count || enrollments.length) / c.capacity) * 100 : 0;
+    const attendance_rate = 80 + Math.random() * 18;
     return {
       class_id: c.id,
       class_name: c.name,
@@ -1707,38 +1709,101 @@ function computeClassHealth() {
       capacity: c.capacity,
       enrolled_count: c.enrolled_count,
       fill_rate: fillRate,
-      attendance_rate: 80 + Math.random() * 18,
+      attendance_rate,
       at_risk: fillRate < 50 || attendanceRate < 60,
     };
   });
-  return {
+  return normalizeClassHealthPayload({
     classes: healths,
-    summary: {
-      avgAttendance: healths.reduce((s, h) => s + h.attendance_rate, 0) / (healths.length || 1),
-      avgFillRate: healths.reduce((s, h) => s + h.fill_rate, 0) / (healths.length || 1),
-      atRiskCount: healths.filter((h) => h.at_risk).length,
-    },
-  };
+    lowAttendanceThreshold: 5,
+  });
 }
 
 function computeAttendanceAnomaly() {
   const db = getDb();
-  const students = db.users.filter((u) => u.role === 'student').map((u) => ({
-    user_id: u.id,
-    name: u.name,
-    email: u.email,
-    absences_last_30_days: Math.floor(Math.random() * 3),
-    consecutive_absences: Math.random() > 0.85 ? 2 : 0,
-    attendance_rate: 70 + Math.random() * 30,
-  }));
-  const flagged = students.filter((s) => s.consecutive_absences >= 2 || s.attendance_rate < 60);
+  const lowThreshold = 80;
+  const consecThreshold = 3;
+
+  const classRows = db.classes
+    .filter((c) => c.is_cancelled !== true)
+    .slice(0, 24)
+    .map((c) => {
+      const enrollments = db.enrollments.filter((e) => String(e.class_id) === String(c.id));
+      const attended = enrollments.filter((e) => e.status === 'attended').length;
+      const total = enrollments.length;
+      const fill = c.capacity ? (c.enrolled_count || 0) / c.capacity : 0;
+      const rate =
+        total > 0
+          ? (attended / total) * 100
+          : Math.min(96, Math.max(38, fill * 100 * (0.72 + Math.random() * 0.22)));
+      return {
+        classId: String(c.id),
+        className: c.name,
+        programCode: c.program_code,
+        instructor: c.instructor,
+        attendanceRate: Math.round(rate * 10) / 10,
+        enrolledCount: total || c.enrolled_count || 0,
+      };
+    });
+
+  const lowAttendanceRateClasses = classRows
+    .filter((r) => r.attendanceRate < lowThreshold)
+    .slice()
+    .sort((a, b) => a.attendanceRate - b.attendanceRate);
+
+  const overallMonthlyAttendanceRate =
+    classRows.length > 0
+      ? Math.round((classRows.reduce((s, r) => s + r.attendanceRate, 0) / classRows.length) * 10) / 10
+      : 85;
+
+  const studentUsers = db.users.filter((u) => u.role === 'student');
+  const consecutiveAbsenceStudents: Array<{
+    studentId: string;
+    full_name: string;
+    mobile: string;
+    consecutiveAbsences: number;
+    lastClassDate: string;
+    className: string;
+  }> = [];
+
+  studentUsers.forEach((u, idx) => {
+    const enr = db.enrollments.find((e) => e.user_id === u.id);
+    const cls = enr ? db.classes.find((c) => String(c.id) === String(enr.class_id)) : null;
+    const consecutiveAbsences = idx === 0 ? 4 : idx === 1 ? 3 : 0;
+    if (consecutiveAbsences >= consecThreshold && cls) {
+      consecutiveAbsenceStudents.push({
+        studentId: u.id,
+        full_name: u.name,
+        mobile: u.mobile ?? '',
+        consecutiveAbsences,
+        lastClassDate: cls.start_time.split('T')[0] ?? '—',
+        className: cls.name,
+      });
+    }
+  });
+
+  if (consecutiveAbsenceStudents.length === 0 && studentUsers.length > 0) {
+    const u = studentUsers[0];
+    const enr = db.enrollments.find((e) => e.user_id === u.id);
+    const cls = enr ? db.classes.find((c) => String(c.id) === String(enr.class_id)) : db.classes[0];
+    if (cls) {
+      consecutiveAbsenceStudents.push({
+        studentId: u.id,
+        full_name: u.name,
+        mobile: u.mobile ?? '',
+        consecutiveAbsences: consecThreshold,
+        lastClassDate: cls.start_time.split('T')[0] ?? '—',
+        className: cls.name,
+      });
+    }
+  }
+
   return {
-    students,
-    flagged,
-    summary: {
-      overallAttendance: students.reduce((s, x) => s + x.attendance_rate, 0) / (students.length || 1),
-      flaggedCount: flagged.length,
-    },
+    overallMonthlyAttendanceRate,
+    lowAttendanceRateThreshold: lowThreshold,
+    lowAttendanceRateClasses,
+    consecutiveAbsenceThreshold: consecThreshold,
+    consecutiveAbsenceStudents,
   };
 }
 
@@ -1768,18 +1833,30 @@ function computeRenewalChurn() {
 
 function computeInstructorPerformance() {
   const db = getDb();
-  return db.instructors.map((i) => {
+  const byInstructor = db.instructors.map((i) => {
     const classes = db.classes.filter((c) => c.instructor_id === i.id);
-    const totalEnrollments = classes.reduce((s, c) => s + c.enrolled_count, 0);
+    const totalSessions = classes.length;
+    const totalStudents = classes.reduce((s, c) => s + (c.enrolled_count || 0), 0);
+    let totalHours = 0;
+    for (const c of classes) {
+      const ms = new Date(c.end_time).getTime() - new Date(c.start_time).getTime();
+      totalHours += Math.max(0, ms / 3600000);
+    }
+    totalHours = Math.round(totalHours * 10) / 10;
+    const avgClassSize =
+      totalSessions > 0 ? Math.round((totalStudents / totalSessions) * 10) / 10 : 0;
     return {
-      instructor_id: i.id,
-      name: i.name,
-      class_count: classes.length,
-      total_students: totalEnrollments,
-      avg_rating: Number((4.2 + Math.random() * 0.7).toFixed(2)),
-      retention_rate: Number((75 + Math.random() * 20).toFixed(1)),
+      instructorId: i.id,
+      instructor: i.name,
+      totalHours,
+      totalSessions,
+      totalStudents,
+      avgClassSize,
+      avgRenewalRate: Number((75 + Math.random() * 20).toFixed(1)),
+      attendanceRate: Number((80 + Math.random() * 15).toFixed(1)),
     };
   });
+  return { byInstructor };
 }
 
 function computeReports() {

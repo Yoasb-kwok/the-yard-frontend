@@ -4,7 +4,13 @@ import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
 import { downloadCsv } from '../../lib/utils';
 import { GraduationCap, Calendar, ArrowUpDown, Download } from 'lucide-react';
-import { FALLBACK_INSTRUCTOR_PERFORMANCE, reportMonthOptions, type InstructorPerformanceData, type InstructorPerformanceRow } from '../../lib/adminReportData';
+import {
+  FALLBACK_INSTRUCTOR_PERFORMANCE,
+  normalizeInstructorPerformancePayload,
+  reportMonthOptions,
+  type InstructorPerformanceData,
+  type InstructorPerformanceRow,
+} from '../../lib/adminReportData';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 type SortKey = 'totalHours' | 'totalSessions' | 'totalStudents' | 'avgClassSize' | 'avgRenewalRate' | 'attendanceRate';
@@ -24,8 +30,11 @@ export default function AdminInstructorPerformancePage() {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
     api.get<InstructorPerformanceData>(`/admin/instructor-performance?demo=1${monthParam}`)
       .then((res: any) => {
-        if (res?.success && res?.data) setData(res.data);
-        else setData(FALLBACK_INSTRUCTOR_PERFORMANCE);
+        if (res?.success && res?.data != null) {
+          setData(normalizeInstructorPerformancePayload(res.data));
+        } else {
+          setData(FALLBACK_INSTRUCTOR_PERFORMANCE);
+        }
       })
       .catch(() => setData(FALLBACK_INSTRUCTOR_PERFORMANCE))
       .finally(() => setLoading(false));
@@ -87,7 +96,15 @@ export default function AdminInstructorPerformancePage() {
     const headers = [t('admin.dashboard.instructor'), t('admin.dashboard.totalTeachingHours'), t('admin.dashboard.totalSessions'), t('admin.dashboard.totalStudentsInstructor'), t('admin.dashboard.avgClassSize'), t('admin.dashboard.avgRenewalRate'), t('admin.dashboard.attendanceRate')];
     const rows: (string | number)[][] = [
       headers,
-      ...sortedRows.map((r) => [r.instructor, r.totalHours, r.totalSessions, r.totalStudents, r.avgClassSize.toFixed(1), `${r.avgRenewalRate.toFixed(1)}%`, `${r.attendanceRate.toFixed(1)}%`]),
+      ...sortedRows.map((r) => [
+        r.instructor,
+        r.totalHours,
+        r.totalSessions,
+        r.totalStudents,
+        Number(r.avgClassSize).toFixed(1),
+        `${Number(r.avgRenewalRate).toFixed(1)}%`,
+        `${Number(r.attendanceRate).toFixed(1)}%`,
+      ]),
     ];
     downloadCsv(rows, `instructor-performance-${reportMonth}.csv`);
   };
@@ -146,9 +163,9 @@ export default function AdminInstructorPerformancePage() {
                       <td className="py-2 pr-4">{row.totalHours}</td>
                       <td className="py-2 pr-4">{row.totalSessions}</td>
                       <td className="py-2 pr-4">{row.totalStudents}</td>
-                      <td className="py-2 pr-4">{row.avgClassSize.toFixed(1)}</td>
-                      <td className="py-2 pr-4">{row.avgRenewalRate.toFixed(1)}%</td>
-                      <td className="py-2">{row.attendanceRate.toFixed(1)}%</td>
+                      <td className="py-2 pr-4">{Number(row.avgClassSize).toFixed(1)}</td>
+                      <td className="py-2 pr-4">{Number(row.avgRenewalRate).toFixed(1)}%</td>
+                      <td className="py-2">{Number(row.attendanceRate).toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
