@@ -14,6 +14,9 @@ import {
 } from '../../lib/newsStorage';
 import { Plus, Edit, Trash2, Newspaper, Image as ImageIcon } from 'lucide-react';
 import { useModalA11y } from '../../lib/useModalA11y';
+import { isDemoMode } from '../../lib/mock';
+import { resolveUploadUrl, uploadImage } from '../../lib/uploads';
+import { DEFAULT_UPLOAD_COMPRESSION, isLikelyImageFile, normalizeImageFileForUpload } from '../../lib/imagePrepare';
 
 type ApiPost = {
   id: string | number;
@@ -25,7 +28,8 @@ type ApiPost = {
   content_zh_tw?: string;
   content_zh_cn?: string;
   content_en?: string;
-  image_url: string | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
   published_at: string;
   created_at?: string;
   show_as_popup?: boolean;
@@ -45,7 +49,7 @@ function toPostItem(p: ApiPost): StoredNewsPost {
     content_zh_tw: p.content_zh_tw ?? legacyContent,
     content_zh_cn: p.content_zh_cn,
     content_en: p.content_en,
-    image_url: p.image_url || null,
+    image_url: p.image_url ?? p.imageUrl ?? null,
     published_at: p.published_at || new Date().toISOString(),
     created_at: p.created_at || p.published_at || new Date().toISOString(),
     show_as_popup: p.show_as_popup ?? false,
@@ -145,13 +149,30 @@ export default function AdminNewsPage() {
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith('image/')) return;
+    const input = e.currentTarget;
+    if (!file) return;
+    if (!isLikelyImageFile(file)) {
+      alert(t('admin.news.imageTypeError', '請選擇圖片檔（JPG、PNG、WebP、GIF、HEIC 等）。'));
+      input.value = '';
+      return;
+    }
     setImageFile(file);
     try {
-      const dataUrl = await readFileAsDataUrl(file);
+      if (!isDemoMode()) {
+        try {
+          const url = await uploadImage(file, 'news');
+          setForm((f) => ({ ...f, image_url: url }));
+          return;
+        } catch (uploadErr) {
+          console.warn('News cover upload failed, falling back to inline data URL', uploadErr);
+        }
+      }
+      const forInline = await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION);
+      const dataUrl = await readFileAsDataUrl(forInline);
       setForm((f) => ({ ...f, image_url: dataUrl }));
     } catch (err) {
       console.error('Failed to read image', err);
+      setImageFile(null);
     }
   }
 
@@ -182,6 +203,7 @@ export default function AdminNewsPage() {
       content_zh_cn: form.content_zh_cn.trim() || undefined,
       content_en: form.content_en.trim() || undefined,
       image_url: form.image_url,
+      imageUrl: form.image_url,
       published_at,
       show_as_popup: form.show_as_popup,
     };
@@ -281,7 +303,7 @@ export default function AdminNewsPage() {
                   <div className="w-full sm:w-24 h-16 sm:h-14 rounded-lg bg-gray-100 overflow-hidden flex-shrink-0">
                     {post.image_url ? (
                       <img
-                        src={post.image_url}
+                        src={resolveUploadUrl(post.image_url)}
                         alt=""
                         className="w-full h-full object-cover"
                       />
@@ -425,7 +447,7 @@ export default function AdminNewsPage() {
                       {form.image_url ? (
                         <div className="relative">
                           <img
-                            src={form.image_url}
+                            src={resolveUploadUrl(form.image_url)}
                             alt=""
                             className="w-full h-40 object-cover rounded-lg border border-gray-200"
                           />
@@ -440,12 +462,15 @@ export default function AdminNewsPage() {
                       ) : null}
                       <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,.heic,.heif,.avif"
                         onChange={handleImageChange}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary-dark"
                       />
                       <p className="text-xs text-gray-500">
-                        {t('admin.news.imageHint', 'Demo 會將圖片存於瀏覽器本地，建議使用 JPG/PNG。')}
+                        {t(
+                          'admin.news.imageHint',
+                          '支援常見圖片格式；大圖會自動壓縮。Demo 會將圖片存於瀏覽器本地。'
+                        )}
                       </p>
                     </div>
                   </div>

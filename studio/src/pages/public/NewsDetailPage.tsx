@@ -6,6 +6,7 @@ import { formatDate } from '../../lib/utils';
 import { ArrowLeft } from 'lucide-react';
 import { getStoredNewsPosts, getDemoNewsPosts } from '../../lib/newsStorage';
 import { api } from '../../lib/api';
+import { resolveUploadUrl } from '../../lib/uploads';
 
 interface NewsPost {
   id: string;
@@ -108,13 +109,13 @@ export default function NewsDetailPage() {
               {post.image_url && (
                 <div className="mt-8 flex justify-center">
                   <a
-                    href={typeof post.image_url === 'string' ? post.image_url : post.image_url}
+                    href={resolveUploadUrl(post.image_url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block cursor-pointer w-full md:w-1/2"
                   >
                     <img
-                      src={typeof post.image_url === 'string' ? post.image_url : post.image_url}
+                      src={resolveUploadUrl(post.image_url)}
                       alt={post.title}
                       className="w-full h-auto rounded-lg hover:opacity-90 transition-opacity"
                     />

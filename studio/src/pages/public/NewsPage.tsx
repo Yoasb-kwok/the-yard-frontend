@@ -5,6 +5,7 @@ import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
 import { getStoredNewsPosts, getDemoNewsPosts } from '../../lib/newsStorage';
 import { api } from '../../lib/api';
+import { resolveUploadUrl } from '../../lib/uploads';
 
 interface NewsPost {
   id: string;
@@ -71,7 +72,7 @@ export default function NewsPage() {
                   {post.image_url && (
                     <div className="aspect-video w-full bg-gray-100 shrink-0">
                       <img
-                        src={post.image_url}
+                        src={resolveUploadUrl(post.image_url)}
                         alt=""
                         className="w-full h-full object-cover"
                       />

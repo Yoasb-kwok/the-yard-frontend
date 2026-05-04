@@ -17,6 +17,7 @@ import {
   type HomeAboutBlock,
   type HomeAboutBlockLayout,
 } from '../../lib/homeAboutBlocks';
+import { DEFAULT_UPLOAD_COMPRESSION, isLikelyImageFile, normalizeImageFileForUpload } from '../../lib/imagePrepare';
 
 const LAYOUT_OPTIONS: { value: HomeAboutBlockLayout; label: string }[] = [
   { value: 'split-image-left', label: '左圖右文' },
@@ -138,8 +139,13 @@ export default function SettingsPage() {
   }
 
   async function handleBlockImage(index: number, file: File | null) {
-    if (!file || !file.type.startsWith('image/')) return;
-    const dataUrl = await readFileAsDataUrl(file);
+    if (!file) return;
+    if (!isLikelyImageFile(file)) {
+      alert(t('admin.settings.imageTypeError', '請選擇圖片檔案（JPG、PNG、WebP、GIF 等）。'));
+      return;
+    }
+    const prepared = await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION);
+    const dataUrl = await readFileAsDataUrl(prepared);
     updateBlock(index, { image_url: dataUrl });
   }
 
@@ -217,7 +223,7 @@ export default function SettingsPage() {
                         上載
                         <input
                           type="file"
-                          accept="image/*"
+                          accept="image/*,.heic,.heif,.avif"
                           className="hidden"
                           onChange={async (e) => {
                             const input = e.currentTarget;

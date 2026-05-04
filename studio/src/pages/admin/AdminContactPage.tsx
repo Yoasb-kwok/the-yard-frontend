@@ -12,8 +12,10 @@ import {
   type ContactContent,
 } from '../../lib/contactContent';
 import { resolveUploadUrl, uploadImage } from '../../lib/uploads';
+import { isLikelyImageFile } from '../../lib/imagePrepare';
 
-const MAX_IMAGE_MB = 5;
+/** Hard guard only; raster images are resized in `uploadImage` before POST. */
+const MAX_IMAGE_MB = 40;
 
 export default function AdminContactPage() {
   const { t } = useTranslation();
@@ -74,7 +76,7 @@ export default function AdminContactPage() {
 
   async function handleBranchImage(index: number, file: File | null) {
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!isLikelyImageFile(file)) {
       alert(t('admin.contact.imageTypeError', 'Please choose an image file'));
       return;
     }
@@ -377,7 +379,7 @@ export default function AdminContactPage() {
                               {t('admin.contact.uploadImage', 'Upload')}
                               <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/*,.heic,.heif,.avif"
                                 className="hidden"
                                 onChange={async (e) => {
                                   const input = e.currentTarget;
@@ -399,9 +401,11 @@ export default function AdminContactPage() {
                             )}
                           </div>
                           <p className="mt-1 text-xs text-gray-500">
-                            {t('admin.contact.imageHint', 'Up to {{size}} MB. Recommended 16:9 ratio.', {
-                              size: MAX_IMAGE_MB,
-                            })}
+                            {t(
+                              'admin.contact.imageHint',
+                              'JPG/PNG/WebP/HEIC 等；大圖會先自動壓縮再上傳（原檔建議 {{size}} MB 以內）。',
+                              { size: MAX_IMAGE_MB }
+                            )}
                           </p>
                         </div>
 

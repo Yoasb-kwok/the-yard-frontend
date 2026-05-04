@@ -9,6 +9,7 @@ import roomRentalImage from '../../assets/images/room_rental.jpg';
 import { api } from '../../lib/api';
 import { formatDate } from '../../lib/utils';
 import { getStoredNewsPosts, getDemoNewsPosts, getPopupNewsPosts } from '../../lib/newsStorage';
+import { resolveUploadUrl } from '../../lib/uploads';
 
 interface NewsPost {
   id: string;
@@ -212,7 +213,7 @@ export default function HomePage() {
                   </h3>
                   <div className="flex-1 min-h-0 rounded-2xl overflow-hidden shadow-lg border border-gray-200/80 aspect-[4/3] sm:aspect-[3/2] bg-gray-100">
                     {latestNews[0].image_url ? (
-                      <img src={latestNews[0].image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                      <img src={resolveUploadUrl(latestNews[0].image_url)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-gray-200">
                         <Newspaper className="h-16 w-16 text-gray-400" />
@@ -298,7 +299,7 @@ export default function HomePage() {
                     >
                       {post.image_url ? (
                         <div className="flex-shrink-0 aspect-[4/3] bg-gray-100 overflow-hidden">
-                          <img src={post.image_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                          <img src={resolveUploadUrl(post.image_url)} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                         </div>
                       ) : null}
                       <div className="p-4 flex-1 flex flex-col min-h-0">
