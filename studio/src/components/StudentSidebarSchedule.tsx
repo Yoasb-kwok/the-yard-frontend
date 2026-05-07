@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useHolidays } from '../lib/useHolidays';
 import { api } from '../lib/api';
-import { getLessonDatesSkipHolidays, getLessonDates } from '../lib/utils';
+import { getLessonDatesSkipHolidays, getLessonDates, formatDateTimeRange } from '../lib/utils';
 import { getLocationInfo } from '../lib/locationInfo';
 import { getFallbackUpcomingClasses, type EnrolledClass } from '../lib/studentEnrollments';
 import { MapPin } from 'lucide-react';
@@ -91,8 +91,6 @@ export default function StudentSidebarSchedule() {
     d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
   const formatDateShort = (d: Date) =>
     d.toLocaleDateString(locale, { month: 'long', day: 'numeric', weekday: 'short' });
-  const formatDateTimeRange = (start: Date, end: Date) =>
-    `${start.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' })} ${formatTime(start)} – ${end.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' })} ${formatTime(end)}`;
 
   if (loading || !profile) return null;
 
@@ -158,7 +156,7 @@ export default function StudentSidebarSchedule() {
                   </p>
                   <p className="text-gray-600 mt-0.5">{e.class.instructor}</p>
                   <p className="text-gray-500 text-xs mt-1">
-                    {formatDateTimeRange(nextDate, endDate)}
+                    {formatDateTimeRange(nextDate, endDate, locale)}
                   </p>
                   {loc && (
                     <p className="text-gray-600 text-xs mt-1">

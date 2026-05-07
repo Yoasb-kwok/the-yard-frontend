@@ -17,6 +17,12 @@ export interface CourseItem {
   location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   weekday: number;
   course_type: 'regular' | 'summer' | 'short_term';
+  /** GET /courses?fromClasses=1：最近一堂未取消班 id，試堂申請優先作 classId */
+  next_class_id?: number | null;
+  /** 未來／進行中班別數（API 選填） */
+  open_class_count?: number | null;
+  /** 後端若仍有「目錄列」概念可回傳；無 courses 表時可恒為 false / 省略 */
+  has_course_catalog_row?: boolean;
 }
 
 export const COURSE_TYPES = ['regular', 'summer', 'short_term'] as const;

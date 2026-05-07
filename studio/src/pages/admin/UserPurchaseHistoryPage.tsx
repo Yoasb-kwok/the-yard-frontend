@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { extractServerErrorText, formatCurrency, formatDateTime } from '../../lib/utils';
+import { extractServerErrorText, formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
 import { patchAdminOrderPaymentStatus } from '../../lib/adminOrderApi';
 import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package, X, Printer, Pencil } from 'lucide-react';
@@ -238,20 +238,6 @@ export default function UserPurchaseHistoryPage() {
     }
   };
 
-  const formatMobile = (mobile: string | null): string => {
-    if (!mobile) return '-';
-    
-    if (mobile.startsWith('852')) {
-      return `+852 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('853')) {
-      return `+853 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('86')) {
-      return `+86 ${mobile.substring(2)}`;
-    }
-    
-    return `+852 ${mobile}`;
-  };
-
   const handlePrintReceipt = () => {
     if (!selectedPurchase) return;
     
@@ -396,7 +382,7 @@ export default function UserPurchaseHistoryPage() {
                 </div>
                 <div>
                   <span class="info-label">${t('admin.purchaseHistory.contactNumber')}:</span>
-                  <span class="info-value">${formatMobile(selectedPurchase.user_mobile)}</span>
+                  <span class="info-value">${formatMobileForDisplay(selectedPurchase.user_mobile, '-')}</span>
                 </div>
               </div>
             </div>
@@ -601,7 +587,7 @@ export default function UserPurchaseHistoryPage() {
                         {purchase.user_name}
                       </div>
                       <div className="text-gray-500 text-xs mb-1">
-                        {formatMobile(purchase.user_mobile)}
+                        {formatMobileForDisplay(purchase.user_mobile, '-')}
                       </div>
                       <div className="text-gray-500 text-xs">
                         {t('admin.purchaseHistory.orderId')}: {purchase.order_id}
@@ -758,7 +744,7 @@ export default function UserPurchaseHistoryPage() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           <div>
                             <div className="font-medium">{purchase.user_name}</div>
-                            <div className="text-gray-500 text-xs">{formatMobile(purchase.user_mobile)}</div>
+                            <div className="text-gray-500 text-xs">{formatMobileForDisplay(purchase.user_mobile, '-')}</div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1044,7 +1030,7 @@ export default function UserPurchaseHistoryPage() {
                   </div>
                   <div>
                     <span className="text-gray-600">{t('admin.purchaseHistory.contactNumber')}:</span>
-                    <span className="ml-2 font-medium text-gray-900">{formatMobile(selectedPurchase.user_mobile)}</span>
+                    <span className="ml-2 font-medium text-gray-900">{formatMobileForDisplay(selectedPurchase.user_mobile, '-')}</span>
                   </div>
                 </div>
               </div>

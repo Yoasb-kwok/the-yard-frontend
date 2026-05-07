@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
+import { formatMobileForDisplay } from '../lib/utils';
 import { KeyRound, Mail, Phone } from 'lucide-react';
 
 export interface AccountSecurityCardProps {
@@ -208,8 +209,8 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated, i
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-900">
-              {mobileDisplay.countryCode && mobileDisplay.number
-                ? `${mobileDisplay.countryCode} ${mobileDisplay.number}`
+              {mobile != null && String(mobile).trim() !== ''
+                ? formatMobileForDisplay(mobile)
                 : t('profile.notProvided')}
             </span>
             <button

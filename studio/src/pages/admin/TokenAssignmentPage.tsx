@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatDate, formatDateTime } from '../../lib/utils';
+import { formatDate, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { ArrowLeft, Search, Calendar, User, Package, CheckCircle, X, Filter, MapPin, Play, Clock } from 'lucide-react';
 
@@ -112,20 +112,6 @@ export default function TokenAssignmentPage() {
       'zh-TW': 'zh-TW',
     };
     return langMap[i18n.language] || i18n.language || 'en-US';
-  };
-
-  const formatMobile = (mobile: string | null): string => {
-    if (!mobile) return '-';
-    
-    if (mobile.startsWith('852')) {
-      return `+852 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('853')) {
-      return `+853 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('86')) {
-      return `+86 ${mobile.substring(2)}`;
-    }
-    
-    return `+852 ${mobile}`;
   };
 
   const getUnassignedTokens = (): number => {
@@ -272,7 +258,7 @@ export default function TokenAssignmentPage() {
             <p className="text-sm text-gray-600 mb-1"><span className="font-medium">{t('admin.tokenAssignment.instructor')}:</span> {classItem.instructor}</p>
             <p className="text-sm text-gray-600 mb-1">
               <span className="font-medium">{t('admin.tokenAssignment.time')}:</span>{' '}
-              {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
+              {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
             </p>
             {classItem.location && (
               <p className="text-sm text-gray-600 mb-1"><span className="font-medium">{t('admin.tokenAssignment.location')}:</span> {getLocationLabel(classItem.location)}</p>
@@ -391,7 +377,7 @@ export default function TokenAssignmentPage() {
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900">{user.full_name}</h2>
-              <p className="text-gray-600">{formatMobile(user.mobile)}</p>
+              <p className="text-gray-600">{formatMobileForDisplay(user.mobile, '-')}</p>
             </div>
           </div>
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatDateTime } from '../../lib/utils';
+import { formatDateTime, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import { ArrowLeft, Search, X, AlertTriangle, Users, RefreshCw } from 'lucide-react';
@@ -286,23 +286,6 @@ export default function ClassAttendancePage() {
     e => e.class_id === selectedClass?.id && e.status === 'enrolled'
   );
 
-  // Format mobile number with country code
-  function formatMobile(mobile: string | null): string {
-    if (!mobile) return '-';
-    
-    // Check if mobile starts with country codes: 852, 853, or 86
-    if (mobile.startsWith('852')) {
-      return `+852 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('853')) {
-      return `+853 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('86')) {
-      return `+86 ${mobile.substring(2)}`;
-    }
-    
-    // If no country code detected, default to +852 (Hong Kong)
-    return `+852 ${mobile}`;
-  }
-
   const getLocale = (): string => {
     const langMap: { [key: string]: string } = {
       'en': 'en-US',
@@ -477,7 +460,7 @@ export default function ClassAttendancePage() {
                 )}
                 <p className="text-sm text-gray-600 mb-1">
                   <span className="font-medium">{t('admin.attendance.time')}:</span>{' '}
-                  {formatDateTime(selectedClass.start_time, getLocale())} - {formatDateTime(selectedClass.end_time, getLocale())}
+                  {formatDateTimeRange(selectedClass.start_time, selectedClass.end_time, getLocale())}
                 </p>
                 {selectedClass.location && (
                   <p className="text-sm text-gray-600 mb-1">
@@ -627,7 +610,7 @@ export default function ClassAttendancePage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{enrollment.user_name}</td>
-                          <td className="px-4 py-3 text-sm text-gray-600">{formatMobile(enrollment.user_mobile)}</td>
+                          <td className="px-4 py-3 text-sm text-gray-600">{formatMobileForDisplay(enrollment.user_mobile, '-')}</td>
                           <td className="px-4 py-3 text-sm">
                             <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(enrollment.status)}`}>
                               {getStatusLabel(enrollment.status)}
@@ -644,10 +627,13 @@ export default function ClassAttendancePage() {
                                   <span className="text-xs text-gray-500">{enrollment.reassigned_to_class_code}</span>
                                   {enrollment.reassigned_to_class_start_time && (
                                     <span className="text-xs text-gray-500">
-                                      {formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
-                                      {enrollment.reassigned_to_class_end_time && (
-                                        <> - {formatDateTime(enrollment.reassigned_to_class_end_time, getLocale())}</>
-                                      )}
+                                      {enrollment.reassigned_to_class_end_time
+                                        ? formatDateTimeRange(
+                                            enrollment.reassigned_to_class_start_time,
+                                            enrollment.reassigned_to_class_end_time,
+                                            getLocale()
+                                          )
+                                        : formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
                                     </span>
                                   )}
                                 </div>
@@ -707,7 +693,7 @@ export default function ClassAttendancePage() {
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <h3 className="text-sm font-semibold text-gray-900 mb-1">{enrollment.user_name}</h3>
-                          <p className="text-xs text-gray-600">{formatMobile(enrollment.user_mobile)}</p>
+                          <p className="text-xs text-gray-600">{formatMobileForDisplay(enrollment.user_mobile, '-')}</p>
                         </div>
                         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(enrollment.status)}`}>
                           {getStatusLabel(enrollment.status)}
@@ -739,10 +725,13 @@ export default function ClassAttendancePage() {
                               <div className="flex items-center justify-between text-xs mt-1">
                                 <span className="text-gray-500 font-medium">{t('admin.attendance.time')}:</span>
                                 <span className="text-gray-900 text-right">
-                                  {formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
-                                  {enrollment.reassigned_to_class_end_time && (
-                                    <> - {formatDateTime(enrollment.reassigned_to_class_end_time, getLocale())}</>
-                                  )}
+                                  {enrollment.reassigned_to_class_end_time
+                                    ? formatDateTimeRange(
+                                        enrollment.reassigned_to_class_start_time,
+                                        enrollment.reassigned_to_class_end_time,
+                                        getLocale()
+                                      )
+                                    : formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
                                 </span>
                               </div>
                             )}
@@ -894,7 +883,7 @@ export default function ClassAttendancePage() {
                 <h4 className="font-medium text-gray-900 mb-2">{t('admin.attendance.classToCancel')}</h4>
                 <p className="text-sm text-gray-600">{selectedClass.name} ({selectedClass.class_code})</p>
                 <p className="text-sm text-gray-600">
-                  {formatDateTime(selectedClass.start_time, getLocale())} - {formatDateTime(selectedClass.end_time, getLocale())}
+                  {formatDateTimeRange(selectedClass.start_time, selectedClass.end_time, getLocale())}
                 </p>
               </div>
 

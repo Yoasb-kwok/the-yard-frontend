@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
-import { downloadCsv } from '../../lib/utils';
+import { downloadCsv, formatMobileForDisplay } from '../../lib/utils';
 import { ClipboardList, Calendar, Download } from 'lucide-react';
 import {
   FALLBACK_ATTENDANCE_ANOMALY,
@@ -80,7 +80,13 @@ export default function AdminAttendanceAnomalyPage() {
       [],
       [t('admin.dashboard.consecutiveAbsenceStudents')],
       [t('admin.dashboard.name'), t('admin.dashboard.mobile'), t('admin.dashboard.consecutiveAbsences'), t('admin.dashboard.lastClassDate'), t('admin.dashboard.className')],
-      ...consec.map((r) => [r.full_name, r.mobile, r.consecutiveAbsences, r.lastClassDate, r.className]),
+      ...consec.map((r) => [
+        r.full_name,
+        formatMobileForDisplay(r.mobile, ''),
+        r.consecutiveAbsences,
+        r.lastClassDate,
+        r.className,
+      ]),
     ];
     downloadCsv(rows, `attendance-anomaly-${reportMonth}.csv`);
   };
@@ -191,7 +197,7 @@ export default function AdminAttendanceAnomalyPage() {
                   {paginatedConsecutive.map((row) => (
                     <tr key={row.studentId} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{row.full_name}</td>
-                      <td className="py-2 pr-4">{row.mobile}</td>
+                      <td className="py-2 pr-4">{formatMobileForDisplay(row.mobile, '–')}</td>
                       <td className="py-2 pr-4">{row.consecutiveAbsences}</td>
                       <td className="py-2 pr-4">{row.lastClassDate}</td>
                       <td className="py-2">{row.className}</td>

@@ -3,8 +3,8 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency, calculateDiscount } from '../../lib/utils';
-import { ShoppingCart, Lock, Check, Calendar, Clock, MapPin } from 'lucide-react';
+import { formatCurrency, calculateDiscount, formatDateTimeRange } from '../../lib/utils';
+import { ShoppingCart, Lock, Check, Calendar, MapPin } from 'lucide-react';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
@@ -286,25 +286,6 @@ export default function TokenPackagePage() {
     return langMap[i18n.language] || i18n.language || 'en-US';
   };
 
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(getLocale(), {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long',
-    });
-  };
-
-  const formatTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString(getLocale(), {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-  };
-
   // Use admin-set profile avatar when available (synced with 導師主頁 / admin 導師管理)
   const getTutorImageUrl = (name: string): string => {
     const profile = getInstructorProfile(name);
@@ -365,17 +346,9 @@ export default function TokenPackagePage() {
                 <div className="flex items-center text-gray-800">
                   <Calendar className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
-                    <p className="text-base font-semibold">{formatDate(classData.start_time)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center text-gray-800">
-                  <Clock className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classTime')}</p>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDateTime')}</p>
                     <p className="text-base font-semibold">
-                      {formatTime(classData.start_time)} - {formatTime(classData.end_time)}
+                      {formatDateTimeRange(classData.start_time, classData.end_time, getLocale())}
                     </p>
                   </div>
                 </div>

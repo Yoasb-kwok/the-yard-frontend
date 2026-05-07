@@ -398,6 +398,13 @@ export default function AdminTagsPage() {
         (r) => typeof r.id === 'number' && !currentIds.has(r.id) && !r.is_system,
       );
       for (const row of toDelete) {
+        // Cascade delete: remove all tags under this type before deleting the type.
+        const existingTags = await fetchAdminTagsByType(row.code).catch(() => [] as TagRow[]);
+        for (const tag of existingTags) {
+          if (typeof tag.id === 'number') {
+            await deleteTag(tag.id);
+          }
+        }
         await deleteTagType(row.id as number);
       }
 

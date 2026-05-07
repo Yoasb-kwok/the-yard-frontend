@@ -426,7 +426,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
         return {
           id: t.id,
           class_name:
-            t.assigned_class_name || cls?.name || t.preferred_program || '試堂申請',
+            t.assigned_class_name || cls?.name || t.requested_trial_class_name || t.preferred_program || '試堂申請',
           status: t.status,
           applied_date: t.created_at,
           assigned_class_name: t.assigned_class_name ?? cls?.name ?? null,
@@ -565,20 +565,35 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     const db = getDb();
     return ok(
       db.users
-        .filter((u) => u.role !== 'admin')
-        .map((u) => ({
-          id: u.id,
-          email: u.email,
-          name: u.name,
-          student_id: u.student_id,
-          mobile: u.mobile,
-          role: u.role,
-          country_code: u.country_code,
-          date_of_birth: u.date_of_birth,
-          level: u.level,
-          has_joined_courses: u.has_joined_courses,
-          created_at: u.created_at,
-        })),
+        .filter((u) => u.role !== 'admin' && u.role !== 'instructor')
+        .map((u) => {
+          const email = u.email ?? '';
+          const nick = u.nick_name?.trim();
+          const tokens = db.userTokens
+            .filter((t) => t.user_id === u.id && t.is_active)
+            .map((t) => ({
+              id: t.id,
+              remaining_tokens: t.balance,
+              expiry_date: t.expires_at.slice(0, 10),
+            }));
+          return {
+            id: u.id,
+            email,
+            full_name: u.name,
+            name: u.name,
+            username: nick && nick.length > 0 ? nick : email.includes('@') ? email.split('@')[0] : email,
+            student_id: u.student_id,
+            mobile: u.mobile,
+            role: u.role,
+            id_last_four: u.id_last_four,
+            country_code: u.country_code,
+            date_of_birth: u.date_of_birth,
+            level: u.level,
+            has_joined_courses: u.has_joined_courses,
+            created_at: u.created_at,
+            user_tokens: tokens,
+          };
+        }),
     );
   }
   const adminUserId = matches('/admin/users/:id', path);
@@ -761,7 +776,12 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       mobile: t.mobile,
       contact_number: t.mobile,
       residential_district: null,
-      trial_class: t.assigned_class_name || cls?.name || t.preferred_program || '',
+      trial_class:
+        t.assigned_class_name ||
+        cls?.name ||
+        t.requested_trial_class_name ||
+        t.preferred_program ||
+        '',
       class_name: t.assigned_class_name || cls?.name || '',
       preferred_datetime: t.preferred_date,
       preferred_date: t.preferred_date,
@@ -1308,9 +1328,9 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     const t = db.tagTypes.find((x) => String(x.id) === adminTagTypeId.id);
     if (!t) return err('Tag type not found');
     if (t.is_system) return err('Cannot delete a system tag type');
-    const hasTags = db.tags.some((x) => x.type === t.code);
-    if (hasTags) return err(`Tag type has ${db.tags.filter((x) => x.type === t.code).length} tags; delete tags first`);
     mutate((d) => {
+      // Cascade delete tags under this type.
+      d.tags = d.tags.filter((x) => x.type !== t.code);
       d.tagTypes = d.tagTypes.filter((x) => String(x.id) !== adminTagTypeId.id);
     });
     return ok({ deleted: true });
@@ -1422,6 +1442,16 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   if (method === 'GET' && (path === '/admin/refund-records' || path === 'admin/refund-records')) {
     return ok(getDb().refundRecords);
+  }
+
+  // ---- Pending counts (sidebar badges)
+  if (method === 'GET' && path === '/admin/pending-counts') {
+    const db = getDb();
+    const pendingApplications =
+      db.extensionRequests.filter((r) => r.status === 'pending').length +
+      db.sickLeaveRequests.filter((r) => r.status === 'pending').length;
+    const pendingTrials = db.trialApplications.filter((t) => t.status === 'pending').length;
+    return ok({ pendingApplications, pendingTrials });
   }
 
   // ---- Pending applications (extension / sick leave)
@@ -1583,8 +1613,15 @@ function createTrialApplication(req: MockRequest): MockResponse {
     raw.preferred_date ?? raw.preferredDate ?? new Date().toISOString();
   const preferredLocation: string | undefined =
     raw.preferred_location ?? raw.preferredLocation;
+  const programCode: string | undefined = raw.programCode ?? raw.program_code;
   const preferredProgram: string | undefined =
-    raw.preferred_program ?? raw.preferredProgram;
+    raw.preferred_program ?? raw.preferredProgram ?? programCode;
+  const requestedTrialClassName: string | undefined = (() => {
+    const v = raw.trialClassName ?? raw.trial_class_name ?? raw.class_name;
+    if (v == null) return undefined;
+    const s = String(v).trim();
+    return s.length > 0 ? s : undefined;
+  })();
   const notes: string | undefined = raw.notes ?? raw.howDidYouHear;
 
   if (!email || !studentName) return err('Missing fields: email, fullName');
@@ -1621,7 +1658,8 @@ function createTrialApplication(req: MockRequest): MockResponse {
     date_of_birth: dateOfBirth,
     preferred_date: preferredDate,
     preferred_location: preferredLocation,
-    preferred_program: preferredProgram ?? classId,
+    preferred_program: preferredProgram ?? programCode ?? classId,
+    requested_trial_class_name: requestedTrialClassName,
     status: 'pending',
     user_id: u.id,
     notes: notes ?? null,

@@ -25,6 +25,8 @@ interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   msg?: string;
+  /** Some error handlers use `message` instead of `msg`; both are read on HTTP errors. */
+  message?: string;
   token?: string;
   user?: any;
   profile?: any;
@@ -116,7 +118,11 @@ async function request<T = any>(
     }
 
     if (!response.ok) {
-      throw new ApiError(response.status, data.msg || 'Request failed');
+      const errText =
+        (typeof data.msg === 'string' && data.msg.trim()) ||
+        (typeof data.message === 'string' && data.message.trim()) ||
+        `Request failed (${response.status})`;
+      throw new ApiError(response.status, errText);
     }
 
     return data;
@@ -124,13 +130,20 @@ async function request<T = any>(
     if (error instanceof ApiError) {
       throw error;
     }
-    // Handle network errors, CORS errors, etc.
-    if (error instanceof TypeError && error.message.includes('fetch')) {
+    const msg = error instanceof Error ? error.message : String(error);
+    // fetch() throws TypeError for "Failed to fetch" (connection refused, DNS, CORS, mixed content, etc.)
+    const looksLikeFetchNetworkFailure =
+      error instanceof TypeError &&
+      (/fetch/i.test(msg) || /network/i.test(msg) || /load failed/i.test(msg));
+    if (looksLikeFetchNetworkFailure) {
+      const baseHint = import.meta.env.DEV
+        ? 'Dev: ensure studio_backend is running on port 3002, or set VITE_API_URL to your API (must include /api). Vite proxies /api → localhost:3002 when VITE_API_URL is unset.'
+        : 'Set VITE_API_URL to your deployed API origin (with /api). Ensure CORS allows this site and the server is reachable.';
       throw new Error(
-        'Network error: Cannot connect to API server. Check VITE_API_URL, backend health, and CORS_ORIGIN.'
+        `Network error (${msg}): could not reach ${url}. ${baseHint}`
       );
     }
-    throw new Error('Network error: ' + (error as Error).message);
+    throw new Error('Network error: ' + msg);
   }
 }
 

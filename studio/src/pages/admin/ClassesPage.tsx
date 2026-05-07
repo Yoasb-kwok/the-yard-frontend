@@ -1,16 +1,16 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
-import { formatDateTime, shouldPostponeClassWithHolidays, formatProgramCodeDisplay, parseAgeRange, ageRangeToTag } from '../../lib/utils';
+import { formatDateTimeRange, shouldPostponeClassWithHolidays, formatProgramCodeDisplay, parseAgeRange, ageRangeToTag } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, useAuth } from '../../contexts/AuthContext';
 import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
-import { useClassTags } from '../../lib/useClassTags';
+import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 
 interface Class {
   id: string;
@@ -34,6 +34,7 @@ interface Class {
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
   level?: CourseLevel;
   age_tag?: string;
+  tag_values?: Record<string, string | null | undefined>;
   /** 若因假期順延，原訂日期 (YYYY-MM-DD) */
   postponed_from?: string | null;
   /** 出席名單是否已確認 */
@@ -98,10 +99,34 @@ function getFallbackEnrollments(classId: string, enrolledCount: number): Enrollm
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
-const AGE_OPTIONS = Array.from({ length: 26 }, (_, i) => i); // 0–25
-
 function getClassDisplayName(c: Class): string {
   return (c.name_zh_tw && c.name_zh_tw.trim()) || (c.name_zh_cn && c.name_zh_cn.trim()) || (c.name_en && c.name_en.trim()) || c.name || '';
+}
+
+function extractClassTagValues(raw: any): Record<string, string | null> {
+  const source = raw?.tag_values ?? raw?.tagValues ?? raw?.tags ?? {};
+  if (!source || typeof source !== 'object') return {};
+  const out: Record<string, string | null> = {};
+  for (const [k, v] of Object.entries(source as Record<string, unknown>)) {
+    const key = String(k || '').trim();
+    if (!key) continue;
+    out[key] = v == null || v === '' ? null : String(v);
+  }
+  return out;
+}
+
+function buildDefaultTagValues(
+  tagTypes: Array<{ code: string }>,
+  prev?: Record<string, string | null | undefined>
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const tt of tagTypes) {
+    const v = prev?.[tt.code];
+    out[tt.code] = typeof v === 'string' ? v : '';
+  }
+  if (!out.level) out.level = 'entry';
+  if (!out.age) out.age = '5-8';
+  return out;
 }
 
 export default function ClassesPage() {
@@ -109,8 +134,7 @@ export default function ClassesPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { getHolidayName, holidayDatesSet } = useHolidays();
-  const { tagsByType: classTagsByType } = useClassTags();
-  const levelOptions = classTagsByType.level ?? [];
+  const { tagTypes, tagsByType: classTagsByType } = useClassTags();
   const [classes, setClasses] = useState<Class[]>([]);
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -122,7 +146,6 @@ export default function ClassesPage() {
   const [view, setView] = useState<ViewType>('month');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [classNameFilter, setClassNameFilter] = useState<string>('');
-  const [monthFilter, setMonthFilter] = useState<string>(''); // YYYY-MM or ''
   const [form, setForm] = useState({
     name: '',
     name_zh_tw: '',
@@ -143,7 +166,16 @@ export default function ClassesPage() {
     repeat_weekly: false,
     total_lessons: 8,
     allow_trial: true,
+    tag_values: {} as Record<string, string>,
   });
+  const formTagTypes = useMemo(
+    () => tagTypes.filter((tt) => tt.code !== 'category'),
+    [tagTypes]
+  );
+  const dynamicTagTypes = useMemo(
+    () => tagTypes.filter((tt) => tt.code !== 'level' && tt.code !== 'age'),
+    [tagTypes]
+  );
   const [expandedAttendanceClassId, setExpandedAttendanceClassId] = useState<string | null>(null);
   const [attendanceData, setAttendanceData] = useState<{
     class: ClassWithAttendance;
@@ -155,6 +187,14 @@ export default function ClassesPage() {
     loadClasses();
     loadInstructors();
   }, []);
+
+  useEffect(() => {
+    if (tagTypes.length === 0) return;
+    setForm((prev) => ({
+      ...prev,
+      tag_values: buildDefaultTagValues(tagTypes, prev.tag_values),
+    }));
+  }, [tagTypes]);
 
   useEffect(() => {
     if (!expandedAttendanceClassId) {
@@ -231,6 +271,7 @@ export default function ClassesPage() {
           location: cls.location,
           level: cls.level,
           age_tag: cls.age_group ?? cls.age_tag,
+          tag_values: extractClassTagValues(cls),
           postponed_from: cls.postponed_from ?? null,
           attendance_confirmed: cls.attendance_confirmed === 1 || cls.attendance_confirmed === true,
         }));
@@ -406,15 +447,26 @@ export default function ClassesPage() {
   }
 
   function findRepeatedClasses(classItem: Class): Class[] {
-    // Find all classes that are part of the same repeat series
-    // Criteria: same name, class_code, instructor, location, and is_internal
-    return classes.filter(c => 
-      c.id !== classItem.id &&
-      c.name === classItem.name &&
-      c.class_code === classItem.class_code &&
-      c.instructor === classItem.instructor &&
-      c.location === classItem.location &&
-      c.is_internal === classItem.is_internal
+    // Use stable series key first (program/class code) so one-off edits
+    // to name/instructor/location won't break bulk-edit grouping.
+    const seriesCode = (classItem.class_code || '').trim();
+    if (seriesCode) {
+      return classes.filter(
+        (c) =>
+          c.id !== classItem.id &&
+          (c.class_code || '').trim() === seriesCode &&
+          c.is_internal === classItem.is_internal
+      );
+    }
+
+    // Legacy fallback for old rows without class_code.
+    return classes.filter(
+      (c) =>
+        c.id !== classItem.id &&
+        c.name === classItem.name &&
+        c.instructor === classItem.instructor &&
+        c.location === classItem.location &&
+        c.is_internal === classItem.is_internal
     );
   }
 
@@ -502,6 +554,11 @@ export default function ClassesPage() {
       repeat_weekly: false,
       total_lessons: 8,
       allow_trial: classItem.allow_trial ?? true,
+      tag_values: buildDefaultTagValues(tagTypes, {
+        ...classItem.tag_values,
+        level: classItem.tag_values?.level ?? classItem.level ?? 'entry',
+        age: classItem.tag_values?.age ?? classItem.age_tag ?? '5-8',
+      }),
     });
     setShowModal(true);
   }
@@ -529,6 +586,7 @@ export default function ClassesPage() {
       repeat_weekly: false,
       total_lessons: 8,
       allow_trial: true,
+      tag_values: buildDefaultTagValues(tagTypes),
     });
     setShowModal(true);
   }
@@ -540,10 +598,8 @@ export default function ClassesPage() {
       alert(t('admin.classes.classNameRequired', '請至少填寫一種語言的課程名稱'));
       return;
     }
-    if (form.lowest_age > form.oldest_age) {
-      alert(t('admin.classes.ageRangeHint', '最低年齡不可大於最高年齡'));
-      return;
-    }
+    const selectedLevelCode = form.tag_values.level || form.level || 'entry';
+    const selectedAgeTagCode = form.tag_values.age || ageRangeToTag(form.lowest_age, form.oldest_age);
     // If editing, update the existing class(es)
     if (editingClass) {
       const isNumericId = (id: string | number) => /^[1-9][0-9]*$/.test(String(id));
@@ -588,8 +644,9 @@ export default function ClassesPage() {
               is_internal: form.is_internal ? 1 : 0,
               allow_trial: form.allow_trial ? 1 : 0,
               location: form.location,
-              level: form.level,
-              age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
+              level: selectedLevelCode,
+              age_group: selectedAgeTagCode,
+              tag_values: form.tag_values,
             };
             
             return api.patch(`/admin/classes/${c.id}`, updateData);
@@ -619,8 +676,9 @@ export default function ClassesPage() {
             is_internal: form.is_internal ? 1 : 0,
             allow_trial: form.allow_trial ? 1 : 0,
             location: form.location,
-            level: form.level,
-            age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
+            level: selectedLevelCode,
+            age_group: selectedAgeTagCode,
+            tag_values: form.tag_values,
           };
           
           const response = await api.patch(`/admin/classes/${editingClass.id}`, updateData);
@@ -646,6 +704,7 @@ export default function ClassesPage() {
               location: response.data.location,
               level: response.data.level,
               age_tag: (response.data.age_group as string) ?? '5-8',
+              tag_values: extractClassTagValues(response.data),
             };
             
             setClasses(classes.map(c => c.id === editingClass.id ? updatedClass : c));
@@ -679,6 +738,7 @@ export default function ClassesPage() {
           repeat_weekly: false,
           total_lessons: 8,
           allow_trial: true,
+          tag_values: buildDefaultTagValues(tagTypes),
         });
       } catch (error) {
         console.error('Error updating class:', error);
@@ -716,8 +776,9 @@ export default function ClassesPage() {
           capacity: form.capacity,
           location: form.location,
           program_code: form.class_code || undefined,
-          level: form.level,
-          age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
+          level: selectedLevelCode,
+          age_group: selectedAgeTagCode,
+          tag_values: form.tag_values,
           is_internal: form.is_internal ? 1 : 0,
           allow_trial: form.allow_trial ? 1 : 0,
         });
@@ -740,6 +801,7 @@ export default function ClassesPage() {
             location: c.location,
             level: (c.level as CourseLevel) || 'entry',
             age_tag: (c.age_group as string) ?? '5-8',
+            tag_values: extractClassTagValues(c),
           });
         }
         newClasses.push(...createdClasses);
@@ -767,6 +829,7 @@ export default function ClassesPage() {
           repeat_weekly: false,
           total_lessons: 8,
           allow_trial: true,
+          tag_values: buildDefaultTagValues(tagTypes),
         });
         alert(t('admin.classes.recurringCourseCreated', { count: createdClasses.length }));
       } catch (err) {
@@ -808,8 +871,9 @@ export default function ClassesPage() {
         capacity: form.capacity,
         location: form.location,
         program_code: form.class_code,
-        level: form.level,
-        age_group: ageRangeToTag(form.lowest_age, form.oldest_age),
+        level: selectedLevelCode,
+        age_group: selectedAgeTagCode,
+        tag_values: form.tag_values,
         is_internal: form.is_internal ? 1 : 0,
         allow_trial: form.allow_trial ? 1 : 0,
         repeat_weekly: 0,
@@ -835,6 +899,7 @@ export default function ClassesPage() {
             location: response.data.location,
             level: response.data.level,
             age_tag: (response.data.age_group as string) ?? '5-8',
+            tag_values: extractClassTagValues(response.data),
           };
           newClasses.push(createdClass);
         } else {
@@ -858,6 +923,9 @@ export default function ClassesPage() {
     const today = new Date().toISOString().slice(0, 10);
     setForm({
       name: '',
+      name_zh_tw: '',
+      name_zh_cn: '',
+      name_en: '',
       class_code: '',
       instructor: '',
       substitute_instructor: '',
@@ -873,6 +941,7 @@ export default function ClassesPage() {
       repeat_weekly: false,
       total_lessons: 8,
       allow_trial: true,
+      tag_values: buildDefaultTagValues(tagTypes),
     });
   }
 
@@ -902,6 +971,7 @@ export default function ClassesPage() {
           location: response.data.location,
           level: response.data.level,
           age_tag: response.data.age_group as AgeTag,
+          tag_values: extractClassTagValues(response.data),
         };
         
         setClasses(classes.map(c => 
@@ -997,15 +1067,6 @@ export default function ClassesPage() {
     // Filter by class name (display name)
     if (classNameFilter) {
       filtered = filtered.filter(classItem => (getClassDisplayName(classItem) || '').trim() === classNameFilter);
-    }
-
-    // Filter by month (YYYY-MM)
-    if (monthFilter) {
-      filtered = filtered.filter(classItem => {
-        const d = new Date(classItem.start_time);
-        const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        return ym === monthFilter;
-      });
     }
 
     // Filter by selected date
@@ -1115,6 +1176,28 @@ export default function ClassesPage() {
     return t(`home.locations.${location}`);
   };
 
+  /** Short label for the filter bar location dropdown (first option is "全部" / "All"). */
+  const getLocationFilterOptionLabel = (location: LocationFilter): string => {
+    if (location === 'all') return t('admin.classes.allLocationsShort', '全部');
+    return t(`home.locations.${location}`);
+  };
+
+  /** Reported enrolment never shown above capacity; append (Full) when at or over capacity. */
+  const renderEnrollmentCountSummary = (classItem: Class): ReactNode => {
+    const capacity = Math.max(0, Number(classItem.capacity) || 0);
+    const raw = Math.max(0, Number(classItem.enrolled_count) || 0);
+    const displayEnrolled = capacity > 0 ? Math.min(raw, capacity) : raw;
+    const isFull = capacity > 0 && raw >= capacity;
+    return (
+      <>
+        {t('admin.classes.enrollmentCountSummary', { enrolled: displayEnrolled, capacity })}
+        {isFull ? (
+          <span className="text-amber-800 font-medium">{t('admin.classes.enrollmentFull', ' (Full)')}</span>
+        ) : null}
+      </>
+    );
+  };
+
   const formatTime = (date: Date): string => {
     return date.toLocaleTimeString(getLocale(), {
       hour: '2-digit',
@@ -1193,7 +1276,7 @@ export default function ClassesPage() {
                     )}
                     <div className="flex items-center text-sm text-gray-600 mb-1">
                       <Calendar className="h-4 w-4 mr-1" />
-                      {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
+                      {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
                     </div>
                     {classItem.location && (
                       <div className="flex items-center text-sm text-gray-600 mb-1">
@@ -1207,7 +1290,7 @@ export default function ClassesPage() {
                       </p>
                     )}
                     <p className="text-sm text-gray-600">
-                      {t('admin.classes.enrolled')}: {classItem.enrolled_count} / {classItem.capacity}
+                      {renderEnrollmentCountSummary(classItem)}
                     </p>
                   </div>
                   <div className="flex gap-2">
@@ -1617,19 +1700,15 @@ export default function ClassesPage() {
     return order.filter(l => l === 'all' || locs.has(l));
   }, [classes]);
 
-  const distinctMonths = useMemo(() => {
-    const set = new Set<string>();
-    classes.forEach(c => {
-      const d = new Date(c.start_time);
-      set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    });
-    return Array.from(set).sort().reverse(); // newest first
-  }, [classes]);
+  const getTagTypeLabel = (typeCode: string): string => {
+    const tt = tagTypes.find((row) => row.code === typeCode);
+    return tt ? localizeTagLabel(tt, i18n.language || 'zh-TW') : typeCode;
+  };
 
-  const formatMonthLabel = (ym: string): string => {
-    const [y, m] = ym.split('-');
-    const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
-    return date.toLocaleDateString(getLocale(), { month: 'long', year: 'numeric' });
+  const getTagValueLabel = (typeCode: string, value: string | null | undefined): string => {
+    if (!value) return '-';
+    const opt = (classTagsByType[typeCode] ?? []).find((row) => row.code === value);
+    return opt ? localizeTagLabel(opt, i18n.language || 'zh-TW') : value;
   };
 
   const sortedClasses = useMemo(() => {
@@ -1810,23 +1889,7 @@ export default function ClassesPage() {
                 className="min-w-[10rem] px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-primary focus:border-primary"
               >
                 {distinctLocations.map((loc) => (
-                  <option key={loc} value={loc}>{getLocationLabel(loc)}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="filter-month" className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                {t('admin.classes.filterByMonth')}:
-              </label>
-              <select
-                id="filter-month"
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
-                className="min-w-[10rem] px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-primary focus:border-primary"
-              >
-                <option value="">{t('admin.classes.allMonths')}</option>
-                {distinctMonths.map((ym) => (
-                  <option key={ym} value={ym}>{formatMonthLabel(ym)}</option>
+                  <option key={loc} value={loc}>{getLocationFilterOptionLabel(loc)}</option>
                 ))}
               </select>
             </div>
@@ -1834,7 +1897,7 @@ export default function ClassesPage() {
         </div>
 
         {/* Selected Date Info and Clear Button */}
-        {(selectedDate || locationFilter !== 'all' || classNameFilter || monthFilter) && (
+        {(selectedDate || locationFilter !== 'all' || classNameFilter) && (
           <div className="flex justify-between items-center bg-primary-lighter p-4 rounded-lg">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
@@ -1843,7 +1906,6 @@ export default function ClassesPage() {
                   : t('admin.classes.allClasses')}
                 {locationFilter !== 'all' && ` ${t('admin.classes.at')} ${getLocationLabel(locationFilter)}`}
                 {classNameFilter && ` · ${classNameFilter}`}
-                {monthFilter && ` · ${formatMonthLabel(monthFilter)}`}
               </h3>
               <p className="text-sm text-gray-600">
                 {filteredClasses.length} {filteredClasses.length === 1 ? t('admin.classes.class') : t('admin.classes.classes')} {t('admin.classes.scheduled')}
@@ -1864,14 +1926,6 @@ export default function ClassesPage() {
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
                 >
                   {t('admin.classes.clearLocationFilter')}
-                </button>
-              )}
-              {monthFilter && (
-                <button
-                  onClick={() => setMonthFilter('')}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
-                >
-                  {t('admin.classes.clearMonthFilter')}
                 </button>
               )}
               {selectedDate && (
@@ -1935,7 +1989,7 @@ export default function ClassesPage() {
                   )}
                   <div className="flex items-center text-sm text-gray-600 mb-1">
                     <Calendar className="h-4 w-4 mr-1" />
-                    {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
+                    {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
                   </div>
                   {classItem.location && (
                     <div className="flex items-center text-sm text-gray-600 mb-1">
@@ -1944,8 +1998,18 @@ export default function ClassesPage() {
                     </div>
                   )}
                   <p className="text-sm text-gray-600">
-                    {t('admin.classes.enrolled')}: {classItem.enrolled_count} / {classItem.capacity}
+                    {renderEnrollmentCountSummary(classItem)}
                   </p>
+                  {dynamicTagTypes.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {dynamicTagTypes.map((tt) => (
+                        <p key={tt.code} className="text-sm text-gray-600">
+                          <span className="font-medium text-gray-700">{getTagTypeLabel(tt.code)}:</span>{' '}
+                          {getTagValueLabel(tt.code, classItem.tag_values?.[tt.code])}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -2132,67 +2196,42 @@ export default function ClassesPage() {
                   <p className="text-xs text-gray-500 mt-1">{t('admin.classes.substituteInstructorHint')}</p>
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.level')}</label>
-                <select
-                  required
-                  value={form.level}
-                  onChange={(e) => setForm({ ...form, level: e.target.value as CourseLevel })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  {levelOptions.map((opt) => {
-                    const lang = (i18n.language || 'zh-TW').toLowerCase();
-                    const label =
-                      (lang.startsWith('zh-cn') || lang === 'zh-hans')
-                        ? (opt.label_zh_cn || opt.label_zh_tw || opt.code)
-                        : lang.startsWith('en')
-                          ? (opt.label_en || opt.label_zh_tw || opt.code)
-                          : (opt.label_zh_tw || opt.label_en || opt.code);
-                    return (
-                      <option key={String(opt.id)} value={opt.code}>
-                        {label}
-                      </option>
-                    );
-                  })}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  {t('admin.classes.levelManagedByTags', '可在「標籤管理」新增或修改程度標籤')}
-                </p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.ageRange', '適合年齡')}</label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <select
-                    required
-                    value={form.lowest_age}
-                    onChange={(e) => setForm({ ...form, lowest_age: Number(e.target.value), oldest_age: Math.max(form.oldest_age, Number(e.target.value)) })}
-                    className="w-24 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    aria-label={t('admin.classes.lowestAge', '最低年齡')}
-                  >
-                    {AGE_OPTIONS.map((n) => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                  <span className="text-gray-500">–</span>
-                  <select
-                    required
-                    value={form.oldest_age}
-                    onChange={(e) => setForm({ ...form, oldest_age: Number(e.target.value) })}
-                    className="w-24 px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                    aria-label={t('admin.classes.oldestAge', '最高年齡')}
-                  >
-                    {AGE_OPTIONS.filter((n) => n >= form.lowest_age).map((n) => (
-                      <option key={n} value={n}>{n}</option>
-                    ))}
-                  </select>
-                  <span className="text-sm text-gray-600">
-                    {t('admin.classes.ageTagLabel', '標籤')}: {ageRangeToTag(form.lowest_age, form.oldest_age)}{t('admin.classes.yearsOld', '歲')}
-                  </span>
-                </div>
-                {form.lowest_age > form.oldest_age && (
-                  <p className="text-xs text-amber-600 mt-1">{t('admin.classes.ageRangeHint', '最低年齡不可大於最高年齡')}</p>
-                )}
-              </div>
+              {formTagTypes.map((tt) => {
+                const options = classTagsByType[tt.code] ?? [];
+                return (
+                  <div key={tt.code}>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{getTagTypeLabel(tt.code)}</label>
+                    <select
+                      required={tt.code === 'level' || tt.code === 'age'}
+                      value={form.tag_values[tt.code] ?? ''}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          level: tt.code === 'level' ? (e.target.value as CourseLevel) : form.level,
+                          ...(tt.code === 'age'
+                            ? (() => {
+                                const parsed = parseAgeRange(e.target.value);
+                                return { lowest_age: parsed.lowest, oldest_age: parsed.oldest };
+                              })()
+                            : {}),
+                          tag_values: {
+                            ...form.tag_values,
+                            [tt.code]: e.target.value,
+                          },
+                        })
+                      }
+                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="">-</option>
+                      {options.map((opt) => (
+                        <option key={String(opt.id)} value={opt.code}>
+                          {localizeTagLabel(opt, i18n.language || 'zh-TW')}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.firstLessonDate')}</label>
                 <DateSelect

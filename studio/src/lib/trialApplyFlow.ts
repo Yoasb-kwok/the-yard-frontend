@@ -4,10 +4,14 @@
  * 端點：`POST /api/trial-application`（公開，毋須登入）
  *
  * Request body：
- *   必填：classId, fullName, email
- *   選填：contactNumber, countryCode, nickName, dateOfBirth, sex, parentsName,
+ *   必填：fullName、email；試堂對班請擇一或並用
+ *     - classId：具體班別 id（例如 next_class_id）
+ *     - programCode：與 classes.program_code 一致時，後端可解析「該系列最近一堂班」
+ *   選填：contactNumber, countryCode, username（legacy key: nickName）, dateOfBirth, sex, parentsName,
  *         residentialDistrict, hasJoinedCourses, hasDanceExperience,
  *         howDidYouHear, promoCode
+ *   建議：`trialClassName` — 使用者所選試堂在畫面上顯示的名稱（與 programCode/classId 一併送），
+ *         供後端寫入 trial_applications，避免僅依 classId 解析錯誤時 admin 列表全變成同一課名。
  *
  * Response（新版，隨機密碼 + Email 流程）：
  *   { success: true,
@@ -36,3 +40,31 @@
  */
 
 export const TRIAL_APPLY_ENDPOINT = 'trial-application';
+
+/**
+ * 組出 POST trial-application 的 classId / programCode（camelCase）。
+ * 優先 apiClassRowId（具體班）；否則純數字 id 視為班別 id；試堂預設選項用 programCode；
+ * 有 program_code 時以 programCode 為主，避免把目錄 slug 誤當 classId。
+ */
+export function trialApplyClassIdentifiers(data: {
+  id: string;
+  program_code: string;
+  apiClassRowId?: string;
+}): { classId?: string; programCode?: string } {
+  const pc = data.program_code?.trim();
+  const row = data.apiClassRowId?.trim();
+  if (row) {
+    return { classId: row, ...(pc ? { programCode: pc } : {}) };
+  }
+  const id = data.id?.trim() ?? '';
+  if (id && /^\d+$/.test(id)) {
+    return { classId: id, ...(pc ? { programCode: pc } : {}) };
+  }
+  if (id.startsWith('trial-') && pc) {
+    return { programCode: pc };
+  }
+  if (pc) {
+    return { programCode: pc };
+  }
+  return {};
+}

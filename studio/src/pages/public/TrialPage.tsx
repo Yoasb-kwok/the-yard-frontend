@@ -1,28 +1,22 @@
-import { useState } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { useAuth, CourseLevel, AgeTag } from '../../contexts/AuthContext';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import { CheckCircle, Calendar, Clock, MapPin, Mail } from 'lucide-react';
+import { CheckCircle, Calendar, MapPin, Mail } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { getLocationInfo } from '../../lib/locationInfo';
 import { api, ApiError } from '../../lib/api';
-import { TRIAL_APPLY_ENDPOINT } from '../../lib/trialApplyFlow';
+import { TRIAL_APPLY_ENDPOINT, trialApplyClassIdentifiers } from '../../lib/trialApplyFlow';
+import type { TrialNavClassData } from '../../lib/trialClassDataFromQuery';
+import { trialNavClassDataFromSearchParams } from '../../lib/trialClassDataFromQuery';
+import { formatDateTimeRange } from '../../lib/utils';
+import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 
-interface ClassData {
-  id: string;
-  name: string;
-  instructor: string;
-  start_time: string;
-  end_time: string;
-  location: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
-  program_code: string;
-  level: CourseLevel;
-  age_tag?: AgeTag;
-}
+type ClassData = TrialNavClassData;
 
 /** 6 堂試堂選項，整齊展示 */
 function getTrialClassOptions(): ClassData[] {
@@ -54,7 +48,12 @@ const TRIAL_CLASS_OPTIONS = getTrialClassOptions();
 export default function TrialPage() {
   const { t, i18n } = useTranslation();
   const location = useLocation();
-  const classData = (location.state as { classData?: ClassData })?.classData;
+  const classDataFromQuery = useMemo(
+    () => trialNavClassDataFromSearchParams(new URLSearchParams(location.search)),
+    [location.search]
+  );
+  const classDataFromState = (location.state as { classData?: ClassData })?.classData;
+  const classData = classDataFromState ?? classDataFromQuery ?? undefined;
   const [fullName, setFullName] = useState('');
   const [nickName, setNickName] = useState('');
   const [dateOfBirth, setDateOfBirth] = useState('');
@@ -83,8 +82,11 @@ export default function TrialPage() {
   const [error, setError] = useState('');
   const [wasLoggedIn, setWasLoggedIn] = useState(false);
   const [selectedTrialClass, setSelectedTrialClass] = useState<ClassData | null>(null);
+  /** 避免連續點「提交」或 Enter 重複送出兩次 POST。 */
+  const trialSubmitLockRef = useRef(false);
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { tagTypes, tagsByType, getTypeLabel } = useClassTags();
 
   const effectiveClassData = classData || selectedTrialClass;
   
@@ -122,26 +124,30 @@ export default function TrialPage() {
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&size=128&background=random&color=fff&bold=true`;
   };
 
-  // Format date
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(i18n.language, {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      weekday: 'long',
-    });
+  const getLocale = (): string => {
+    const m: Record<string, string> = { en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
+    return m[i18n.language] ?? i18n.language ?? 'en-US';
   };
 
-  // Format time only (HH:MM)
-  const formatTime = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString(i18n.language, {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-  };
+  const dynamicTagRows = useMemo(() => {
+    if (!effectiveClassData) return [];
+    return tagTypes
+      .filter((tt) => tt.code !== 'level' && tt.code !== 'age')
+      .map((tt) => {
+        const raw = effectiveClassData.tag_values?.[tt.code];
+        const code = typeof raw === 'string' ? raw.trim() : '';
+        if (!code || code === '-') return null;
+        const option = (tagsByType[tt.code] ?? []).find((r) => r.code === code);
+        const valueLabel = option ? localizeTagLabel(option, i18n.language || 'zh-TW') : code;
+        const typeLabel = getTypeLabel(tt.code) || localizeTagLabel(tt, i18n.language || 'zh-TW');
+        return { key: tt.code, typeLabel, valueLabel };
+      })
+      .filter(Boolean) as Array<{ key: string; typeLabel: string; valueLabel: string }>;
+  }, [effectiveClassData, getTypeLabel, i18n.language, tagTypes, tagsByType]);
+  const instructorProfile = useMemo(
+    () => getInstructorProfile(effectiveClassData?.instructor ?? ''),
+    [effectiveClassData?.instructor]
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -152,18 +158,30 @@ export default function TrialPage() {
       return;
     }
 
+    if (trialSubmitLockRef.current) {
+      return;
+    }
+
     // If logged in, still call backend so trial is saved and shows in 我的試堂申請
     if (isLoggedIn && user && profile) {
+      trialSubmitLockRef.current = true;
       setLoading(true);
       setWasLoggedIn(true);
       try {
         const fullContactNumber = profile.mobile || profile.contact_number || '';
         const payload = {
-          classId: effectiveClassData.id,
+          ...trialApplyClassIdentifiers({
+            id: effectiveClassData.id,
+            program_code: effectiveClassData.program_code,
+            apiClassRowId: effectiveClassData.apiClassRowId,
+          }),
+          trialClassName: effectiveClassData.name,
           fullName: (profile.full_name || user.name || user.email || '').trim(),
           email: (user.email || '').trim().toLowerCase(),
           contactNumber: fullContactNumber || undefined,
           countryCode: undefined,
+          // Prefer new key `username`, keep `nickName` for backend compatibility.
+          username: (profile.nick_name || '').trim() || undefined,
           nickName: (profile.nick_name || '').trim() || undefined,
           dateOfBirth: profile.date_of_birth || undefined,
           sex: profile.sex !== undefined && profile.sex !== null ? profile.sex : undefined,
@@ -189,6 +207,7 @@ export default function TrialPage() {
         }
       } finally {
         setLoading(false);
+        trialSubmitLockRef.current = false;
       }
       return;
     }
@@ -202,16 +221,24 @@ export default function TrialPage() {
       return;
     }
 
+    trialSubmitLockRef.current = true;
     setLoading(true);
 
     try {
       const fullContactNumber = contactNumber ? `${countryCode}${contactNumber}` : '';
       const payload = {
-        classId: effectiveClassData.id,
+        ...trialApplyClassIdentifiers({
+          id: effectiveClassData.id,
+          program_code: effectiveClassData.program_code,
+          apiClassRowId: effectiveClassData.apiClassRowId,
+        }),
+        trialClassName: effectiveClassData.name,
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
         contactNumber: fullContactNumber || undefined,
         countryCode: countryCode || undefined,
+        // Prefer new key `username`, keep `nickName` for backend compatibility.
+        username: nickName.trim() || undefined,
         nickName: nickName.trim() || undefined,
         dateOfBirth: dateOfBirth || undefined,
         sex: sex !== null ? sex : undefined,
@@ -257,6 +284,7 @@ export default function TrialPage() {
       setError(msg);
     } finally {
       setLoading(false);
+      trialSubmitLockRef.current = false;
     }
   }
 
@@ -265,7 +293,7 @@ export default function TrialPage() {
     const locInfo = effectiveClassData ? getLocationInfo(effectiveClassData.location) : null;
     const locationName = locInfo?.name ?? (effectiveClassData ? t(`home.locations.${effectiveClassData.location}`) : '');
     const datetimeStr = effectiveClassData
-      ? `${formatDate(effectiveClassData.start_time)} ${formatTime(effectiveClassData.start_time)}`
+      ? formatDateTimeRange(effectiveClassData.start_time, effectiveClassData.end_time, getLocale())
       : '';
     return (
       <PublicLayout>
@@ -360,11 +388,7 @@ export default function TrialPage() {
                 <p className="text-sm text-gray-500 mb-2">{opt.instructor}</p>
                 <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
                   <Calendar className="h-4 w-4 flex-shrink-0" />
-                  {formatDate(opt.start_time)}
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                  <Clock className="h-4 w-4 flex-shrink-0" />
-                  {formatTime(opt.start_time)} - {formatTime(opt.end_time)}
+                  {formatDateTimeRange(opt.start_time, opt.end_time, getLocale())}
                 </div>
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <MapPin className="h-4 w-4 flex-shrink-0" />
@@ -405,23 +429,39 @@ export default function TrialPage() {
                 {t('trial.classInformation')}
               </h3>
 
-              {/* Tutor Image and Name */}
-              <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
-                <img
-                  src={getTutorImageUrl(effectiveClassData.instructor)}
-                  alt={effectiveClassData.instructor}
-                  className="w-24 h-24 rounded-full object-cover mr-4 border-4 border-primary-lighter"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
-                  <p className="text-lg font-bold text-gray-900">{effectiveClassData.instructor}</p>
+              {/* Tutor Image and Name (fallback only when no detailed profile) */}
+              {!instructorProfile && (
+                <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
+                  <img
+                    src={getTutorImageUrl(effectiveClassData.instructor)}
+                    alt={effectiveClassData.instructor}
+                    className="w-24 h-24 rounded-full object-cover mr-4 border-4 border-primary-lighter"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
+                    <p className="text-lg font-bold text-gray-900">{effectiveClassData.instructor}</p>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Teacher intro (awards, experience, dance school) */}
-              {getInstructorProfile(effectiveClassData.instructor) && (
+              {instructorProfile && (
                 <div className="mb-6 pb-6 border-b-2 border-gray-100">
                   <InstructorIntroCard instructorName={effectiveClassData.instructor} />
+                </div>
+              )}
+
+              {/* Dynamic tags synced with Tag Management */}
+              {dynamicTagRows.length > 0 && (
+                <div className="mb-6 pb-6 border-b-2 border-gray-100 space-y-2">
+                  {dynamicTagRows.map((row) => (
+                    <div key={row.key}>
+                      <p className="text-sm font-medium text-gray-500 mb-1">{row.typeLabel}</p>
+                      <span className="inline-block text-sm font-semibold px-3 py-1.5 rounded border bg-gray-100 text-gray-800 border-gray-200">
+                        {row.valueLabel}
+                      </span>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -473,17 +513,13 @@ export default function TrialPage() {
                 <div className="flex items-center text-gray-800">
                   <Calendar className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDate')}</p>
-                    <p className="text-base font-semibold">{formatDate(effectiveClassData.start_time)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center text-gray-800">
-                  <Clock className="h-5 w-5 mr-3 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classTime')}</p>
+                    <p className="text-sm font-medium text-gray-500 mb-1">{t('trial.classDateTime')}</p>
                     <p className="text-base font-semibold">
-                      {formatTime(effectiveClassData.start_time)} - {formatTime(effectiveClassData.end_time)}
+                      {formatDateTimeRange(
+                        effectiveClassData.start_time,
+                        effectiveClassData.end_time,
+                        getLocale()
+                      )}
                     </p>
                   </div>
                 </div>

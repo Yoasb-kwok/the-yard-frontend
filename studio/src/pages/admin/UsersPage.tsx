@@ -5,8 +5,9 @@ import Layout from '../../components/Layout';
 import PageLoading from '../../components/PageLoading';
 import LoadErrorBanner from '../../components/LoadErrorBanner';
 import EmptyState from '../../components/EmptyState';
-import { formatDate } from '../../lib/utils';
+import { formatDate, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
+import { isDemoMode } from '../../lib/mock';
 import { Search, Edit, Mail, Calendar, Package, Receipt, Clock, Download, Send } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
@@ -20,54 +21,78 @@ interface UserToken {
 
 interface User {
   id: string;
+  /** 帳戶編號（如學員編號 student_id） */
+  account_number: string | null;
   full_name: string;
-  role: 'student' | 'admin';
+  /** 用戶名（登入識別，常為用戶顯示名或電郵 @ 前綴） */
+  username: string | null;
+  email: string | null;
   mobile: string | null;
+  id_card_last4: string | null;
+  role: 'student' | 'admin';
   created_at: string;
   user_tokens: UserToken[];
-  /** Number of profiles (family members) under this account. One account can have multiple members (e.g. parent + children). */
-  profile_count?: number;
+}
+
+function normalizeUserTokens(raw: unknown): UserToken[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((t: { id?: unknown; remaining_tokens?: unknown; balance?: unknown; expiry_date?: unknown; expires_at?: unknown }) => {
+    const exp =
+      typeof t.expiry_date === 'string'
+        ? t.expiry_date.slice(0, 10)
+        : typeof t.expires_at === 'string'
+          ? t.expires_at.slice(0, 10)
+          : '';
+    return {
+      id: t.id != null ? String(t.id) : undefined,
+      remaining_tokens: Number(t.remaining_tokens ?? t.balance ?? 0),
+      expiry_date: exp,
+    };
+  });
 }
 
 // Mock data
 const MOCK_USERS: User[] = [
   {
-    id: 'admin-001',
-    full_name: 'Admin User',
-    role: 'admin',
-    mobile: '12345678',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [],
-  },
-  {
     id: 'student-001',
+    account_number: 'MOCK-STD-001',
     full_name: 'Student User',
+    username: 'student001',
+    email: 'student.user@example.com',
     role: 'student',
     mobile: '87654321',
+    id_card_last4: '1001',
     created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
     user_tokens: [
-      { remaining_tokens: 5, expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+      { id: 'ut-m1', remaining_tokens: 5, expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
     ],
   },
   {
     id: 'student-002',
+    account_number: 'MOCK-STD-002',
     full_name: 'John Doe',
+    username: 'jdoe',
+    email: 'john.doe@example.com',
     role: 'student',
     mobile: '98765432',
+    id_card_last4: '2002',
     created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     user_tokens: [
-      { remaining_tokens: 2, expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+      { id: 'ut-m2', remaining_tokens: 2, expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
     ],
-    profile_count: 3,
   },
   {
     id: 'student-003',
+    account_number: 'MOCK-STD-003',
     full_name: 'Jane Smith',
+    username: 'jsmith',
+    email: 'jane.smith@example.com',
     role: 'student',
     mobile: '91234567',
+    id_card_last4: null,
     created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     user_tokens: [
-      { remaining_tokens: 8, expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
+      { id: 'ut-m3', remaining_tokens: 8, expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
     ],
   },
 ];
@@ -83,7 +108,6 @@ export default function UsersPage() {
   const [editForm, setEditForm] = useState({
     full_name: '',
     mobile: '',
-    role: 'student' as 'student' | 'admin',
   });
   const [tokenExpiryModal, setTokenExpiryModal] = useState(false);
   const [selectedUserForTokenEdit, setSelectedUserForTokenEdit] = useState<User | null>(null);
@@ -93,22 +117,60 @@ export default function UsersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'admin'>('all');
 
   useEffect(() => {
     loadUsers();
   }, []);
 
-  function normalizeUser(raw: any): User {
+  useEffect(() => {
+    if (sortKey === 'id_card_last4') setSortKey('full_name');
+  }, [sortKey]);
+
+  function getListLocale(): string {
+    return i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US';
+  }
+
+  /** Match adminRoute / DB: role string or numeric admin flag on list rows. */
+  function isExcludedAdminOrInstructorRole(role: unknown): boolean {
+    if (role === 'admin' || role === 1 || role === '1') return true;
+    if (role === 'instructor' || role === 'Instructor') return true;
+    return false;
+  }
+
+  function normalizeUser(raw: Record<string, unknown>): User {
     const role = raw.role === 'admin' || raw.role === 1 || raw.role === '1' ? 'admin' : 'student';
+    const email = raw.email != null ? String(raw.email) : null;
+    const nick = typeof raw.nick_name === 'string' ? raw.nick_name.trim() : '';
+    const usernameRaw = raw.username != null ? String(raw.username).trim() : '';
+    const usernameFromEmail =
+      email && email.includes('@') ? email.split('@')[0] : email && email.length > 0 ? email : '';
+    const username =
+      usernameRaw.length > 0 ? usernameRaw : nick.length > 0 ? nick : usernameFromEmail || null;
+    const acct =
+      raw.student_id != null && String(raw.student_id).length > 0
+        ? String(raw.student_id)
+        : raw.account_number != null && String(raw.account_number).length > 0
+          ? String(raw.account_number)
+          : null;
+    const idLast =
+      raw.id_last_four != null
+        ? String(raw.id_last_four)
+        : raw.id_card_last4 != null
+          ? String(raw.id_card_last4)
+          : raw.hkid_last4 != null
+            ? String(raw.hkid_last4)
+            : null;
     return {
       id: String(raw.id),
-      full_name: raw.full_name ?? raw.name ?? '',
+      account_number: acct,
+      full_name: (raw.full_name as string) ?? (raw.name as string) ?? '',
+      username: username || null,
+      email,
+      mobile: raw.mobile != null ? String(raw.mobile) : null,
+      id_card_last4: idLast,
       role,
-      mobile: raw.mobile ?? null,
-      created_at: raw.created_at ?? new Date().toISOString(),
-      user_tokens: Array.isArray(raw.user_tokens) ? raw.user_tokens : raw.user_tokens ?? [],
-      profile_count: raw.profile_count != null ? Number(raw.profile_count) : raw.profiles?.length,
+      created_at: (raw.created_at as string) ?? new Date().toISOString(),
+      user_tokens: normalizeUserTokens(raw.user_tokens),
     };
   }
 
@@ -116,16 +178,26 @@ export default function UsersPage() {
     try {
       setLoading(true);
       setLoadError(null);
-      const response = await api.get<any[]>('/admin/users?demo=1').catch(() => ({ success: true, data: MOCK_USERS }));
-      if (response.success && response.data) {
-        setUsers(response.data.map((u: any) => normalizeUser(u)));
+      // Real backend: GET /api/admin/users (see vite proxy → localhost:3002). No ?demo=1 required.
+      const response = await api.get<any[]>('/admin/users');
+      if (response.success && Array.isArray(response.data)) {
+        setUsers(
+          response.data
+            .filter((u: { role?: unknown }) => !isExcludedAdminOrInstructorRole(u.role))
+            .map((u: Record<string, unknown>) => normalizeUser(u))
+        );
       } else {
-        setUsers(MOCK_USERS);
+        setUsers([]);
+        if (!response.success) {
+          const m = response.msg?.trim() || response.message?.trim();
+          if (m) setLoadError(m);
+        }
       }
     } catch (error) {
       console.error('Error loading users:', error);
       setLoadError(error instanceof Error ? error.message : '無法載入用戶列表');
-      setUsers(MOCK_USERS);
+      // Only use embedded mock when running in demo mode; otherwise show empty + error so stale mock is not mistaken for live DB.
+      setUsers(isDemoMode() ? MOCK_USERS : []);
     } finally {
       setLoading(false);
     }
@@ -136,7 +208,6 @@ export default function UsersPage() {
     setEditForm({
       full_name: user.full_name,
       mobile: user.mobile || '',
-      role: user.role,
     });
     setEditModal(true);
   }
@@ -153,15 +224,17 @@ export default function UsersPage() {
       const response = await api.patch(`/admin/users/${selectedUser.id}`, {
         full_name: editForm.full_name,
         mobile: editForm.mobile,
-        role: editForm.role,
+        role: 'student',
       });
 
       if (response.success) {
-        setUsers(users.map(u => 
-          u.id === selectedUser.id 
-            ? { ...u, full_name: editForm.full_name, mobile: editForm.mobile || null, role: editForm.role }
-            : u
-        ));
+        setUsers(
+          users.map((u) =>
+            u.id === selectedUser.id
+              ? { ...u, full_name: editForm.full_name, mobile: editForm.mobile || null, role: 'student' as const }
+              : u
+          )
+        );
         alert(t('admin.users.userUpdated'));
         setEditModal(false);
       } else {
@@ -227,23 +300,49 @@ export default function UsersPage() {
     }
   }
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.full_name.toLowerCase().includes(search.toLowerCase()) || user.mobile?.includes(search);
-    const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-    return matchesSearch && matchesRole;
+  const filteredUsers = users.filter((user) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      user.full_name.toLowerCase().includes(q) ||
+      (user.mobile?.toLowerCase().includes(q) ?? false) ||
+      (user.email?.toLowerCase().includes(q) ?? false) ||
+      (user.username?.toLowerCase().includes(q) ?? false) ||
+      (user.account_number?.toLowerCase().includes(q) ?? false) ||
+      (user.id_card_last4?.includes(search.trim()) ?? false)
+    );
   });
 
   const sortedUsers = [...filteredUsers].sort((a, b) => {
-    if (!sortKey) return 0;
+    const sk = sortKey === 'id_card_last4' ? 'full_name' : sortKey;
+    if (!sk) return 0;
     let cmp = 0;
-    if (sortKey === 'full_name') {
+    const tokenSum = (u: User) => u.user_tokens.reduce((s, t) => s + (t.remaining_tokens || 0), 0);
+    const earliest = (u: User) => getEarliestExpiryDate(u.user_tokens);
+    if (sk === 'account_number') {
+      cmp = (a.account_number || '').localeCompare(b.account_number || '', undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
+    } else if (sk === 'full_name') {
       cmp = (a.full_name || '').localeCompare(b.full_name || '', undefined, { sensitivity: 'base' });
-    } else if (sortKey === 'created_at') {
-      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    } else if (sortKey === 'mobile') {
+    } else if (sk === 'username') {
+      cmp = (a.username || '').localeCompare(b.username || '', undefined, { sensitivity: 'base' });
+    } else if (sk === 'mobile') {
       cmp = (a.mobile || '').localeCompare(b.mobile || '', undefined, { sensitivity: 'base' });
-    } else if (sortKey === 'role') {
-      cmp = (a.role || '').localeCompare(b.role || '', undefined, { sensitivity: 'base' });
+    } else if (sk === 'email') {
+      cmp = (a.email || '').localeCompare(b.email || '', undefined, { sensitivity: 'base' });
+    } else if (sk === 'remaining_tokens') {
+      cmp = tokenSum(a) - tokenSum(b);
+    } else if (sk === 'token_expiry') {
+      const ea = earliest(a);
+      const eb = earliest(b);
+      if (!ea && !eb) cmp = 0;
+      else if (!ea) cmp = 1;
+      else if (!eb) cmp = -1;
+      else cmp = new Date(ea).getTime() - new Date(eb).getTime();
+    } else if (sk === 'created_at') {
+      cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     }
     return sortDir === 'asc' ? cmp : -cmp;
   });
@@ -255,7 +354,7 @@ export default function UsersPage() {
     pageSize: usersPageSize,
     totalItems: usersTotalItems,
     paginatedItems: paginatedUsers,
-  } = useTablePagination(sortedUsers, undefined, [search, roleFilter]);
+  } = useTablePagination(sortedUsers, undefined, [search]);
 
   function handleSort(key: string) {
     if (sortKey === key) {
@@ -294,13 +393,32 @@ export default function UsersPage() {
   }
 
   function exportCsv() {
-    const headers = ['ID', 'Name', 'Role', 'Mobile', 'Members', 'Tokens', 'Earliest Expiry', 'Joined'];
+    const loc = getListLocale();
+    const headers = [
+      t('admin.users.colAccountNumber'),
+      t('admin.users.colFullName'),
+      t('admin.users.colUsername'),
+      t('admin.users.colMobile'),
+      t('admin.users.colEmail'),
+      t('admin.users.colRemainingTokens'),
+      t('admin.users.colTokenExpiry'),
+      t('admin.users.colJoinedAt'),
+    ];
     const rows = sortedUsers.map((u) => {
       const tokens = u.user_tokens.reduce((s, t) => s + t.remaining_tokens, 0);
       const expiry = getEarliestExpiryDate(u.user_tokens);
-      const roleLabel = u.role === 'admin' ? t('admin.users.admin') : t('admin.users.student');
-      const members = u.profile_count != null ? String(u.profile_count) : '';
-      return [u.id, u.full_name, roleLabel, u.mobile || '', members, tokens, expiry || '', u.created_at.slice(0, 10)].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+      return [
+        u.account_number || '',
+        u.full_name,
+        u.username || '',
+        formatMobileForDisplay(u.mobile, ''),
+        u.email || '',
+        String(tokens),
+        expiry ? formatDate(expiry, loc) : '',
+        formatDateTime(u.created_at, loc),
+      ]
+        .map((c) => `"${String(c).replace(/"/g, '""')}"`)
+        .join(',');
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -357,21 +475,6 @@ export default function UsersPage() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <label htmlFor="role-filter" className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                {t('admin.users.filterByRole')}:
-              </label>
-              <select
-                id="role-filter"
-                value={roleFilter}
-                onChange={(e) => setRoleFilter(e.target.value as 'all' | 'student' | 'admin')}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <option value="all">{t('admin.users.allRoles')}</option>
-                <option value="student">{t('admin.users.student')}</option>
-                <option value="admin">{t('admin.users.admin')}</option>
-              </select>
-            </div>
             <button
               type="button"
               onClick={exportCsv}
@@ -393,10 +496,22 @@ export default function UsersPage() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed border-collapse text-xs">
+              <colgroup>
+                <col className="w-9" />
+                <col className="w-[9%]" />
+                <col className="w-[11%]" />
+                <col className="w-[8%]" />
+                <col className="w-[9%]" />
+                <col className="w-[20%]" />
+                <col className="w-[6%]" />
+                <col className="w-[9%]" />
+                <col className="w-[11%]" />
+                <col className="w-[152px]" />
+              </colgroup>
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 py-3 text-left w-10">
+                  <th className="px-1.5 py-3 text-left">
                     <input
                       type="checkbox"
                       checked={
@@ -407,20 +522,30 @@ export default function UsersPage() {
                       className="rounded border-gray-300 text-primary focus:ring-primary"
                     />
                   </th>
-                  <TableSortButton label={t('admin.users.name')} sortKey="full_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
-                  <TableSortButton label={t('admin.users.role')} sortKey="role" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
-                  <TableSortButton label={t('admin.users.mobile')} sortKey="mobile" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.membersCount')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.tokens')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.tokenExpiryDate')}</th>
-                  <TableSortButton label={t('admin.users.joined')} sortKey="created_at" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-4 py-3 text-left text-xs" />
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.users.actions')}</th>
+                  <TableSortButton label={t('admin.users.colAccountNumber')} sortKey="account_number" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton label={t('admin.users.colFullName')} sortKey="full_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton label={t('admin.users.colUsername')} sortKey="username" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton label={t('admin.users.colMobile')} sortKey="mobile" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton label={t('admin.users.colEmail')} sortKey="email" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton label={t('admin.users.colRemainingTokens')} sortKey="remaining_tokens" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton label={t('admin.users.colTokenExpiry')} sortKey="token_expiry" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5" />
+                  <TableSortButton
+                    label={t('admin.users.colJoinedAt')}
+                    sortKey="created_at"
+                    currentSortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className="px-2 py-3 text-left font-medium text-gray-500 uppercase whitespace-nowrap [&_svg]:h-3.5 [&_svg]:w-3.5"
+                  />
+                  <th className="px-2 py-3 text-right font-medium text-gray-500 uppercase whitespace-nowrap w-[152px]">
+                    {t('admin.users.actions')}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12">
+                    <td colSpan={10} className="px-2 py-12">
                       <EmptyState message={t('admin.users.noUsers', '暫無用戶')} />
                     </td>
                   </tr>
@@ -430,7 +555,7 @@ export default function UsersPage() {
                   const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
                   return (
                     <tr key={user.id}>
-                      <td className="px-4 py-3">
+                      <td className="px-1.5 py-3 align-middle">
                         <input
                           type="checkbox"
                           checked={selectedIds.has(user.id)}
@@ -438,74 +563,103 @@ export default function UsersPage() {
                           className="rounded border-gray-300 text-primary focus:ring-primary"
                         />
                       </td>
-                      <td className="px-4 py-3 text-sm font-medium text-gray-900">{user.full_name}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          user.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-700'
-                        }`}>
-                          {user.role === 'admin' ? t('admin.users.admin') : t('admin.users.student')}
-                        </span>
+                      <td className="px-2 py-3 text-gray-600 min-w-0">
+                        <div className="truncate" title={user.account_number || undefined}>
+                          {user.account_number || '–'}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{user.mobile || '-'}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600" title={t('admin.users.membersCountTitle')}>
-                        {user.profile_count != null ? user.profile_count : '–'}
+                      <td className="px-2 py-3 font-medium text-gray-900 min-w-0">
+                        <div className="truncate" title={user.full_name}>
+                          {user.full_name}
+                        </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{totalTokens}</td>
-                      <td className="px-4 py-3 text-sm text-gray-600">
-                        <div className="flex items-center space-x-2">
-                          <span>
-                            {earliestExpiry ? formatDate(earliestExpiry, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US') : '-'}
+                      <td className="px-2 py-3 text-gray-600 min-w-0">
+                        <div className="truncate" title={user.username || undefined}>
+                          {user.username || '–'}
+                        </div>
+                      </td>
+                      <td
+                        className="px-2 py-3 text-gray-600 whitespace-nowrap tabular-nums"
+                        title={user.mobile || undefined}
+                      >
+                        {formatMobileForDisplay(user.mobile)}
+                      </td>
+                      <td className="px-2 py-3 text-gray-600 min-w-0">
+                        <div className="truncate" title={user.email || undefined}>
+                          {user.email || '–'}
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 text-gray-600 whitespace-nowrap text-center tabular-nums">{totalTokens}</td>
+                      <td className="px-2 py-3 text-gray-600 whitespace-nowrap">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <span className="truncate min-w-0">
+                            {earliestExpiry ? formatDate(earliestExpiry, getListLocale()) : '–'}
                           </span>
                           {earliestExpiry && (
                             <button
+                              type="button"
                               onClick={() => openTokenExpiryModal(user)}
-                              className="text-primary hover:text-primary-dark"
+                              className="text-primary hover:text-primary-dark shrink-0 p-0.5"
                               title={t('admin.users.editTokenExpiryDate')}
                             >
-                              <Calendar className="h-4 w-4" />
+                              <Calendar className="h-3.5 w-3.5" />
                             </button>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-600">{formatDate(user.created_at, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}</td>
-                      <td className="px-4 py-3 text-sm">
-                        <button
-                          onClick={() => openEditModal(user)}
-                          className="text-primary hover:text-primary-dark mr-3"
-                          title={t('admin.users.edit')}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        {totalTokens > 0 && (
+                      <td
+                        className="px-2 py-3 text-gray-600 min-w-0 align-middle"
+                        title={formatDateTime(user.created_at, getListLocale())}
+                      >
+                        <div className="truncate text-xs tabular-nums leading-snug">
+                          {formatDateTime(user.created_at, getListLocale())}
+                        </div>
+                      </td>
+                      <td className="px-2 py-3 w-[152px] align-middle">
+                        <div className="flex flex-nowrap items-center justify-end gap-0.5">
                           <button
-                            onClick={() => navigate(`/admin/users/${user.id}/assign-tokens`)}
-                            className="text-green-600 hover:text-green-800 mr-3"
-                            title={t('admin.users.assignTokens')}
+                            type="button"
+                            onClick={() => openEditModal(user)}
+                            className="text-primary hover:text-primary-dark p-0.5 inline-flex shrink-0"
+                            title={t('admin.users.edit')}
                           >
-                            <Package className="h-4 w-4" />
+                            <Edit className="h-3.5 w-3.5" />
                           </button>
-                        )}
-                        <button
-                          onClick={() => navigate(`/admin/users/${user.id}/purchase-history`)}
-                          className="text-blue-600 hover:text-blue-800 mr-3"
-                          title={t('admin.users.purchaseHistory')}
-                        >
-                          <Receipt className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => navigate(`/admin/users/${user.id}/schedule`)}
-                          className="text-purple-600 hover:text-purple-800 mr-3"
-                          title={t('admin.users.upcomingClasses')}
-                        >
-                          <Clock className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => sendPasswordReset(user.id)}
-                          className="text-gray-600 hover:text-gray-800"
-                          title={t('admin.users.passwordReset')}
-                        >
-                          <Mail className="h-4 w-4" />
-                        </button>
+                          {totalTokens > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/admin/users/${user.id}/assign-tokens`)}
+                              className="text-green-600 hover:text-green-800 p-0.5 inline-flex shrink-0"
+                              title={t('admin.users.assignTokens')}
+                            >
+                              <Package className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/admin/users/${user.id}/purchase-history`)}
+                            className="text-blue-600 hover:text-blue-800 p-0.5 inline-flex shrink-0"
+                            title={t('admin.users.purchaseHistory')}
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/admin/users/${user.id}/schedule`)}
+                            className="text-purple-600 hover:text-purple-800 p-0.5 inline-flex shrink-0"
+                            title={t('admin.users.upcomingClasses')}
+                          >
+                            <Clock className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => sendPasswordReset(user.id)}
+                            className="text-gray-600 hover:text-gray-800 p-0.5 inline-flex shrink-0"
+                            title={t('admin.users.passwordReset')}
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -546,17 +700,6 @@ export default function UsersPage() {
                   onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.role')}</label>
-                <select
-                  value={editForm.role}
-                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value as 'student' | 'admin' })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="student">{t('admin.users.student')}</option>
-                  <option value="admin">{t('admin.users.admin')}</option>
-                </select>
               </div>
             </div>
             <div className="flex justify-end space-x-3 mt-6">
@@ -602,7 +745,7 @@ export default function UsersPage() {
                         {t('admin.users.currentExpiryDate')}
                       </label>
                       <p className="text-sm text-gray-600 mb-2">
-                        {formatDate(token.expiry_date, i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US')}
+                        {formatDate(token.expiry_date, getListLocale())}
                       </p>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         {t('admin.users.newExpiryDate')}

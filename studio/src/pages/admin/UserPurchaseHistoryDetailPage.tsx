@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatCurrency, formatDateTime } from '../../lib/utils';
+import { formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, Package, X, Printer } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
@@ -199,20 +199,6 @@ export default function UserPurchaseHistoryDetailPage() {
     }
   };
 
-  const formatMobile = (mobile: string | null): string => {
-    if (!mobile) return '-';
-    
-    if (mobile.startsWith('852')) {
-      return `+852 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('853')) {
-      return `+853 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('86')) {
-      return `+86 ${mobile.substring(2)}`;
-    }
-    
-    return `+852 ${mobile}`;
-  };
-
   const handlePrintReceipt = () => {
     // Create a new window with just the receipt content
     const printWindow = window.open('', '_blank');
@@ -363,7 +349,7 @@ export default function UserPurchaseHistoryDetailPage() {
             <Receipt className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{t('admin.purchaseHistory.userPurchaseHistory')}</h1>
-              <p className="text-gray-600 mt-1">{user.full_name} ({formatMobile(user.mobile)})</p>
+              <p className="text-gray-600 mt-1">{user.full_name} ({formatMobileForDisplay(user.mobile, '-')})</p>
             </div>
           </div>
         </div>
@@ -609,7 +595,7 @@ export default function UserPurchaseHistoryDetailPage() {
                   </div>
                   <div>
                     <span className="text-gray-600">{t('admin.purchaseHistory.contactNumber')}:</span>
-                    <span className="ml-2 font-medium text-gray-900">{formatMobile(selectedPurchase.user_mobile)}</span>
+                    <span className="ml-2 font-medium text-gray-900">{formatMobileForDisplay(selectedPurchase.user_mobile, '-')}</span>
                   </div>
                 </div>
               </div>

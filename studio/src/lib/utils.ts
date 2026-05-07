@@ -56,6 +56,66 @@ export function formatDateTime(date: string | Date, locale: string = 'en-US'): s
   });
 }
 
+/**
+ * Show mobile without Hong Kong country prefix 852 (e.g. "85291234567", "+852 9123 4567" → "91234567").
+ * Macau (853) and mainland (86) keep a +prefix for clarity. Other values are returned trimmed.
+ */
+export function formatMobileForDisplay(mobile: string | null | undefined, emptyLabel = '–'): string {
+  if (mobile == null || String(mobile).trim() === '') return emptyLabel;
+  const trimmed = String(mobile).trim();
+  const compact = trimmed.replace(/\s+/g, '');
+  if (/^\+?852\d/.test(compact)) {
+    const local = compact.replace(/^\+?852/, '');
+    return local.length > 0 ? local : emptyLabel;
+  }
+  if (/^\+?853\d/.test(compact)) {
+    const rest = compact.replace(/^\+?853/, '');
+    return rest.length > 0 ? `+853 ${rest}` : emptyLabel;
+  }
+  if (/^\+?86\d/.test(compact)) {
+    const rest = compact.replace(/^\+?86/, '');
+    return rest.length > 0 ? `+86 ${rest}` : emptyLabel;
+  }
+  return trimmed;
+}
+
+/**
+ * One calendar line for a class slot: date once, then start–end times (e.g. zh-TW: 2026年3月7日 10:00–11:00).
+ * If start/end fall on different days, shows both date+time segments.
+ */
+export function formatDateTimeRange(
+  start: string | Date,
+  end: string | Date,
+  locale: string = 'en-US'
+): string {
+  const s = new Date(start);
+  const e = new Date(end);
+  if (isNaN(s.getTime())) return formatDateTime(start, locale);
+  if (isNaN(e.getTime())) return formatDateTime(start, locale);
+  const sameCalendarDay =
+    s.getFullYear() === e.getFullYear() &&
+    s.getMonth() === e.getMonth() &&
+    s.getDate() === e.getDate();
+  const datePart: Intl.DateTimeFormatOptions = {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  };
+  const timePart: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  };
+  const dateStr = s.toLocaleDateString(locale, datePart);
+  const t0 = s.toLocaleTimeString(locale, timePart);
+  const t1 = e.toLocaleTimeString(locale, timePart);
+  if (sameCalendarDay) {
+    return `${dateStr} ${t0}-${t1}`;
+  }
+  const endDateStr = e.toLocaleDateString(locale, datePart);
+  return `${dateStr} ${t0} - ${endDateStr} ${t1}`;
+}
+
 /** Course usually has 4, 8 or 16 lessons. Returns dates for lesson 1 to N (weekly from first lesson). */
 export function getLessonDates(firstLessonStart: string | Date, totalLessons: number): Date[] {
   const start = new Date(firstLessonStart);

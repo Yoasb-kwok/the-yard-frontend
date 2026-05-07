@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
+import { formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { UserMinus, Calendar, Download } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
@@ -233,7 +234,7 @@ export default function AdminRenewalChurnPage() {
     const headers = [t('admin.dashboard.name'), t('admin.dashboard.mobile'), t('admin.dashboard.expiryDate'), t('admin.dashboard.churnReason')];
     const rows = renewalChurn.churnList.map((r) => [
       r.full_name,
-      r.mobile,
+      formatMobileForDisplay(r.mobile, ''),
       r.expiry_date,
       getChurnReasonLabel(r.churn_reason),
     ]);
@@ -367,7 +368,7 @@ export default function AdminRenewalChurnPage() {
                   {paginatedChurn.map((r) => (
                     <tr key={r.id} className="border-b border-gray-100">
                       <td className="py-2 pr-4 font-medium text-gray-900">{r.full_name}</td>
-                      <td className="py-2 pr-4">{r.mobile}</td>
+                      <td className="py-2 pr-4">{formatMobileForDisplay(r.mobile, '–')}</td>
                       <td className="py-2 pr-4">{r.expiry_date}</td>
                       <td className="py-2">{getChurnReasonLabel(r.churn_reason)}</td>
                     </tr>

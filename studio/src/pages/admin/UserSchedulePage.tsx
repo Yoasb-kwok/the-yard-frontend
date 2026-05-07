@@ -2,8 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatDateTime } from '../../lib/utils';
-import { ArrowLeft, Calendar, Clock, MapPin, User } from 'lucide-react';
+import { formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
+import { ArrowLeft, Calendar, MapPin, User } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Enrollment {
@@ -161,20 +161,6 @@ export default function UserSchedulePage() {
     }
   };
 
-  const formatMobile = (mobile: string | null): string => {
-    if (!mobile) return '-';
-    
-    if (mobile.startsWith('852')) {
-      return `+852 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('853')) {
-      return `+853 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('86')) {
-      return `+86 ${mobile.substring(2)}`;
-    }
-    
-    return `+852 ${mobile}`;
-  };
-
   // Sort enrollments by start time (ascending)
   const sortedEnrollments = useMemo(() => {
     return [...enrollments].sort((a, b) => 
@@ -227,7 +213,7 @@ export default function UserSchedulePage() {
             <Calendar className="h-8 w-8 text-primary" />
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{t('admin.users.upcomingClasses')}</h1>
-              <p className="text-gray-600 mt-1">{user.full_name} ({formatMobile(user.mobile)})</p>
+              <p className="text-gray-600 mt-1">{user.full_name} ({formatMobileForDisplay(user.mobile, '-')})</p>
             </div>
           </div>
         </div>
@@ -274,12 +260,7 @@ export default function UserSchedulePage() {
                         <td className="px-6 py-4 text-sm text-gray-600">{enrollment.class.class_code}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">{enrollment.class.instructor}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">
-                          <div className="flex flex-col">
-                            <span>{formatDateTime(enrollment.class.start_time, getLocale())}</span>
-                            <span className="text-xs text-gray-500">
-                              {t('common.to')} {formatDateTime(enrollment.class.end_time, getLocale())}
-                            </span>
-                          </div>
+                          {formatDateTimeRange(enrollment.class.start_time, enrollment.class.end_time, getLocale())}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {enrollment.class.location ? getLocationLabel(enrollment.class.location) : '-'}
@@ -336,12 +317,8 @@ export default function UserSchedulePage() {
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2 text-gray-600">
                         <Calendar className="h-4 w-4" />
-                        <span>{formatDateTime(enrollment.class.start_time, getLocale())}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Clock className="h-4 w-4" />
                         <span>
-                          {formatDateTime(enrollment.class.start_time, getLocale())} - {formatDateTime(enrollment.class.end_time, getLocale())}
+                          {formatDateTimeRange(enrollment.class.start_time, enrollment.class.end_time, getLocale())}
                         </span>
                       </div>
                       {enrollment.class.location && (

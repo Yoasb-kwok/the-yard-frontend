@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime, formatProgramCodeDisplay } from '../lib/utils';
+import { formatDateTime, formatDateTimeRange, formatMobileForDisplay, formatProgramCodeDisplay } from '../lib/utils';
 import { Search, X, AlertTriangle, Users, ChevronUp, RefreshCw } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from './TablePagination';
 
@@ -50,14 +50,6 @@ interface ClassAttendancePanelProps {
   onMarkMultipleAttended?: (enrollmentIds: string[]) => void | Promise<void>;
   onClose?: () => void;
   inline?: boolean;
-}
-
-function formatMobile(mobile: string | null): string {
-  if (!mobile) return '-';
-  if (mobile.startsWith('852')) return `+852 ${mobile.substring(3)}`;
-  if (mobile.startsWith('853')) return `+853 ${mobile.substring(3)}`;
-  if (mobile.startsWith('86')) return `+86 ${mobile.substring(2)}`;
-  return `+852 ${mobile}`;
 }
 
 export default function ClassAttendancePanel({
@@ -345,7 +337,7 @@ export default function ClassAttendancePanel({
                       </td>
                     )}
                     <td className="px-4 py-2 text-sm font-medium text-gray-900">{enrollment.user_name}</td>
-                    <td className="px-4 py-2 text-sm text-gray-600">{formatMobile(enrollment.user_mobile)}</td>
+                    <td className="px-4 py-2 text-sm text-gray-600">{formatMobileForDisplay(enrollment.user_mobile, '-')}</td>
                     <td className="px-4 py-2 text-sm">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${getStatusColor(enrollment.status)}`}>
                         {getStatusLabel(enrollment.status)}
@@ -373,9 +365,13 @@ export default function ClassAttendancePanel({
                             <span className="text-xs text-gray-500">{enrollment.reassigned_to_class_code}</span>
                             {enrollment.reassigned_to_class_start_time && (
                               <span className="text-xs text-gray-500">
-                                {formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
-                                {enrollment.reassigned_to_class_end_time &&
-                                  ` - ${formatDateTime(enrollment.reassigned_to_class_end_time, getLocale())}`}
+                                {enrollment.reassigned_to_class_end_time
+                                  ? formatDateTimeRange(
+                                      enrollment.reassigned_to_class_start_time,
+                                      enrollment.reassigned_to_class_end_time,
+                                      getLocale()
+                                    )
+                                  : formatDateTime(enrollment.reassigned_to_class_start_time, getLocale())}
                               </span>
                             )}
                           </div>
@@ -454,7 +450,7 @@ export default function ClassAttendancePanel({
                     )}
                     <div className="min-w-0">
                       <h4 className="text-sm font-semibold text-gray-900 truncate">{enrollment.user_name}</h4>
-                      <p className="text-xs text-gray-600">{formatMobile(enrollment.user_mobile)}</p>
+                      <p className="text-xs text-gray-600">{formatMobileForDisplay(enrollment.user_mobile, '-')}</p>
                     </div>
                   </div>
                   <span className={`px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${getStatusColor(enrollment.status)}`}>
@@ -652,7 +648,7 @@ export default function ClassAttendancePanel({
                 </p>
               )}
               <p className="text-sm text-gray-600">
-                {formatDateTime(selectedClass.start_time, getLocale())} - {formatDateTime(selectedClass.end_time, getLocale())}
+                {formatDateTimeRange(selectedClass.start_time, selectedClass.end_time, getLocale())}
               </p>
             </div>
             <div className="flex justify-end gap-3 pt-4 border-t">

@@ -345,7 +345,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                 <p className="mt-2">{t('footer.hotlineNote')}</p>
                 <div className="flex items-center gap-3 mt-3">
                   <a
-                    href="http://wa.me/+85292299875"
+                    href="https://api.whatsapp.com/send?phone=85292299875"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"

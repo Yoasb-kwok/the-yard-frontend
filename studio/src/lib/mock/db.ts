@@ -102,6 +102,8 @@ export interface DemoTrialApplication {
   preferred_date: string;
   preferred_location?: string;
   preferred_program?: string;
+  /** 申請當下前台顯示的試堂／課程名稱（POST trialClassName）；優先於 preferred_program 顯示在 admin。 */
+  requested_trial_class_name?: string | null;
   assigned_class_id?: string | null;
   assigned_class_name?: string | null;
   assigned_lessons?: number | null;

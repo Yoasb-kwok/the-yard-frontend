@@ -259,15 +259,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setLoading(false);
             return;
           }
-        } catch {
-          // API unreachable or invalid token – remove token only; keep auth_session so we can restore below (fixes refresh logout when no backend).
-          localStorage.removeItem('token');
+        } catch (e) {
+          // Only drop JWT on real 401; keep token on network/gateway errors so admin APIs still work after refresh.
+          if (e instanceof ApiError && e.status === 401) {
+            localStorage.removeItem('token');
+          }
         }
       }
       const stored = localStorage.getItem('auth_session');
       if (stored) {
         try {
-          const parsed = JSON.parse(stored);
+          const parsed = JSON.parse(stored) as {
+            user?: User;
+            session?: Session | null;
+            profiles?: Profile[];
+            profile?: Profile;
+            activeProfileId?: string;
+            authToken?: string;
+          };
+          if (parsed.authToken && typeof parsed.authToken === 'string') {
+            localStorage.setItem('token', parsed.authToken);
+          }
           setUser(parsed.user);
           setSession(parsed.session ?? null);
           if (parsed.profiles && Array.isArray(parsed.profiles)) {
@@ -278,11 +290,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfiles(profs);
             setActiveProfileId(parsed.profile.id);
             try {
+              const tok = parsed.authToken ?? localStorage.getItem('token');
               localStorage.setItem('auth_session', JSON.stringify({
                 ...parsed,
                 profiles: profs,
                 activeProfileId: parsed.profile.id,
                 profile: undefined,
+                ...(tok ? { authToken: tok } : {}),
               }));
             } catch (_) {}
           } else {
@@ -304,8 +318,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profiles: Profile[];
     activeProfileId: string;
     session: Session;
+    /** When set (including null), overrides localStorage token for backup; when omitted, keeps current token in auth_session. */
+    authToken?: string | null;
   }) {
-    localStorage.setItem('auth_session', JSON.stringify(payload));
+    const { authToken: explicit, ...core } = payload;
+    const token =
+      explicit !== undefined ? explicit : localStorage.getItem('token');
+    const serial = { ...core, ...(token ? { authToken: String(token) } : {}) };
+    localStorage.setItem('auth_session', JSON.stringify(serial));
+    if (token) localStorage.setItem('token', String(token));
+    if (explicit === null) localStorage.removeItem('token');
   }
 
   function switchProfile(profileId: string) {
@@ -399,11 +421,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         rememberMe: true,
       });
-      if (res.success && res.token && res.user) {
-        const u = res.user;
-        const needPasswordChange = (res as { requirePasswordChange?: boolean }).requirePasswordChange === true;
+      const loginBody =
+        (res as { data?: { token?: string; user?: any } }).data &&
+        typeof (res as { data?: { token?: string; user?: any } }).data === 'object'
+          ? (res as { data: { token?: string; user?: any } }).data
+          : res;
+      const jwt = loginBody.token ?? (res as { token?: string }).token;
+      const u = loginBody.user ?? (res as { user?: any }).user;
+      if (res.success && jwt && u) {
+        const needPasswordChange =
+          (res as { requirePasswordChange?: boolean }).requirePasswordChange === true ||
+          (loginBody as { requirePasswordChange?: boolean }).requirePasswordChange === true;
         setRequirePasswordChange(needPasswordChange);
-        localStorage.setItem('token', res.token);
+        localStorage.setItem('token', jwt);
         try {
           const h = await api.get<{ serverId?: string }>('health');
           const sid = (h as any).serverId ?? (h as any).data?.serverId;
@@ -427,6 +457,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               profiles: profilesFromMe,
               activeProfileId: profilesFromMe[0]?.id ?? null,
               session: sessionObj,
+              authToken: jwt,
             });
             return { requirePasswordChange: needPasswordChange || (meRes as any).requirePasswordChange === true };
           }
@@ -459,6 +490,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profiles: [mainProfile],
           activeProfileId: mainProfile.id,
           session: sessionObj,
+          authToken: jwt,
         });
         return { requirePasswordChange: needPasswordChange };
       }
@@ -555,11 +587,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mobile: extra?.mobile ?? contactNumber ?? '',
     };
     try {
-      const res = await api.post('user/register', body) as { success?: boolean; user?: any; profile?: any; token?: string };
-      if (res.success && res.user) {
-        const u = res.user;
+      const res = await api.post('user/register', body) as {
+        success?: boolean;
+        user?: any;
+        profile?: any;
+        token?: string;
+        data?: { user?: any; profile?: any; token?: string };
+      };
+      const regBody =
+        res.data && typeof res.data === 'object' ? res.data : res;
+      const u = regBody.user ?? res.user;
+      if (res.success && u) {
         const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? email };
-        const profileData = res.profile ?? {};
+        const profileData = regBody.profile ?? res.profile ?? {};
         const profileObj: Profile = {
           id: userObj.id,
           full_name: u.name ?? fullName,
@@ -577,7 +617,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           level: null,
         };
         const sessionObj: Session = { user: userObj };
-        if (res.token) localStorage.setItem('token', res.token);
+        const regToken = regBody.token ?? res.token;
+        if (regToken) localStorage.setItem('token', regToken);
         setUser(userObj);
         setProfiles([profileObj]);
         setActiveProfileId(profileObj.id);
@@ -587,6 +628,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           profiles: [profileObj],
           activeProfileId: profileObj.id,
           session: sessionObj,
+          authToken: regToken ?? undefined,
         });
         return;
       }

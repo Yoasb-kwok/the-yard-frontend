@@ -96,15 +96,15 @@ export default function Layout({ children }: LayoutProps) {
       items: [
         { path: '/admin/pending-applications', icon: ListChecks, label: t('admin.dashboard.pendingApplications') },
         { path: '/admin/trial-applications', icon: BookOpen, label: t('admin.trialApplications.title') },
-        { path: '/admin/users', icon: Users, label: t('nav.users') },
-        { path: '/admin/purchase-history', icon: Receipt, label: t('nav.tokenPurchaseHistory') },
-        { path: '/admin/token-packages', icon: Package, label: t('nav.tokenPackageManagement', '代幣套票管理') },
-        { path: '/admin/classes', icon: Calendar, label: t('nav.classes') },
-        { path: '/admin/tags', icon: Tags, label: t('nav.adminTags', '標籤管理') },
-        { path: '/admin/holidays', icon: CalendarOff, label: t('nav.holidays') },
-        { path: '/admin/instructors', icon: GraduationCap, label: t('nav.instructors') },
-        { path: '/admin/coupons', icon: Tag, label: t('nav.coupons') },
-        { path: '/admin/refund-records', icon: RotateCcw, label: t('nav.refundRecords') },
+        { path: '/admin/users', icon: Users, label: t('admin.users.title') },
+        { path: '/admin/purchase-history', icon: Receipt, label: t('admin.purchaseHistory.title') },
+        { path: '/admin/token-packages', icon: Package, label: t('admin.tokenPackages.title') },
+        { path: '/admin/classes', icon: Calendar, label: t('admin.classes.title') },
+        { path: '/admin/tags', icon: Tags, label: t('admin.tags.title') },
+        { path: '/admin/holidays', icon: CalendarOff, label: t('admin.holidays.title') },
+        { path: '/admin/instructors', icon: GraduationCap, label: t('admin.instructors.title') },
+        { path: '/admin/coupons', icon: Tag, label: t('admin.coupons.title') },
+        { path: '/admin/refund-records', icon: RotateCcw, label: t('admin.refundRecords.title') },
         { path: '/admin/audit-log', icon: FileText, label: t('admin.auditLog.title') },
       ],
     },
@@ -112,13 +112,13 @@ export default function Layout({ children }: LayoutProps) {
       title: t('admin.content.title', '內容與系統設定'),
       items: [
         { path: '/admin/class-notice', icon: MessageSquare, label: t('admin.classNotice.title', '全班通知') },
-        { path: '/admin/news', icon: Newspaper, label: t('admin.news.navTitle', '最新消息') },
-        { path: '/admin/course-intro', icon: BookOpen, label: t('admin.courseIntro.navTitle', '課堂介紹') },
+        { path: '/admin/news', icon: Newspaper, label: t('admin.news.title', '最新消息管理') },
+        { path: '/admin/course-intro', icon: BookOpen, label: t('admin.courseIntro.title', '課堂介紹（課程介紹）') },
         { path: '/admin/settings', icon: Info, label: t('nav.settingsHomeAbout', '關於我們') },
-        { path: '/admin/contact', icon: Phone, label: t('nav.adminContact', '聯絡我們') },
-        { path: '/admin/faq', icon: HelpCircle, label: t('nav.adminFaq', '常見問題') },
-        { path: '/admin/terms', icon: ScrollText, label: t('nav.adminTerms', '條款與細則') },
-        { path: '/admin/privacy', icon: ShieldCheck, label: t('nav.adminPrivacy', '私隱政策') },
+        { path: '/admin/contact', icon: Phone, label: t('admin.contact.title', '聯絡我們頁面') },
+        { path: '/admin/faq', icon: HelpCircle, label: t('admin.faq.heading', '常見問題') },
+        { path: '/admin/terms', icon: ScrollText, label: t('admin.terms.heading', '條款與細則') },
+        { path: '/admin/privacy', icon: ShieldCheck, label: t('admin.privacy.heading', '私隱政策') },
       ],
     },
   ];
@@ -640,7 +640,7 @@ export default function Layout({ children }: LayoutProps) {
                 <p className="mt-2">{t('footer.hotlineNote')}</p>
                 <div className="flex items-center gap-3 mt-3">
                   <a
-                    href="http://wa.me/+85292299875"
+                    href="https://api.whatsapp.com/send?phone=85292299875"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded"

@@ -142,7 +142,7 @@ export default function HomePage() {
           <div className="text-center px-4 sm:px-6 lg:px-8 pointer-events-auto">
             <h1 className="text-5xl font-bold mb-6 text-white drop-shadow-lg">
               <a
-                href="http://wa.me/+85292299875"
+                href="https://api.whatsapp.com/send?phone=85292299875"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:underline transition-all"

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import { isDemoMode } from './mock';
 
 export interface AdminPendingCounts {
   pendingApplications: number;
@@ -26,7 +27,7 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
       return;
     }
     api
-      .get<AdminPendingCounts>('admin/pending-counts?demo=1')
+      .get<AdminPendingCounts>('admin/pending-counts')
       .then((res: unknown) => {
         const data = (res as { data?: AdminPendingCounts })?.data;
         if (data && typeof data.pendingApplications === 'number' && typeof data.pendingTrials === 'number') {
@@ -34,7 +35,7 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
         }
       })
       .catch(() => {
-        setCounts(DEMO_COUNTS);
+        setCounts(isDemoMode() ? DEMO_COUNTS : ZERO_COUNTS);
       });
   }, [isAdmin]);
 

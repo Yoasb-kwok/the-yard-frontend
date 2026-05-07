@@ -3,11 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
 import { BookOpen, Calendar, MapPin, Search, ArrowDownWideNarrow, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
-import type { CourseLevel } from '../../contexts/AuthContext';
-import { ALL_COURSES, type CourseItem, type CourseType } from '../../lib/coursesData';
+import type { AgeTag, CourseLevel } from '../../contexts/AuthContext';
+import type { CourseItem, CourseType } from '../../lib/coursesData';
+import { courseItemHasVerifiedClasses, mapApiCourseRowToCourseItem } from '../../lib/mapApiCourseRow';
 import { applyCourseIntroOverrides } from '../../lib/courseIntroStorage';
 import { getCoursesPageHero, getHeroTitleForLocale, getHeroDescForLocale, getHeroNoteForLocale } from '../../lib/coursesPageHeroStorage';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
 
 export type { CourseItem, CourseType };
 
@@ -15,7 +16,7 @@ type SortOption = 'ageGroup' | 'level' | 'name' | 'weekday';
 
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
-/** 可供試堂的時段（API 或 demo） */
+/** 可供試堂的時段（來自 GET /classes） */
 export interface TrialSlot {
   start_time: string;
   end_time: string;
@@ -23,6 +24,7 @@ export interface TrialSlot {
   location?: CourseItem['location'];
   /** API 班別 id，試堂申請時可帶上 */
   class_id?: number;
+  tag_values?: Record<string, string | null | undefined>;
 }
 
 const LOCATIONS = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'] as const;
@@ -43,29 +45,17 @@ function apiClassesToTrialSlots(rows: any[]): TrialSlot[] {
     .filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true))
     .map((row: any) => {
       const start = new Date(row.start_time);
-      return start.getTime() >= fromTime && start.getTime() <= toTime ? { start_time: row.start_time, end_time: row.end_time, location: normalizeLocation(row.location), class_id: row.id } : null;
+      return start.getTime() >= fromTime && start.getTime() <= toTime
+        ? {
+            start_time: row.start_time,
+            end_time: row.end_time,
+            location: normalizeLocation(row.location),
+            class_id: row.id,
+            tag_values: row.tag_values ?? row.tagValues ?? row.tags ?? {},
+          }
+        : null;
     })
     .filter(Boolean) as TrialSlot[];
-}
-
-/** 每種課程 fallback：隨機產生幾堂可供試堂的時段（未來 14 日內） */
-function getDemoTrialSlotsForCourse(course: CourseItem): TrialSlot[] {
-  const now = new Date();
-  const slots: TrialSlot[] = [];
-  const dayOffsets = [1, 3, 6, 10];
-  const hourOptions = [10, 14, 16, 19];
-  const seed = course.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  for (let i = 0; i < 4; i++) {
-    const dayOffset = dayOffsets[i];
-    const hour = hourOptions[(seed + i) % hourOptions.length];
-    const start = new Date(now);
-    start.setDate(start.getDate() + dayOffset);
-    start.setHours(hour, 0, 0, 0);
-    const end = new Date(start);
-    end.setHours(end.getHours() + 1, 0, 0, 0);
-    slots.push({ start_time: start.toISOString(), end_time: end.toISOString(), location: course.location });
-  }
-  return slots;
 }
 
 function getAgeSortKey(age_tag: string): number {
@@ -80,39 +70,121 @@ function getLevelSortKey(level: CourseLevel): number {
   return map[level] ?? 0;
 }
 
-function toCourseItem(row: any): CourseItem {
-  const loc = normalizeLocation(row.location);
-  const courseType = row.course_type === 'summer' || row.course_type === 'short_term' ? row.course_type : 'regular';
-  return {
-    id: String(row.id),
-    name: row.name || '',
-    program_code: row.program_code || '',
-    intro: row.intro || '',
-    level: (row.level || 'entry') as CourseLevel,
-    age_tag: row.age_tag || '5-8',
-    instructor: row.instructor || '',
-    trial_class_name: row.trial_class_name || row.name || '',
-    location: loc,
-    weekday: typeof row.weekday === 'number' ? row.weekday : 0,
-    course_type: courseType,
-  };
+function mapApiClassesToCourseItems(rows: Record<string, unknown>[]): CourseItem[] {
+  const byProgram = new Map<string, Record<string, unknown>[]>();
+  for (const row of rows) {
+    const r = row as Record<string, unknown>;
+    const programCode = String(r.program_code ?? '').trim();
+    if (!programCode) continue;
+    const bucket = byProgram.get(programCode);
+    if (bucket) bucket.push(r);
+    else byProgram.set(programCode, [r]);
+  }
+
+  return Array.from(byProgram.entries())
+    .map(([programCode, group]) => {
+      const first = group[0];
+      const sortedByTime = [...group].sort((a, b) =>
+        String(a.start_time ?? '').localeCompare(String(b.start_time ?? ''))
+      );
+      const next = sortedByTime.find((row) => {
+        const t = String(row.start_time ?? '');
+        return t && new Date(t).getTime() >= Date.now();
+      }) ?? sortedByTime[0];
+      const category = String(first.category ?? first.course_type ?? '').toLowerCase();
+      const courseType: CourseType =
+        category === 'summer'
+          ? 'summer'
+          : category === 'short' || category === 'short_term'
+            ? 'short_term'
+            : 'regular';
+
+      return {
+        id: `pc:${programCode}`,
+        name: String(first.name ?? programCode),
+        program_code: programCode,
+        intro: String(first.intro ?? first.description ?? ''),
+        level: (String(first.level ?? 'entry') as CourseLevel),
+        age_tag: String(first.age_tag ?? '5-8'),
+        instructor: String(first.instructor ?? ''),
+        trial_class_name: String(first.trial_class_name ?? first.name ?? programCode),
+        location: normalizeLocation(String(first.location ?? '')),
+        weekday:
+          typeof first.weekday === 'number'
+            ? first.weekday
+            : next.start_time
+              ? new Date(String(next.start_time)).getDay()
+              : 0,
+        course_type: courseType,
+        next_class_id: typeof next.id === 'number' ? next.id : Number(next.id ?? 0) || null,
+        open_class_count: group.length,
+        has_course_catalog_row: false,
+      } as CourseItem;
+    })
+    .filter(courseItemHasVerifiedClasses);
 }
 
 export default function CoursesPage() {
   const { t, i18n } = useTranslation();
-  const [courses, setCourses] = useState<CourseItem[]>(ALL_COURSES);
+  const [courses, setCourses] = useState<CourseItem[]>([]);
+  const [coursesListLoading, setCoursesListLoading] = useState(true);
+  /** 與「後端回傳空陣列」區分：5xx／連線失敗等 */
+  const [coursesListError, setCoursesListError] = useState<'none' | 'server' | 'network'>('none');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('ageGroup');
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
-  /** 每課程的「可供試堂時段」快取：展開時呼叫 API，失敗或無資料則用 demo */
+  /** 每課程的「可供試堂時段」快取：展開時呼叫 GET /classes，無資料則不顯示假時段 */
   const [trialSlotsCache, setTrialSlotsCache] = useState<Record<string, { slots: TrialSlot[]; loading: boolean }>>({});
 
+  // GET /api/courses 為「課程介紹用聚合 API」，不必對應名為 courses 的 table；fromClasses=1 應僅由 classes 等推出。
   useEffect(() => {
-    api.get<CourseItem[]>('/courses').then((res) => {
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setCourses(res.data.map(toCourseItem));
-      }
-    }).catch(() => {});
+    let cancelled = false;
+    setCoursesListLoading(true);
+    setCoursesListError('none');
+    api
+      .get<Record<string, unknown>[]>('/courses', { fromClasses: 1 })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          const mapped = res.data.map((row) => mapApiCourseRowToCourseItem(row as Record<string, unknown>));
+          const verified = mapped.filter(courseItemHasVerifiedClasses);
+          // Backends that do not expose next/open counters should still render.
+          setCourses(verified.length > 0 ? verified : mapped.filter((c) => !!String(c.program_code).trim()));
+          return;
+        }
+        const classesRes = await api.get<Record<string, unknown>[]>('/classes');
+        if (cancelled) return;
+        if (classesRes.success && Array.isArray(classesRes.data)) {
+          setCourses(mapApiClassesToCourseItems(classesRes.data));
+        } else {
+          setCourses([]);
+        }
+      })
+      .catch(async (err: unknown) => {
+        if (cancelled) return;
+        try {
+          const classesRes = await api.get<Record<string, unknown>[]>('/classes');
+          if (cancelled) return;
+          if (classesRes.success && Array.isArray(classesRes.data) && classesRes.data.length > 0) {
+            setCourses(mapApiClassesToCourseItems(classesRes.data));
+            return;
+          }
+        } catch {
+          // ignore fallback errors and use the original error state below
+        }
+        setCourses([]);
+        if (err instanceof ApiError && err.status >= 500) {
+          setCoursesListError('server');
+        } else {
+          setCoursesListError('network');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCoursesListLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /** 展開某課程時拉取該課程的試堂時段（未來 14 日、program_code） */
@@ -276,9 +348,28 @@ export default function CoursesPage() {
             </div>
           </div>
 
-          {/* Course list */}
+          {/* Course list：僅顯示後端回傳，不再使用靜態 demo 課程表 */}
           <div className="space-y-4">
-            {filteredAndSorted.length === 0 ? (
+            {coursesListLoading ? (
+              <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-500">
+                {t('courses.loadingList', '載入課程列表中…')}
+              </div>
+            ) : courses.length === 0 ? (
+              <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-600 space-y-2">
+                {coursesListError === 'server' ? (
+                  <p>{t('courses.loadErrorServer', '課程列表暫時無法載入（伺服器錯誤）。請稍後再試，或請管理員查看後端日誌。')}</p>
+                ) : coursesListError === 'network' ? (
+                  <p>{t('courses.loadErrorNetwork', '無法連線載入課程列表。請檢查網路或 API 位址後再試。')}</p>
+                ) : (
+                  <p>{t('courses.emptyFromApi', '目前沒有從系統載入到可顯示的課程。請確認後端已提供課程資料，或稍後再試。')}</p>
+                )}
+                <p className="text-sm text-gray-500">
+                  <Link to="/calendar" className="text-primary font-medium hover:underline">
+                    {t('courses.viewCalendar', '查看月曆可報名時段')}
+                  </Link>
+                </p>
+              </div>
+            ) : filteredAndSorted.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-500">
                 {t('courses.noResults', '沒有符合的課程，請試試其他關鍵字或排序。')}
               </div>
@@ -326,25 +417,53 @@ export default function CoursesPage() {
                           {expandedCourseId === course.id ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </button>
                       </div>
-                      {/* 展開：可供試堂的日子（API 或 fallback demo） */}
+                      {/* 展開：可供試堂的日子（僅 GET /classes 真實時段） */}
                       {expandedCourseId === course.id && (
                         <div className="mt-4 pt-4 border-t border-gray-100">
                           <p className="text-sm font-medium text-gray-700 mb-3">{t('courses.availableTrialSlots', '可供試堂時段')}</p>
                           {trialSlotsCache[course.id]?.loading ? (
                             <p className="text-sm text-gray-500 py-2">{t('common.loading', '載入中…')}</p>
+                          ) : (trialSlotsCache[course.id]?.slots?.length ?? 0) === 0 ? (
+                            <p className="text-sm text-gray-500 py-2">
+                              {t(
+                                'courses.noTrialSlotsInRange',
+                                '未來 14 日內暫無符合的試堂時段，請到月曆查看其他日期。'
+                              )}
+                            </p>
                           ) : (
                             <ul className="space-y-2">
-                              {((trialSlotsCache[course.id]?.slots?.length ? trialSlotsCache[course.id].slots : getDemoTrialSlotsForCourse(course)) as TrialSlot[]).map((slot, idx) => {
+                              {(trialSlotsCache[course.id]!.slots as TrialSlot[]).map((slot, idx) => {
                                 const start = new Date(slot.start_time);
                                 const end = new Date(slot.end_time);
                                 const dateStr = start.toLocaleDateString(locale, { month: 'numeric', day: 'numeric', weekday: 'short' });
                                 const timeStr = `${start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })} – ${end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}`;
                                 const loc = slot.location ?? course.location;
                                 const locationStr = t(`home.locations.${loc}`, loc);
+                                const rowId =
+                                  slot.class_id != null && slot.class_id !== ''
+                                    ? String(slot.class_id)
+                                    : typeof course.next_class_id === 'number'
+                                      ? String(course.next_class_id)
+                                      : undefined;
+                                const trialSearch = new URLSearchParams({
+                                  courseId: course.id,
+                                  pc: course.program_code,
+                                  tn: course.trial_class_name,
+                                  st: slot.start_time,
+                                  et: slot.end_time,
+                                  loc: String(loc),
+                                  instr: course.instructor,
+                                  lvl: course.level,
+                                  age: course.age_tag,
+                                });
+                                if (rowId) trialSearch.set('rowId', rowId);
+                                if (slot.tag_values) {
+                                  trialSearch.set('tags', encodeURIComponent(JSON.stringify(slot.tag_values)));
+                                }
                                 return (
-                                  <li key={slot.class_id ?? idx}>
+                                  <li key={`${course.id}-${slot.class_id ?? 'd'}-${slot.start_time}-${idx}`}>
                                     <Link
-                                      to="/trial"
+                                      to={{ pathname: '/trial', search: `?${trialSearch.toString()}` }}
                                       state={{
                                         classData: {
                                           id: course.id,
@@ -355,8 +474,9 @@ export default function CoursesPage() {
                                           location: loc,
                                           program_code: course.program_code,
                                           level: course.level,
-                                          age_tag: course.age_tag,
-                                          class_id: slot.class_id,
+                                          age_tag: course.age_tag as AgeTag,
+                                          tag_values: slot.tag_values,
+                                          apiClassRowId: rowId,
                                         },
                                       }}
                                       className="grid grid-cols-[minmax(0,1fr)_auto_auto_24px] sm:grid-cols-[140px_100px_1fr_24px] gap-x-3 gap-y-0 items-center py-2.5 px-3 rounded-lg bg-gray-50 hover:bg-primary/10 hover:border-primary/30 border border-transparent transition-colors group text-left"

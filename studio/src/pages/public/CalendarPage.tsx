@@ -29,6 +29,7 @@ interface Lesson {
   lesson_number?: number | null;
   level: CourseLevel;
   age_tag: string;
+  tag_values?: Record<string, string | null | undefined>;
   /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
   weekday: number;
   /** Total lessons in the course (4, 8, or 16 – 每週一次). */
@@ -82,6 +83,26 @@ function getCalendarRangeForView(date: Date, view: ViewType): { from: string; to
   return { from: from.toISOString(), to: to.toISOString() };
 }
 
+function extractClassTagValues(raw: any): Record<string, string | null> {
+  const source = raw?.tag_values ?? raw?.tagValues ?? raw?.tags ?? {};
+  if (!source || typeof source !== 'object') return {};
+  const out: Record<string, string | null> = {};
+  for (const [k, v] of Object.entries(source as Record<string, unknown>)) {
+    const key = String(k || '').trim();
+    if (!key) continue;
+    const val = v == null ? '' : String(v).trim();
+    out[key] = !val || val === '-' ? null : val;
+  }
+  return out;
+}
+
+function normalizeCategoryCode(v: unknown): 'regular' | 'summer' | 'short_term' {
+  const code = String(v ?? '').trim().toLowerCase();
+  if (code === 'summer') return 'summer';
+  if (code === 'short' || code === 'short-term' || code === 'short_term') return 'short_term';
+  return 'regular';
+}
+
 export default function CalendarPage() {
   const { t, i18n } = useTranslation();
   const { user, profile } = useAuth();
@@ -105,10 +126,19 @@ export default function CalendarPage() {
   const [filterLevel, setFilterLevel] = useState<string | null>(null);
   const [filterAge, setFilterAge] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
-  const { tagsByType: classTagsByType, getTypeLabel: getTagTypeLabel } = useClassTags();
+  const [extraTagFilters, setExtraTagFilters] = useState<Record<string, string | null>>({});
+  const { tagTypes, tagsByType: classTagsByType, getTypeLabel: getTagTypeLabel } = useClassTags();
   const levelTagOptions = classTagsByType.level ?? [];
   const ageTagOptions = classTagsByType.age ?? [];
   const categoryTagOptions = classTagsByType.category ?? [];
+  const dynamicTagTypes = useMemo(
+    () => tagTypes.filter((tt) => tt.code !== 'level' && tt.code !== 'age'),
+    [tagTypes]
+  );
+  const extraFilterTagTypes = useMemo(
+    () => dynamicTagTypes.filter((tt) => tt.code !== 'category'),
+    [dynamicTagTypes]
+  );
   const [isNarrowScreen, setIsNarrowScreen] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
   const lessonModalRef = useRef<HTMLDivElement>(null);
   const slotPickerRef = useRef<HTMLDivElement>(null);
@@ -121,6 +151,18 @@ export default function CalendarPage() {
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  useEffect(() => {
+    // Keep only filters for active dynamic types.
+    const activeCodes = new Set(extraFilterTagTypes.map((tt) => tt.code));
+    setExtraTagFilters((prev) => {
+      const next: Record<string, string | null> = {};
+      for (const [k, v] of Object.entries(prev)) {
+        if (activeCodes.has(k)) next[k] = v;
+      }
+      return next;
+    });
+  }, [extraFilterTagTypes]);
+
   const isStudent = user && profile?.role === 'student';
   const profileAgeTag = getAgeTagFromDateOfBirth(profile?.date_of_birth ?? null);
   const displayLessonsBase = !isStudent
@@ -132,9 +174,22 @@ export default function CalendarPage() {
     let list = displayLessonsBase;
     if (filterLevel != null) list = list.filter((l) => l.level === filterLevel);
     if (filterAge != null) list = list.filter((l) => l.age_tag === filterAge);
-    if (filterCategory != null) list = list.filter((l) => (l.course_type ?? 'regular') === filterCategory);
+    if (filterCategory != null) {
+      list = list.filter((l) => {
+        const fromTags = l.tag_values?.category;
+        const categoryCode = fromTags ? normalizeCategoryCode(fromTags) : normalizeCategoryCode(l.course_type);
+        return categoryCode === filterCategory;
+      });
+    }
+    for (const [typeCode, selectedCode] of Object.entries(extraTagFilters)) {
+      if (!selectedCode) continue;
+      list = list.filter((l) => {
+        const value = l.tag_values?.[typeCode];
+        return typeof value === 'string' && value.trim() === selectedCode;
+      });
+    }
     return list;
-  }, [displayLessonsBase, filterLevel, filterAge, filterCategory]);
+  }, [displayLessonsBase, filterLevel, filterAge, filterCategory, extraTagFilters]);
   const isLessonSuggested = (lesson: Lesson): boolean =>
     !isStudent || ((!profile?.level || lesson.level === profile.level) && (!profileAgeTag || lesson.age_tag === profileAgeTag));
 
@@ -229,9 +284,10 @@ export default function CalendarPage() {
             lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
             level: (cls.level || 'entry') as CourseLevel,
             age_tag: cls.age_group || cls.age_tag || '9-12',
+            tag_values: extractClassTagValues(cls),
             weekday: startTime.getDay(),
             total_lessons: clampTotal(total) as 4 | 8 | 16,
-            course_type: (cls.course_type || 'regular') as Lesson['course_type'],
+            course_type: normalizeCategoryCode(cls.tag_values?.category ?? cls.course_type),
           };
         });
       setLessons(mapped.length > 0 ? mapped : getFallbackCalendarLessons(currentDate));
@@ -1229,6 +1285,42 @@ export default function CalendarPage() {
                 </div>
               </div>
             )}
+            {extraFilterTagTypes.map((tt) => {
+              const options = classTagsByType[tt.code] ?? [];
+              if (options.length === 0) return null;
+              return (
+                <div key={tt.code} className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-medium text-gray-500 shrink-0">
+                    {getTagTypeLabel(tt.code) || localizeTagLabel(tt, i18n.language || 'zh-TW')}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {options.map((opt) => {
+                      const label = localizeTagLabel(opt, i18n.language || 'zh-TW');
+                      const selectedCode = extraTagFilters[tt.code] ?? null;
+                      return (
+                        <button
+                          key={String(opt.id)}
+                          type="button"
+                          onClick={() =>
+                            setExtraTagFilters((prev) => ({
+                              ...prev,
+                              [tt.code]: selectedCode === opt.code ? null : opt.code,
+                            }))
+                          }
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                            selectedCode === opt.code
+                              ? 'bg-primary text-white border border-primary'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:border-primary/50 hover:text-primary'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
         </div>
@@ -1294,6 +1386,7 @@ export default function CalendarPage() {
             <div ref={lessonModalRef} className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full" role="dialog" aria-modal="true" aria-label={t('calendar.lessonDetails', 'Lesson details')}>
               {(() => {
                 const locationColors = getLocationColors(selectedLesson.location);
+                const instructorProfile = getInstructorProfile(selectedLesson.instructor);
                 
                 return (
                   <div className="bg-white">
@@ -1330,11 +1423,6 @@ export default function CalendarPage() {
                           >
                             {formatProgramCodeDisplay(selectedLesson.program_code, selectedLesson.lesson_number) || selectedLesson.program_code}
                           </span>
-                          {(selectedLesson.lesson_number != null && selectedLesson.lesson_number >= 1) && (
-                            <span className="text-sm font-medium text-gray-700">
-                              {t('calendar.lessonXOfY', { current: selectedLesson.lesson_number, total: selectedLesson.total_lessons })}
-                            </span>
-                          )}
                           <span className={`text-xs font-semibold px-2 py-1 rounded border ${getLevelTag(selectedLesson.level).className}`}>
                             {getLevelTag(selectedLesson.level).label}
                           </span>
@@ -1344,25 +1432,55 @@ export default function CalendarPage() {
                         </div>
                       </div>
 
-                      {/* Tutor Profile */}
-                      <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
-                        <img
-                          src={getTutorImageUrl(selectedLesson.instructor)}
-                          alt={selectedLesson.instructor}
-                          className="w-20 h-20 rounded-full object-cover mr-4"
-                        />
-                        <div>
-                          <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
-                          <p className="text-lg font-bold text-gray-900">{selectedLesson.instructor}</p>
+                      {/* Tutor Profile (fallback only when no detailed profile) */}
+                      {!instructorProfile && (
+                        <div className="flex items-center mb-6 pb-6 border-b-2 border-gray-100">
+                          <img
+                            src={getTutorImageUrl(selectedLesson.instructor)}
+                            alt={selectedLesson.instructor}
+                            className="w-20 h-20 rounded-full object-cover mr-4"
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-gray-500 mb-1">{t('home.tutor')}</p>
+                            <p className="text-lg font-bold text-gray-900">{selectedLesson.instructor}</p>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Teacher intro (awards, experience, dance school) */}
-                      {getInstructorProfile(selectedLesson.instructor) && (
+                      {instructorProfile && (
                         <div className="mb-6 pb-6 border-b-2 border-gray-100">
                           <InstructorIntroCard instructorName={selectedLesson.instructor} compact />
                         </div>
                       )}
+
+                      {(() => {
+                        const rows = dynamicTagTypes
+                          .map((tt) => {
+                            const raw = selectedLesson.tag_values?.[tt.code];
+                            const code = typeof raw === 'string' ? raw.trim() : '';
+                            if (!code || code === '-') return null;
+                            const option = (classTagsByType[tt.code] ?? []).find((r) => r.code === code);
+                            const valueLabel = option ? localizeTagLabel(option, i18n.language || 'zh-TW') : code;
+                            const typeLabel = getTagTypeLabel(tt.code) || localizeTagLabel(tt, i18n.language || 'zh-TW');
+                            return { key: tt.code, typeLabel, valueLabel };
+                          })
+                          .filter(Boolean) as Array<{ key: string; typeLabel: string; valueLabel: string }>;
+
+                        if (rows.length === 0) return null;
+                        return (
+                          <div className="mb-6 pb-6 border-b-2 border-gray-100 space-y-2">
+                            {rows.map((row) => (
+                              <div key={row.key}>
+                                <p className="text-sm font-medium text-gray-500 mb-1">{row.typeLabel}</p>
+                                <span className="inline-block text-sm font-semibold px-3 py-1.5 rounded border bg-gray-100 text-gray-800 border-gray-200">
+                                  {row.valueLabel}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })()}
 
                       {/* Class Details */}
                       <div className="space-y-4 mb-6">
@@ -1416,7 +1534,7 @@ export default function CalendarPage() {
                             style={{ color: locationColors.primary }}
                           />
                           <span className="text-base font-semibold">
-                            {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[selectedLesson.weekday]}`) })} · {t('calendar.lessonsInTotal', { count: selectedLesson.total_lessons })}
+                            {t('calendar.everyWeekday', { day: t(`calendar.weekdays.${WEEKDAY_KEYS[selectedLesson.weekday]}`) })}
                           </span>
                         </div>
 
@@ -1430,7 +1548,26 @@ export default function CalendarPage() {
                         {selectedLesson && (isStudent ? isLessonSuggested(selectedLesson) : true) && (
                           <>
                             <Link
-                              to={`/trial?classId=${selectedLesson.id}`}
+                              to={{
+                                pathname: '/trial',
+                                search: `?${new URLSearchParams({
+                                  classId: String(selectedLesson.id),
+                                  rowId: String(selectedLesson.id),
+                                  st: selectedLesson.start_time,
+                                  et: selectedLesson.end_time,
+                                  name: selectedLesson.name,
+                                  instructor: selectedLesson.instructor,
+                                  pc: selectedLesson.program_code,
+                                  level: selectedLesson.level,
+                                  loc: selectedLesson.location,
+                                  ...(selectedLesson.age_tag
+                                    ? { age: String(selectedLesson.age_tag) }
+                                    : {}),
+                                  ...(selectedLesson.tag_values
+                                    ? { tags: encodeURIComponent(JSON.stringify(selectedLesson.tag_values)) }
+                                    : {}),
+                                }).toString()}`,
+                              }}
                               state={{
                                 classData: {
                                   id: selectedLesson.id,
@@ -1441,7 +1578,9 @@ export default function CalendarPage() {
                                   location: selectedLesson.location,
                                   program_code: selectedLesson.program_code,
                                   level: selectedLesson.level,
-                                  age_tag: selectedLesson.age_tag,
+                                  age_tag: selectedLesson.age_tag as AgeTag,
+                                  tag_values: selectedLesson.tag_values,
+                                  apiClassRowId: String(selectedLesson.id),
                                 }
                               }}
                               className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"

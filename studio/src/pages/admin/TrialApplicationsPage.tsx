@@ -181,7 +181,9 @@ function normalizeTrialApplicationRow(raw: unknown): TrialApplication | null {
     applicant_email: toStr(o.applicant_email ?? o.email),
     applicant_phone: toOptStr(o.applicant_phone ?? o.contact_number ?? o.mobile) ?? undefined,
     residential_district: toOptStr(o.residential_district),
-    trial_class: toStr(o.trial_class ?? o.class_name),
+    trial_class: toStr(
+      o.trial_class ?? o.class_name ?? o.trialClassName ?? o.requested_trial_class_name ?? o.preferred_trial_class_name,
+    ),
     preferred_datetime: toOptStr(o.preferred_datetime) ?? undefined,
     status: rawStatus || 'pending',
     assigned_class_id: toOptStr(o.assigned_class_id),
@@ -257,6 +259,7 @@ export default function TrialApplicationsPage() {
     pageSize: trialPageSize,
     totalItems: trialTotalItems,
     paginatedItems: paginatedTrial,
+    startIndex: trialListStart,
   } = useTablePagination(filtered, undefined, [quickFilter, statusFilter]);
 
   useEffect(() => {
@@ -525,8 +528,10 @@ export default function TrialApplicationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {paginatedTrial.map((app) => (
-                    <Fragment key={app.id}>
+                  {paginatedTrial.map((app, rowIndex) => {
+                    const rowKey = `trial-row-${trialListStart + rowIndex}-${String(app.id)}`;
+                    return (
+                    <Fragment key={rowKey}>
                       <tr className="hover:bg-gray-50">
                         <td className="px-4 py-3">
                           <div className="font-medium text-gray-900">{app.applicant_name}</div>
@@ -547,16 +552,16 @@ export default function TrialApplicationsPage() {
                         <td className="px-4 py-3 text-right">
                           <button
                             type="button"
-                            onClick={() => setExpandedId(expandedId === app.id ? null : app.id)}
+                            onClick={() => setExpandedId(expandedId === rowKey ? null : rowKey)}
                             className="text-primary hover:text-primary-dark flex items-center justify-end gap-1 text-sm"
                           >
-                            {expandedId === app.id ? t('common.collapse') : t('admin.trialApplications.notesAndAssign')}
-                            <ChevronDown className={`h-4 w-4 ${expandedId === app.id ? 'rotate-180' : ''}`} />
+                            {expandedId === rowKey ? t('common.collapse') : t('admin.trialApplications.notesAndAssign')}
+                            <ChevronDown className={`h-4 w-4 ${expandedId === rowKey ? 'rotate-180' : ''}`} />
                           </button>
                         </td>
                       </tr>
-                      {expandedId === app.id && (
-                        <tr key={`${app.id}-expand`} className="bg-gray-50">
+                      {expandedId === rowKey && (
+                        <tr key={`${rowKey}-expand`} className="bg-gray-50">
                           <td colSpan={6} className="px-4 py-4">
                             <div className="space-y-4">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -608,7 +613,7 @@ export default function TrialApplicationsPage() {
                                   >
                                     <option value="">{t('admin.trialApplications.assignClassPlaceholder')}</option>
                                     {uniqueClassOptions.map((c) => (
-                                      <option key={c.id} value={String(c.id)}>
+                                      <option key={getClassOptionDedupeKey(c)} value={String(c.id)}>
                                         {getClassOptionLabel(c, getLocale())}
                                       </option>
                                     ))}
@@ -622,7 +627,7 @@ export default function TrialApplicationsPage() {
                                   >
                                     <option value="">{editAssignedClassId[app.id] ? t('admin.trialApplications.assignedLessonsPlaceholder') : t('admin.trialApplications.selectClassFirst', '請先選擇班別')}</option>
                                     {getAvailableLessonsWithDates(classes.find((c) => String(c.id) === editAssignedClassId[app.id])).map(({ n, date }) => (
-                                      <option key={n} value={n}>
+                                      <option key={`${rowKey}-lesson-${n}`} value={n}>
                                         {t('admin.trialApplications.lessonWithDate', '第{{n}}堂 · {{date}}', { n, date: formatLessonDate(date, getLocale()) })}
                                       </option>
                                     ))}
@@ -647,7 +652,8 @@ export default function TrialApplicationsPage() {
                         </tr>
                       )}
                     </Fragment>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatDate, formatDateTime } from '../../lib/utils';
+import { formatDate, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
 import { ArrowLeft, Search, Calendar, Users, CheckCircle, X, ChevronLeft, ChevronRight, Filter, MapPin, AlertTriangle } from 'lucide-react';
@@ -191,20 +191,6 @@ export default function ReassignStudentsPage() {
       'zh-TW': 'zh-TW',
     };
     return langMap[i18n.language] || i18n.language || 'en-US';
-  };
-
-  const formatMobile = (mobile: string | null): string => {
-    if (!mobile) return '-';
-    
-    if (mobile.startsWith('852')) {
-      return `+852 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('853')) {
-      return `+853 ${mobile.substring(3)}`;
-    } else if (mobile.startsWith('86')) {
-      return `+86 ${mobile.substring(2)}`;
-    }
-    
-    return `+852 ${mobile}`;
   };
 
   const getLocationLabel = (location?: string): string => {
@@ -470,7 +456,7 @@ export default function ReassignStudentsPage() {
                       <p className="text-gray-600 mb-1">{classItem.instructor}</p>
                       <div className="flex items-center text-sm text-gray-600 mb-1">
                         <Calendar className="h-4 w-4 mr-1" />
-                        {formatDateTime(classItem.start_time, getLocale())} - {formatDateTime(classItem.end_time, getLocale())}
+                        {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
                       </div>
                       {classItem.location && (
                         <div className="flex items-center text-sm text-gray-600 mb-1">
@@ -834,7 +820,7 @@ export default function ReassignStudentsPage() {
             <div>
               <p className="text-sm text-gray-600 mb-1">
                 <span className="font-medium">{t('admin.attendance.time')}:</span>{' '}
-                {formatDateTime(cancelledClass.start_time, getLocale())} - {formatDateTime(cancelledClass.end_time, getLocale())}
+                {formatDateTimeRange(cancelledClass.start_time, cancelledClass.end_time, getLocale())}
               </p>
               {cancelledClass.location && (
                 <p className="text-sm text-gray-600 mb-1">
@@ -900,7 +886,7 @@ export default function ReassignStudentsPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 truncate">{enrollment.user_name}</p>
-                          <p className="text-xs text-gray-500">{formatMobile(enrollment.user_mobile)}</p>
+                          <p className="text-xs text-gray-500">{formatMobileForDisplay(enrollment.user_mobile, '-')}</p>
                         </div>
                       </div>
                     </div>
