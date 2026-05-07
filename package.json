@@ -4,7 +4,7 @@
   "description": "Frontend app lives in studio/ — run dev/build from there or via this root.",
   "scripts": {
     "dev": "npm run dev --prefix studio",
-    "build": "npm run build --prefix studio",
+    "build": "npm install --prefix studio && npm run build --prefix studio",
     "preview": "npm run preview --prefix studio",
     "lint": "npm run lint --prefix studio",
     "typecheck": "npm run typecheck --prefix studio"
