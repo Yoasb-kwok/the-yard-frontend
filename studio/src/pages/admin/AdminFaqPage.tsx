@@ -7,10 +7,14 @@ import { Save, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import {
   createDefaultFaqContent,
   createEmptyFaqItem,
+  hasFaqFieldVisibleContent,
+  getFaqFieldForLocaleExact,
   loadAdminFaq,
   saveAdminFaq,
+  setFaqFieldForLocale,
   type FaqContent,
   type FaqItem,
+  type FaqLocale,
 } from '../../lib/faqContent';
 
 function escapeHtml(s: string): string {
@@ -50,6 +54,7 @@ function buildFallbackFromI18n(t: (k: string, def?: string) => string): FaqConte
 export default function AdminFaqPage() {
   const { t } = useTranslation();
   const [content, setContent] = useState<FaqContent>(() => createDefaultFaqContent());
+  const [activeLang, setActiveLang] = useState<FaqLocale>('zh-TW');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -88,10 +93,6 @@ export default function AdminFaqPage() {
     }
   }
 
-  function updateField<K extends keyof FaqContent>(key: K, value: FaqContent[K]) {
-    setContent((prev) => ({ ...prev, [key]: value }));
-  }
-
   function updateItem(index: number, patch: Partial<FaqItem>) {
     setContent((prev) => ({
       ...prev,
@@ -120,11 +121,7 @@ export default function AdminFaqPage() {
   }
 
   async function handleSave() {
-    if (!content.title.trim()) {
-      alert(t('admin.faq.missingTitle', '請先輸入頁面標題'));
-      return;
-    }
-    const emptyCount = content.items.filter((it) => !it.question.trim()).length;
+    const emptyCount = content.items.filter((it) => !hasFaqFieldVisibleContent(it.question)).length;
     if (emptyCount > 0) {
       const ok = window.confirm(
         t(
@@ -172,41 +169,30 @@ export default function AdminFaqPage() {
           </p>
         </div>
 
-        {/* Page-level fields */}
-        <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {t('admin.faq.pageSection', '頁面標題與簡介')}
-          </h2>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('admin.faq.pageTitle', '頁面標題')}
-            </label>
-            <input
-              type="text"
-              value={content.title}
-              onChange={(e) => updateField('title', e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('admin.faq.pageIntro', '頁面簡介（顯示於標題下方）')}
-            </label>
-            <textarea
-              value={content.intro}
-              onChange={(e) => updateField('intro', e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-        </div>
-
         {/* Items list */}
         <div className="bg-white rounded-lg shadow-md p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {t('admin.faq.itemsSection', '問題清單')}
-            </h2>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {t('admin.faq.itemsSection', '問題清單')}
+              </h2>
+              <div className="inline-flex items-center rounded-md border border-gray-200 p-0.5 bg-white">
+                {(['zh-TW', 'zh-CN', 'en'] as const).map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setActiveLang(lang)}
+                    className={`px-2.5 py-1 text-xs rounded ${
+                      activeLang === lang
+                        ? 'bg-primary text-white'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {lang === 'zh-TW' ? '繁中' : lang === 'zh-CN' ? '简中' : 'EN'}
+                  </button>
+                ))}
+              </div>
+            </div>
             <span className="text-xs text-gray-500">
               {t('admin.faq.itemsCount', '共 {{count}} 題', { count: content.items.length })}
             </span>
@@ -219,74 +205,87 @@ export default function AdminFaqPage() {
           )}
 
           <div className="space-y-6">
-            {content.items.map((item, index) => (
-              <div
-                key={item.id}
-                className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:p-5 space-y-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-sm font-semibold text-gray-800">
-                    {t('admin.faq.itemLabel', '第 {{n}} 題', { n: index + 1 })}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => moveItem(index, -1)}
-                      disabled={index === 0}
-                      title={t('admin.faq.moveUp', '上移')}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <ArrowUp className="h-3.5 w-3.5" />
-                      {t('admin.faq.moveUp', '上移')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveItem(index, 1)}
-                      disabled={index === content.items.length - 1}
-                      title={t('admin.faq.moveDown', '下移')}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      <ArrowDown className="h-3.5 w-3.5" />
-                      {t('admin.faq.moveDown', '下移')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(index)}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      {t('admin.faq.remove', '刪除')}
-                    </button>
+            {content.items.map((item, index) => {
+              const question = getFaqFieldForLocaleExact(item.question, activeLang);
+              const answerHtml = getFaqFieldForLocaleExact(item.answer_html, activeLang);
+              return (
+                <div
+                  key={item.id}
+                  className="rounded-xl border border-gray-200 bg-gray-50/50 p-4 sm:p-5 space-y-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-gray-800">
+                      {t('admin.faq.itemLabel', '第 {{n}} 題', { n: index + 1 })}
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => moveItem(index, -1)}
+                        disabled={index === 0}
+                        title={t('admin.faq.moveUp', '上移')}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                        {t('admin.faq.moveUp', '上移')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveItem(index, 1)}
+                        disabled={index === content.items.length - 1}
+                        title={t('admin.faq.moveDown', '下移')}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                        {t('admin.faq.moveDown', '下移')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(index)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {t('admin.faq.remove', '刪除')}
+                      </button>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('admin.faq.question', '問題')}
-                  </label>
-                  <input
-                    type="text"
-                    value={item.question}
-                    onChange={(e) => updateItem(index, { question: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('admin.faq.answer', '答案')}
-                  </label>
-                  <div className="site-content-quill border border-gray-200 rounded-md overflow-hidden bg-white">
-                    <ReactQuill
-                      theme="snow"
-                      value={item.answer_html}
-                      onChange={(value) => updateItem(index, { answer_html: value })}
-                      modules={quillModules}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('admin.faq.question', '問題')}
+                    </label>
+                    <input
+                      type="text"
+                      value={question}
+                      onChange={(e) =>
+                        updateItem(index, {
+                          question: setFaqFieldForLocale(item.question, activeLang, e.target.value),
+                        })
+                      }
+                      className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('admin.faq.answer', '答案')}
+                    </label>
+                    <div className="site-content-quill border border-gray-200 rounded-md overflow-hidden bg-white">
+                      <ReactQuill
+                        key={`${item.id}-${activeLang}`}
+                        theme="snow"
+                        value={answerHtml}
+                        onChange={(value) =>
+                          updateItem(index, {
+                            answer_html: setFaqFieldForLocale(item.answer_html, activeLang, value),
+                          })
+                        }
+                        modules={quillModules}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <button

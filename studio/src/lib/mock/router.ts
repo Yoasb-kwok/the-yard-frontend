@@ -339,7 +339,43 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     return ok(list);
   }
 
-  if (method === 'GET' && (path === '/about' || path === '/home/about')) {
+  if (method === 'GET' && path === '/about') {
+    const db = getDb();
+    const stored = (db.siteContent['home-about'] ?? db.siteContent['about']) as
+      | Record<string, unknown>
+      | undefined;
+    const title = typeof stored?.title === 'string' ? stored.title : '關於我們';
+    if (typeof stored?.content === 'string') {
+      return ok({ title, content: stored.content });
+    }
+    const fromHomeAbout = db.homeAbout;
+    const blocks = Array.isArray(fromHomeAbout.blocks)
+      ? fromHomeAbout.blocks.map((b, i) => ({
+          id:
+            typeof (b as Record<string, unknown>).id === 'string'
+              ? ((b as Record<string, unknown>).id as string)
+              : `block_${i + 1}`,
+          image_url:
+            typeof (b as Record<string, unknown>).image_url === 'string'
+              ? ((b as Record<string, unknown>).image_url as string)
+              : null,
+          body_html:
+            typeof (b as Record<string, unknown>).body_html === 'string'
+              ? ((b as Record<string, unknown>).body_html as string)
+              : '<p></p>',
+          body_html_zh_tw:
+            typeof (b as Record<string, unknown>).body_html === 'string'
+              ? ((b as Record<string, unknown>).body_html as string)
+              : '<p></p>',
+          body_html_zh_cn: '',
+          body_html_en: '',
+          layout: i % 2 === 0 ? 'split-image-left' : 'split-image-right',
+        }))
+      : [];
+    const content = JSON.stringify({ schemaVersion: 1, blocks });
+    return ok({ title, content });
+  }
+  if (method === 'GET' && path === '/home/about') {
     const db = getDb();
     return ok(db.homeAbout);
   }
@@ -1089,7 +1125,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
 
   // ---- Contact CMS
-  if (method === 'GET' && path === '/admin/contact/settings') {
+  if (method === 'GET' && (path === '/admin/contact/settings' || path === '/admin/contact')) {
     const db = getDb();
     return ok({
       ...db.contactSettings,
@@ -1101,7 +1137,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       branches: db.contactBranches,
     });
   }
-  if (method === 'PATCH' && path === '/admin/contact/settings') {
+  if (method === 'PATCH' && (path === '/admin/contact/settings' || path === '/admin/contact')) {
     const patch = body as Record<string, unknown>;
     mutate((d) => {
       Object.assign(d.contactSettings, patch);
@@ -1167,7 +1203,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
 
   // ---- FAQ CMS
-  if (method === 'GET' && path === '/admin/faq/settings') {
+  if (method === 'GET' && (path === '/admin/faq/settings' || path === '/admin/faq')) {
     const db = getDb();
     return ok({
       ...db.faqSettings,
@@ -1179,11 +1215,20 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       items: db.faqItems,
     });
   }
-  if (method === 'PATCH' && path === '/admin/faq/settings') {
+  if (method === 'PATCH' && (path === '/admin/faq/settings' || path === '/admin/faq')) {
     mutate((d) => {
       Object.assign(d.faqSettings, body as object);
     });
     return ok(getDb().faqSettings);
+  }
+  if (method === 'PATCH' && path === '/admin/about') {
+    const patch = body as Record<string, unknown>;
+    const title = typeof patch.title === 'string' ? patch.title : '關於我們';
+    const content = typeof patch.content === 'string' ? patch.content : '';
+    mutate((d) => {
+      d.siteContent['home-about'] = { title, content };
+    });
+    return ok({ title, content, updated_at: new Date().toISOString() });
   }
   if (method === 'GET' && path === '/admin/faq/items') {
     return ok(

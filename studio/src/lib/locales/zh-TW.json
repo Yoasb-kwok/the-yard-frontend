@@ -1180,7 +1180,7 @@
     },
     "courseIntro": {
       "navTitle": "課堂介紹",
-      "title": "課堂介紹（課程介紹）",
+      "title": "課堂介紹",
       "hint": "編輯各課程的名稱、簡介與試堂名稱，請輸入三種語言。前台「課程介紹」頁將依使用者語言顯示。",
       "editTitle": "編輯課堂介紹",
       "courseName": "課程名稱",
@@ -1189,7 +1189,7 @@
     },
     "news": {
       "navTitle": "最新消息",
-      "title": "最新消息管理",
+      "title": "最新消息",
       "add": "新增消息",
       "edit": "編輯消息",
       "hint": "此處新增或編輯的消息會顯示於前台「最新消息」頁。目前為 Demo，資料儲存於瀏覽器本地。",
@@ -1250,7 +1250,7 @@
       "tokenExpiryReminderHint": "開啟後，代幣即將到期時可自動發送提醒（需接好寄信服務）。"
     },
     "contact": {
-      "title": "聯絡我們頁面",
+      "title": "聯絡我們",
       "subtitle": "管理公開「聯絡我們」頁顯示的分店。每個卡片顯示地址、開放時間、分店圖與 Google 地圖。",
       "pageSection": "頁面標題",
       "pageTitle": "頁面標題",
@@ -1285,7 +1285,7 @@
       "remove": "移除",
       "removeBranch": "移除分店",
       "saveChanges": "儲存變更",
-      "saved": "聯絡我們頁面已更新",
+      "saved": "聯絡我們已更新",
       "confirmEmptyBranch": "有分店完全空白，仍要儲存嗎？"
     },
     "sitePage": {
@@ -1295,8 +1295,8 @@
       "missingTitle": "請先輸入頁面標題"
     },
     "terms": {
-      "heading": "條款與細則",
-      "description": "編輯公開頁「條款與細則」(/terms) 的標題與內容。儲存後會即時套用；未儲存前仍顯示語系檔的預設內容。",
+      "heading": "條款細則",
+      "description": "編輯公開頁「條款細則」(/terms) 的標題與內容。儲存後會即時套用；未儲存前仍顯示語系檔的預設內容。",
       "titleLabel": "頁面標題"
     },
     "privacy": {

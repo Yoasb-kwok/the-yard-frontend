@@ -74,7 +74,7 @@ function mapApiClassesToCourseItems(rows: Record<string, unknown>[]): CourseItem
   const byProgram = new Map<string, Record<string, unknown>[]>();
   for (const row of rows) {
     const r = row as Record<string, unknown>;
-    const programCode = String(r.program_code ?? '').trim();
+    const programCode = String(r.class_code ?? r.program_code ?? '').trim();
     if (!programCode) continue;
     const bucket = byProgram.get(programCode);
     if (bucket) bucket.push(r);
@@ -101,13 +101,13 @@ function mapApiClassesToCourseItems(rows: Record<string, unknown>[]): CourseItem
 
       return {
         id: `pc:${programCode}`,
-        name: String(first.name ?? programCode),
+        name: String(first.class_name ?? first.name ?? programCode),
         program_code: programCode,
         intro: String(first.intro ?? first.description ?? ''),
         level: (String(first.level ?? 'entry') as CourseLevel),
         age_tag: String(first.age_tag ?? '5-8'),
         instructor: String(first.instructor ?? ''),
-        trial_class_name: String(first.trial_class_name ?? first.name ?? programCode),
+        trial_class_name: String(first.trial_class_name ?? first.class_name ?? first.name ?? programCode),
         location: normalizeLocation(String(first.location ?? '')),
         weekday:
           typeof first.weekday === 'number'
@@ -203,12 +203,19 @@ export default function CoursesPage() {
     to.setDate(to.getDate() + 14);
     const fromISO = from.toISOString();
     const toISO = to.toISOString();
-    api.get<any[]>('/classes', { from: fromISO, to: toISO, program_code: programCodeForFetch })
+    api.get<any[]>('/classes', {
+      from: fromISO,
+      to: toISO,
+      class_code: programCodeForFetch,
+      program_code: programCodeForFetch,
+    })
       .then((res) => {
         const rows = (res.success && Array.isArray(res.data)) ? res.data : [];
         // 前端再依 program_code 篩選（避免後端未篩選時不同課程顯示相同時段）
         const filtered = rows.filter(
-          (row: any) => (row.program_code || '').toString().trim() === programCodeForFetch
+          (row: any) =>
+            (row.class_code ?? row.program_code ?? '').toString().trim() ===
+            programCodeForFetch
         );
         // 只顯示「可供試堂」的班別（後端 allow_trial=1）；若後端未提供該欄位則全部顯示
         const hasTrialFlag = filtered.some((row: any) => row.allow_trial === 1 || row.allow_trial === true);

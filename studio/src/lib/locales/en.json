@@ -1247,7 +1247,7 @@
       "tokenExpiryReminderHint": "When enabled, reminders can be sent when tokens are about to expire (requires email service)."
     },
     "contact": {
-      "title": "Contact Page",
+      "title": "Contact",
       "subtitle": "Manage the branches displayed on the public Contact page. Each branch card shows an address, opening hours, a photo and a Google Map.",
       "pageSection": "Page Heading",
       "pageTitle": "Page Title",

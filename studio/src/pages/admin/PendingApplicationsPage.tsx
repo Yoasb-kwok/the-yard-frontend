@@ -263,8 +263,6 @@ export default function PendingApplicationsPage() {
           </button>
         </div>
 
-        <p className="text-sm text-gray-600">{t('admin.dashboard.pendingApplicationsHint')}</p>
-
         {apiError && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
             {apiError}

@@ -23,13 +23,11 @@ export default function AdminPrivacyPage() {
     <AdminSimpleSitePage
       pageKey="privacy"
       heading={t('admin.privacy.heading', '私隱政策')}
-      description={t(
-        'admin.privacy.description',
-        '編輯公開頁「私隱政策」(/privacy) 的標題與內容。儲存後會即時套用；未儲存前仍顯示語系檔的預設內容。'
-      )}
+      description=""
       fallbackTitle={fallbackTitle}
       fallbackContentHtml={fallbackContent}
-      titleLabel={t('admin.privacy.titleLabel', '頁面標題')}
+      showTitleField={false}
+      enableContentLanguageSwitch={true}
     />
   );
 }

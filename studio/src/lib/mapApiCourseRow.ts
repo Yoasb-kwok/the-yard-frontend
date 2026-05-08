@@ -34,7 +34,9 @@ export function courseItemHasVerifiedClasses(c: CourseItem): boolean {
  */
 export function mapApiCourseRowToCourseItem(row: Record<string, unknown>): CourseItem {
   const r = row as Record<string, any>;
-  const programCode = String(r.program_code ?? r.programCode ?? '').trim();
+  const programCode = String(
+    r.class_code ?? r.classCode ?? r.program_code ?? r.programCode ?? ''
+  ).trim();
   const rawId = r.id;
   const hasCatalogId = rawId != null && rawId !== '';
   const catalogId = hasCatalogId ? String(rawId) : '';

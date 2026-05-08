@@ -1,6 +1,6 @@
 /**
  * 獨立「關於我們」頁（/about）後台內容，API 離線時寫入 localStorage。
- * site_content 鍵名仍為 home-about（與後端一致）。
+ * 對應 API: GET /api/about, PATCH /api/admin/about.
  */
 
 export interface HomeAboutContent {

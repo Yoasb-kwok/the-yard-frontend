@@ -270,7 +270,6 @@ export default function AdminClassNoticePage() {
               ))}
             </select>
           </div>
-          <p className="text-sm text-gray-500">{t('admin.classNotice.multilangHint', '請輸入三種語言的通知內容，學生端將依其語言設定顯示。至少填寫一種。')}</p>
           <div className="space-y-3">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">繁體中文</label>

@@ -5,8 +5,8 @@
  *   GET    /api/faq                          → { title, intro, items: [...] }
  *
  * Admin:
- *   GET    /api/admin/faq/settings           → { title, intro, updated_at }
- *   PATCH  /api/admin/faq/settings           body: { title?, intro? }
+ *   GET    /api/admin/faq                    → { title, intro, updated_at }
+ *   PATCH  /api/admin/faq                    body: { title?, intro? }
  *   GET    /api/admin/faq/items              → all items including is_active=0
  *   POST   /api/admin/faq/items              body: { question, answer_html, is_active?, display_order? }
  *   PATCH  /api/admin/faq/items/:id          body: partial item fields
@@ -35,6 +35,19 @@ export interface FaqContent {
   items: FaqItem[];
 }
 
+export type FaqLocale = 'zh-TW' | 'zh-CN' | 'en';
+
+interface PackedFaqI18nValue {
+  schemaVersion: 1;
+  values: {
+    'zh-TW': string;
+    'zh-CN': string;
+    en: string;
+  };
+}
+
+const FAQ_I18N_PREFIX = '__FAQ_I18N__';
+
 function newClientId(): string {
   return `new-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -50,6 +63,87 @@ export function createEmptyFaqItem(): FaqItem {
 
 export function createDefaultFaqContent(): FaqContent {
   return { title: '', intro: '', items: [] };
+}
+
+function emptyPackedValues() {
+  return {
+    'zh-TW': '',
+    'zh-CN': '',
+    en: '',
+  };
+}
+
+function normalizeFaqLocale(lang?: string): FaqLocale {
+  if (!lang) return 'zh-TW';
+  if (lang === 'zh-CN' || lang.toLowerCase() === 'zh-cn') return 'zh-CN';
+  if (lang === 'en' || lang.toLowerCase().startsWith('en')) return 'en';
+  return 'zh-TW';
+}
+
+function parsePackedI18n(raw: string): PackedFaqI18nValue | null {
+  const value = raw.trim();
+  if (!value.startsWith(FAQ_I18N_PREFIX)) return null;
+  const jsonText = value.slice(FAQ_I18N_PREFIX.length).trim();
+  if (!jsonText) return null;
+  try {
+    const parsed = JSON.parse(jsonText) as Partial<PackedFaqI18nValue>;
+    if (!parsed || parsed.schemaVersion !== 1 || !parsed.values) return null;
+    return {
+      schemaVersion: 1,
+      values: {
+        'zh-TW': typeof parsed.values['zh-TW'] === 'string' ? parsed.values['zh-TW'] : '',
+        'zh-CN': typeof parsed.values['zh-CN'] === 'string' ? parsed.values['zh-CN'] : '',
+        en: typeof parsed.values.en === 'string' ? parsed.values.en : '',
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function stringifyPackedI18n(values: PackedFaqI18nValue['values']): string {
+  return `${FAQ_I18N_PREFIX}${JSON.stringify({ schemaVersion: 1, values })}`;
+}
+
+export function getFaqFieldForLocale(raw: string, lang?: string): string {
+  const packed = parsePackedI18n(raw || '');
+  if (!packed) return raw || '';
+  const locale = normalizeFaqLocale(lang);
+  if (packed.values[locale].trim()) return packed.values[locale];
+  if (packed.values['zh-TW'].trim()) return packed.values['zh-TW'];
+  if (packed.values['zh-CN'].trim()) return packed.values['zh-CN'];
+  if (packed.values.en.trim()) return packed.values.en;
+  return '';
+}
+
+export function getFaqFieldForLocaleExact(raw: string, lang?: string): string {
+  const locale = normalizeFaqLocale(lang);
+  const packed = parsePackedI18n(raw || '');
+  if (!packed) {
+    return locale === 'zh-TW' ? raw || '' : '';
+  }
+  return packed.values[locale] || '';
+}
+
+export function setFaqFieldForLocale(raw: string, lang: string, nextValue: string): string {
+  const locale = normalizeFaqLocale(lang);
+  const packed = parsePackedI18n(raw || '');
+  const values = packed ? { ...packed.values } : emptyPackedValues();
+  if (!packed && (raw || '').trim() !== '') {
+    values['zh-TW'] = raw;
+  }
+  values[locale] = nextValue;
+  return stringifyPackedI18n(values);
+}
+
+export function hasFaqFieldVisibleContent(raw: string): boolean {
+  const packed = parsePackedI18n(raw || '');
+  if (!packed) return (raw || '').trim() !== '';
+  return (
+    packed.values['zh-TW'].trim() !== '' ||
+    packed.values['zh-CN'].trim() !== '' ||
+    packed.values.en.trim() !== ''
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -162,7 +256,7 @@ export const loadFaqContent = loadPublicFaq;
 
 export async function loadAdminFaq(): Promise<FaqContent> {
   const [settingsRes, itemsRes] = await Promise.all([
-    api.get('/admin/faq/settings'),
+    api.get('/admin/faq'),
     api.get<unknown[]>('/admin/faq/items'),
   ]);
 
@@ -216,7 +310,7 @@ function extractId(res: { data?: unknown; id?: unknown; insertId?: unknown }): n
  */
 export async function saveAdminFaq(current: FaqContent): Promise<FaqContent> {
   // 1. Settings
-  const settingsRes = await api.patch('/admin/faq/settings', {
+  const settingsRes = await api.patch('/admin/faq', {
     title: current.title.trim(),
     intro: current.intro.trim(),
   });

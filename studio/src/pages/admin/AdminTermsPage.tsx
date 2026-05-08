@@ -22,14 +22,12 @@ export default function AdminTermsPage() {
   return (
     <AdminSimpleSitePage
       pageKey="terms"
-      heading={t('admin.terms.heading', '條款與細則')}
-      description={t(
-        'admin.terms.description',
-        '編輯公開頁「條款與細則」(/terms) 的標題與內容。儲存後會即時套用；未儲存前仍顯示語系檔的預設內容。'
-      )}
+      heading={t('admin.terms.heading', '條款細則')}
+      description=""
       fallbackTitle={fallbackTitle}
       fallbackContentHtml={fallbackContent}
-      titleLabel={t('admin.terms.titleLabel', '頁面標題')}
+      showTitleField={false}
+      enableContentLanguageSwitch={true}
     />
   );
 }

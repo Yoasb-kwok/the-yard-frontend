@@ -262,9 +262,6 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <p className="text-sm text-gray-500">
-          {t('admin.dashboard.useSidebarHint')}
-        </p>
       </div>
     </Layout>
   );

@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { Save, Plus, Trash2, Upload, ArrowUp, ArrowDown, MapPin } from 'lucide-react';
+import { Save, Plus, Trash2, ArrowUp, ArrowDown, MapPin } from 'lucide-react';
 import {
+  branchHasVisibleText,
   buildMapEmbedUrl,
   createDefaultContactContent,
   createEmptyBranch,
+  getContactFieldForLocaleExact,
   loadAdminContact,
   saveAdminContact,
   type ContactBranch,
   type ContactContent,
+  type ContactLocale,
+  setContactFieldForLocale,
 } from '../../lib/contactContent';
 import { resolveUploadUrl, uploadImage } from '../../lib/uploads';
 import { isLikelyImageFile } from '../../lib/imagePrepare';
@@ -20,6 +24,7 @@ const MAX_IMAGE_MB = 40;
 export default function AdminContactPage() {
   const { t } = useTranslation();
   const [content, setContent] = useState<ContactContent>(() => createDefaultContactContent());
+  const [branchLangs, setBranchLangs] = useState<Record<string, ContactLocale>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -40,15 +45,32 @@ export default function AdminContactPage() {
     }
   }
 
-  function updateField<K extends keyof ContactContent>(key: K, value: ContactContent[K]) {
-    setContent((prev) => ({ ...prev, [key]: value }));
-  }
-
   function updateBranch(index: number, patch: Partial<ContactBranch>) {
     setContent((prev) => ({
       ...prev,
       branches: prev.branches.map((b, i) => (i === index ? { ...b, ...patch } : b)),
     }));
+  }
+
+  function getBranchLang(branchId: ContactBranch['id']): ContactLocale {
+    return branchLangs[String(branchId)] ?? 'zh-TW';
+  }
+
+  function switchBranchLang(branchId: ContactBranch['id'], lang: ContactLocale) {
+    setBranchLangs((prev) => ({ ...prev, [String(branchId)]: lang }));
+  }
+
+  function updateBranchLocalizedText(
+    index: number,
+    field: 'name' | 'address' | 'hours',
+    nextValue: string
+  ) {
+    const branch = content.branches[index];
+    if (!branch) return;
+    const lang = getBranchLang(branch.id);
+    updateBranch(index, {
+      [field]: setContactFieldForLocale(branch[field], lang, nextValue),
+    } as Partial<ContactBranch>);
   }
 
   function addBranch() {
@@ -102,9 +124,7 @@ export default function AdminContactPage() {
   }
 
   async function handleSave() {
-    const hasEmptyBranch = content.branches.some(
-      (b) => !b.name.trim() && !b.address.trim() && !b.hours.trim() && !b.map_query.trim() && !b.image_url
-    );
+    const hasEmptyBranch = content.branches.some((b) => !branchHasVisibleText(b));
     if (hasEmptyBranch) {
       const confirmed = window.confirm(
         t(
@@ -145,63 +165,8 @@ export default function AdminContactPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
               <MapPin className="h-7 w-7 text-primary" />
-              {t('admin.contact.title', 'Contact Page')}
+              {t('admin.contact.title', '聯絡我們')}
             </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              {t(
-                'admin.contact.subtitle',
-                'Manage branches shown on the public Contact page. Each branch displays an address, opening hours, photo and Google Map.'
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="w-full sm:w-auto bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark flex items-center justify-center disabled:opacity-60"
-          >
-            <Save className="h-5 w-5 mr-2" />
-            {saving
-              ? t('admin.settings.saving', 'Saving...')
-              : t('admin.contact.saveChanges', 'Save Changes')}
-          </button>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 space-y-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            {t('admin.contact.pageSection', 'Page Heading')}
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('admin.contact.pageTitle', 'Page Title')}
-              </label>
-              <input
-                type="text"
-                value={content.title}
-                onChange={(e) => updateField('title', e.target.value)}
-                placeholder={t('contact.title', 'Contact Us')}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              <p className="mt-1 text-xs text-gray-500">
-                {t('admin.contact.pageTitleHint', 'Leave empty to use the default translation.')}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('admin.contact.pageIntro', 'Intro Text')}
-              </label>
-              <input
-                type="text"
-                value={content.intro}
-                onChange={(e) => updateField('intro', e.target.value)}
-                placeholder={t(
-                  'admin.contact.pageIntroPlaceholder',
-                  'Short message shown above the branch list (optional)'
-                )}
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-            </div>
           </div>
         </div>
 
@@ -211,12 +176,6 @@ export default function AdminContactPage() {
               <h2 className="text-lg font-semibold text-gray-900">
                 {t('admin.contact.branchesSection', 'Branches')}
               </h2>
-              <p className="text-sm text-gray-600">
-                {t(
-                  'admin.contact.branchesHint',
-                  'Each card corresponds to one branch displayed on the public page.'
-                )}
-              </p>
             </div>
             <button
               type="button"
@@ -235,7 +194,12 @@ export default function AdminContactPage() {
           ) : (
             <div className="space-y-6">
               {content.branches.map((branch, index) => {
-                const embedUrl = buildMapEmbedUrl(branch.map_query);
+                const activeLang = getBranchLang(branch.id);
+                const branchName = getContactFieldForLocaleExact(branch.name, activeLang);
+                const branchAddress = getContactFieldForLocaleExact(branch.address, activeLang);
+                const branchHours = getContactFieldForLocaleExact(branch.hours, activeLang);
+                const branchMap = getContactFieldForLocaleExact(branch.map_query, activeLang);
+                const embedUrl = buildMapEmbedUrl(branchMap);
                 return (
                   <div
                     key={branch.id}
@@ -246,11 +210,24 @@ export default function AdminContactPage() {
                         <p className="text-sm font-semibold text-gray-800">
                           {t('admin.contact.branchNumber', 'Branch {{n}}', { n: index + 1 })}
                         </p>
-                        {branch.name.trim() && (
-                          <p className="text-xs text-gray-500 mt-0.5">{branch.name.trim()}</p>
-                        )}
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex items-center rounded-md border border-gray-200 p-0.5 bg-white">
+                          {(['zh-TW', 'zh-CN', 'en'] as const).map((lang) => (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => switchBranchLang(branch.id, lang)}
+                              className={`px-2.5 py-1 text-xs rounded ${
+                                activeLang === lang
+                                  ? 'bg-primary text-white'
+                                  : 'text-gray-600 hover:bg-gray-100'
+                              }`}
+                            >
+                              {lang === 'zh-TW' ? '繁中' : lang === 'zh-CN' ? '简中' : 'EN'}
+                            </button>
+                          ))}
+                        </div>
                         <button
                           type="button"
                           onClick={() => moveBranch(index, -1)}
@@ -290,8 +267,8 @@ export default function AdminContactPage() {
                           </label>
                           <input
                             type="text"
-                            value={branch.name}
-                            onChange={(e) => updateBranch(index, { name: e.target.value })}
+                            value={branchName}
+                            onChange={(e) => updateBranchLocalizedText(index, 'name', e.target.value)}
                             placeholder={t(
                               'admin.contact.branchNamePlaceholder',
                               'e.g. San Po Kong HQ'
@@ -306,8 +283,10 @@ export default function AdminContactPage() {
                           </label>
                           <textarea
                             rows={3}
-                            value={branch.address}
-                            onChange={(e) => updateBranch(index, { address: e.target.value })}
+                            value={branchAddress}
+                            onChange={(e) =>
+                              updateBranchLocalizedText(index, 'address', e.target.value)
+                            }
                             placeholder={t(
                               'admin.contact.branchAddressPlaceholder',
                               'Full address (supports multiple lines)'
@@ -322,8 +301,8 @@ export default function AdminContactPage() {
                           </label>
                           <textarea
                             rows={3}
-                            value={branch.hours}
-                            onChange={(e) => updateBranch(index, { hours: e.target.value })}
+                            value={branchHours}
+                            onChange={(e) => updateBranchLocalizedText(index, 'hours', e.target.value)}
                             placeholder={t(
                               'admin.contact.branchHoursPlaceholder',
                               'e.g.\nMon–Fri: 4pm – 11pm\nSat, Sun & Public Holiday: 12nn – 11pm'
@@ -338,20 +317,22 @@ export default function AdminContactPage() {
                           </label>
                           <input
                             type="text"
-                            value={branch.map_query}
-                            onChange={(e) => updateBranch(index, { map_query: e.target.value })}
+                            value={branchMap}
+                            onChange={(e) =>
+                              updateBranch(index, {
+                                map_query: setContactFieldForLocale(
+                                  branch.map_query,
+                                  activeLang,
+                                  e.target.value
+                                ),
+                              })
+                            }
                             placeholder={t(
                               'admin.contact.branchMapPlaceholder',
                               'Google Maps embed URL, share URL, or plain address'
                             )}
                             className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                           />
-                          <p className="mt-1 text-xs text-gray-500">
-                            {t(
-                              'admin.contact.branchMapHint',
-                              'Accepts an iframe embed URL, a google.com/maps share link, or a plain-text address.'
-                            )}
-                          </p>
                         </div>
                       </div>
 
@@ -360,35 +341,31 @@ export default function AdminContactPage() {
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             {t('admin.contact.branchImage', 'Branch Photo')}
                           </label>
-                          <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white overflow-hidden flex items-center justify-center h-48">
+                          <label className="rounded-xl border-2 border-dashed border-gray-200 bg-white overflow-hidden flex items-center justify-center h-48 cursor-pointer hover:border-primary transition-colors">
                             {branch.image_url ? (
                               <img
                                 src={resolveUploadUrl(branch.image_url)}
-                                alt={branch.name || t('admin.contact.branchImage', 'Branch Photo')}
+                                alt={branchName || t('admin.contact.branchImage', 'Branch Photo')}
                                 className="w-full h-full object-cover"
                               />
                             ) : (
                               <span className="text-xs text-gray-400 px-2 text-center">
-                                {t('admin.contact.noImage', 'No image uploaded')}
+                                {t('admin.contact.clickToUploadImage', '點擊上載相片')}
                               </span>
                             )}
-                          </div>
+                            <input
+                              type="file"
+                              accept="image/*,.heic,.heif,.avif"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const input = e.currentTarget;
+                                const file = input.files?.[0] || null;
+                                await handleBranchImage(index, file);
+                                input.value = '';
+                              }}
+                            />
+                          </label>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary rounded cursor-pointer hover:bg-primary-dark">
-                              <Upload className="h-3.5 w-3.5" />
-                              {t('admin.contact.uploadImage', 'Upload')}
-                              <input
-                                type="file"
-                                accept="image/*,.heic,.heif,.avif"
-                                className="hidden"
-                                onChange={async (e) => {
-                                  const input = e.currentTarget;
-                                  const file = input.files?.[0] || null;
-                                  await handleBranchImage(index, file);
-                                  input.value = '';
-                                }}
-                              />
-                            </label>
                             {branch.image_url && (
                               <button
                                 type="button"
@@ -400,13 +377,6 @@ export default function AdminContactPage() {
                               </button>
                             )}
                           </div>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {t(
-                              'admin.contact.imageHint',
-                              'JPG/PNG/WebP/HEIC 等；大圖會先自動壓縮再上傳（原檔建議 {{size}} MB 以內）。',
-                              { size: MAX_IMAGE_MB }
-                            )}
-                          </p>
                         </div>
 
                         <div>

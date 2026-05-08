@@ -47,6 +47,13 @@ export function setCourseIntroOverrides(courseId: string, overrides: CourseIntro
   setStored(all);
 }
 
+export function deleteCourseIntroOverrides(courseId: string): void {
+  const all = getStored();
+  if (!(courseId in all)) return;
+  delete all[courseId];
+  setStored(all);
+}
+
 export function getForLocale<T extends string | undefined>(
   zhTw: T,
   zhCn: T,

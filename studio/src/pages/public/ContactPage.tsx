@@ -4,7 +4,9 @@ import PublicLayout from '../../components/PublicLayout';
 import { Mail, MapPin, Facebook, Instagram, Clock } from 'lucide-react';
 import building1Image from '../../assets/images/building1.jpg';
 import {
+  branchHasVisibleText,
   buildMapEmbedUrl,
+  getContactFieldForLocale,
   loadPublicContact,
   type ContactBranch,
   type ContactContent,
@@ -35,9 +37,7 @@ export default function ContactPage() {
   }, [i18n.language]);
 
   const branches = useMemo<ContactBranch[]>(() => {
-    const branchesFromApi = content?.branches?.filter((b) =>
-      [b.name, b.address, b.hours, b.map_query].some((s) => (s ?? '').trim() !== '') || b.image_url
-    );
+    const branchesFromApi = content?.branches?.filter((b) => branchHasVisibleText(b));
     if (branchesFromApi && branchesFromApi.length > 0) return branchesFromApi;
 
     return [
@@ -83,7 +83,7 @@ export default function ContactPage() {
 
         <div className="space-y-10">
           {branches.map((branch) => (
-            <BranchCard key={branch.id} branch={branch} t={t} />
+            <BranchCard key={branch.id} branch={branch} t={t} lang={i18n.language} />
           ))}
         </div>
 
@@ -122,13 +122,14 @@ export default function ContactPage() {
 interface BranchCardProps {
   branch: ContactBranch;
   t: (key: string, fallback?: string) => string;
+  lang: string;
 }
 
-function BranchCard({ branch, t }: BranchCardProps) {
-  const embedUrl = buildMapEmbedUrl(branch.map_query);
-  const address = branch.address.trim();
-  const hours = branch.hours.trim();
-  const name = branch.name.trim();
+function BranchCard({ branch, t, lang }: BranchCardProps) {
+  const embedUrl = buildMapEmbedUrl(getContactFieldForLocale(branch.map_query, lang));
+  const address = getContactFieldForLocale(branch.address, lang).trim();
+  const hours = getContactFieldForLocale(branch.hours, lang).trim();
+  const name = getContactFieldForLocale(branch.name, lang).trim();
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">

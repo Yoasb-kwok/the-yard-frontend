@@ -15,6 +15,30 @@ interface NewsPost {
   published_at: string;
 }
 
+function pickTextByLang(
+  row: any,
+  lang: 'zh-TW' | 'zh-CN' | 'en',
+  kind: 'title' | 'content'
+): string {
+  const byLang =
+    lang === 'zh-TW'
+      ? row?.[`${kind}_zh_tw`]
+      : lang === 'zh-CN'
+      ? row?.[`${kind}_zh_cn`]
+      : row?.[`${kind}_en`];
+  return byLang || row?.[kind] || '';
+}
+
+function toNewsPost(row: any, lang: 'zh-TW' | 'zh-CN' | 'en'): NewsPost {
+  return {
+    id: String(row?.id ?? ''),
+    title: pickTextByLang(row, lang, 'title'),
+    content: pickTextByLang(row, lang, 'content'),
+    image_url: row?.image_url ?? row?.imageUrl ?? null,
+    published_at: row?.published_at || row?.created_at || new Date().toISOString(),
+  };
+}
+
 export default function NewsPage() {
   const { t, i18n } = useTranslation();
   const [posts, setPosts] = useState<NewsPost[]>([]);
@@ -26,11 +50,13 @@ export default function NewsPage() {
 
   async function loadNews() {
     setLoading(true);
+    const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
     try {
-      const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
-      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }[]>('/news', { lang });
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        setPosts(res.data.map((p) => ({ id: p.id, title: p.title, content: p.content, image_url: p.image_url, published_at: p.published_at })));
+      const res = await api.get<any[]>('/news', { lang, _t: Date.now() });
+      if (res.success && Array.isArray(res.data)) {
+        const rows = res.data.map((p) => toNewsPost(p, lang));
+        rows.sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
+        setPosts(rows);
         setLoading(false);
         return;
       }

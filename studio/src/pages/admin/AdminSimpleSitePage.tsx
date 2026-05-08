@@ -5,9 +5,12 @@ import 'react-quill/dist/quill.snow.css';
 import Layout from '../../components/Layout';
 import { Save } from 'lucide-react';
 import {
+  getSitePageContentForLocaleExact,
   loadSimpleSitePage,
   saveSimpleSitePage,
+  setSitePageContentForLocale,
   type SimpleSitePageContent,
+  type SitePageLocale,
 } from '../../lib/sitePageContent';
 
 interface Props {
@@ -23,6 +26,10 @@ interface Props {
   fallbackContentHtml: string;
   /** Optional label for the title input */
   titleLabel?: string;
+  /** Whether to show the editable title input (default: true). */
+  showTitleField?: boolean;
+  /** Enable one-click language switching for content editor. */
+  enableContentLanguageSwitch?: boolean;
 }
 
 /**
@@ -36,12 +43,15 @@ export default function AdminSimpleSitePage({
   fallbackTitle,
   fallbackContentHtml,
   titleLabel,
+  showTitleField = true,
+  enableContentLanguageSwitch = false,
 }: Props) {
   const { t } = useTranslation();
   const [title, setTitle] = useState('');
   const [contentHtml, setContentHtml] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeLang, setActiveLang] = useState<SitePageLocale>('zh-TW');
 
   const quillModules = useMemo(
     () => ({
@@ -83,7 +93,7 @@ export default function AdminSimpleSitePage({
 
   async function handleSave() {
     const trimmedTitle = title.trim();
-    if (!trimmedTitle) {
+    if (showTitleField && !trimmedTitle) {
       alert(
         t(
           'admin.sitePage.missingTitle',
@@ -94,7 +104,7 @@ export default function AdminSimpleSitePage({
     }
     setSaving(true);
     const payload: SimpleSitePageContent = {
-      title: trimmedTitle,
+      title: (trimmedTitle || fallbackTitle).trim(),
       contentHtml,
     };
     try {
@@ -123,40 +133,67 @@ export default function AdminSimpleSitePage({
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">{heading}</h1>
-          <p className="mt-1 text-sm text-gray-600">{description}</p>
+          {description.trim() !== '' && <p className="mt-1 text-sm text-gray-600">{description}</p>}
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {titleLabel || t('admin.sitePage.pageTitle', '頁面標題')}
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
+          {showTitleField && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {titleLabel || t('admin.sitePage.pageTitle', '頁面標題')}
+              </label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+          )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              {t('admin.sitePage.body', '頁面內容')}
-            </label>
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-gray-700">
+                {t('admin.sitePage.body', '頁面內容')}
+              </label>
+              {enableContentLanguageSwitch && (
+                <div className="inline-flex items-center rounded-md border border-gray-200 p-0.5 bg-white">
+                  {(['zh-TW', 'zh-CN', 'en'] as const).map((lang) => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setActiveLang(lang)}
+                      className={`px-2.5 py-1 text-xs rounded ${
+                        activeLang === lang
+                          ? 'bg-primary text-white'
+                          : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {lang === 'zh-TW' ? '繁中' : lang === 'zh-CN' ? '简中' : 'EN'}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="site-content-quill border border-gray-200 rounded-md overflow-hidden bg-white">
               <ReactQuill
+                key={enableContentLanguageSwitch ? activeLang : 'default'}
                 theme="snow"
-                value={contentHtml}
-                onChange={setContentHtml}
+                value={
+                  enableContentLanguageSwitch
+                    ? getSitePageContentForLocaleExact(contentHtml, activeLang)
+                    : contentHtml
+                }
+                onChange={(value) => {
+                  if (!enableContentLanguageSwitch) {
+                    setContentHtml(value);
+                    return;
+                  }
+                  setContentHtml((prev) => setSitePageContentForLocale(prev, activeLang, value));
+                }}
                 modules={quillModules}
               />
             </div>
-            <p className="mt-2 text-xs text-gray-500">
-              {t(
-                'admin.sitePage.bodyHint',
-                '可使用粗體、斜體、標題、清單、連結等格式。儲存後即時套用到公開頁。'
-              )}
-            </p>
           </div>
 
           <div className="pt-2">

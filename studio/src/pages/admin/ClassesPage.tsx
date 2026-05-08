@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, type ReactNode } from 'react';
+import { useEffect, useState, useMemo, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
@@ -39,6 +39,41 @@ interface Class {
   postponed_from?: string | null;
   /** 出席名單是否已確認 */
   attendance_confirmed?: boolean;
+}
+
+function getClassNameByLang(raw: any, lang: 'zh_tw' | 'zh_cn' | 'en'): string | undefined {
+  const suffix = lang === 'zh_tw' ? 'zh_tw' : lang === 'zh_cn' ? 'zh_cn' : 'en';
+  const fromName = raw?.[`name_${suffix}`];
+  const fromClassName = raw?.[`class_name_${suffix}`];
+  if (typeof fromName === 'string' && fromName.trim() !== '') return fromName;
+  if (typeof fromClassName === 'string' && fromClassName.trim() !== '') return fromClassName;
+  return undefined;
+}
+
+function buildClassNamePayload(form: {
+  name_zh_tw: string;
+  name_zh_cn: string;
+  name_en: string;
+}) {
+  const zhTw = form.name_zh_tw.trim() || undefined;
+  const zhCn = form.name_zh_cn.trim() || undefined;
+  const en = form.name_en.trim() || undefined;
+  return {
+    name_zh_tw: zhTw,
+    name_zh_cn: zhCn,
+    name_en: en,
+    class_name_zh_tw: zhTw,
+    class_name_zh_cn: zhCn,
+    class_name_en: en,
+  };
+}
+
+function buildClassCodePayload(classCode: string) {
+  const normalized = classCode.trim();
+  return {
+    program_code: normalized,
+    class_code: normalized,
+  };
 }
 
 interface Instructor {
@@ -182,6 +217,7 @@ export default function ClassesPage() {
     enrollments: Enrollment[];
   } | null>(null);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const backdropMouseDownRef = useRef(false);
 
   useEffect(() => {
     loadClasses();
@@ -249,36 +285,45 @@ export default function ClassesPage() {
   async function loadClasses() {
     try {
       setLoading(true);
-      const response = await api.get<Class[]>('/admin/classes?demo=1').catch(() => ({ success: true, data: FALLBACK_CLASSES }));
-      if (response.success && response.data) {
-        const transformedClasses: Class[] = response.data.map((cls: any) => ({
-          id: cls.id?.toString() ?? cls.id,
-          name: cls.name ?? '',
-          name_zh_tw: cls.name_zh_tw ?? cls.name,
-          name_zh_cn: cls.name_zh_cn,
-          name_en: cls.name_en,
-          class_code: cls.program_code ?? cls.class_code ?? '',
-          lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
-          instructor: cls.instructor || '',
-          substitute_instructor: cls.substitute_instructor ?? null,
-          start_time: cls.start_time,
-          end_time: cls.end_time,
-          capacity: cls.capacity ?? 10,
-          enrolled_count: cls.enrolled_count ?? 0,
-          is_internal: cls.is_internal === 1 || cls.is_internal === true,
-          is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
-          allow_trial: cls.allow_trial === 1 || cls.allow_trial === true,
-          location: cls.location,
-          level: cls.level,
-          age_tag: cls.age_group ?? cls.age_tag,
-          tag_values: extractClassTagValues(cls),
-          postponed_from: cls.postponed_from ?? null,
-          attendance_confirmed: cls.attendance_confirmed === 1 || cls.attendance_confirmed === true,
-        }));
-        setClasses(transformedClasses);
-      } else {
-        setClasses(FALLBACK_CLASSES);
+      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
+      let rows: any[] = [];
+      for (const endpoint of endpoints) {
+        try {
+          const response = await api.get<any[]>(endpoint);
+          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+            rows = response.data;
+            break;
+          }
+        } catch {
+          // Try next endpoint.
+        }
       }
+      const sourceRows = rows.length > 0 ? rows : FALLBACK_CLASSES;
+      const transformedClasses: Class[] = sourceRows.map((cls: any) => ({
+        id: cls.id?.toString() ?? cls.id,
+        name: cls.name ?? cls.class_name ?? '',
+        name_zh_tw: getClassNameByLang(cls, 'zh_tw') ?? cls.class_name ?? cls.name,
+        name_zh_cn: getClassNameByLang(cls, 'zh_cn'),
+        name_en: getClassNameByLang(cls, 'en'),
+        class_code: cls.class_code ?? cls.program_code ?? '',
+        lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
+        instructor: cls.instructor || '',
+        substitute_instructor: cls.substitute_instructor ?? null,
+        start_time: cls.start_time,
+        end_time: cls.end_time,
+        capacity: cls.capacity ?? 10,
+        enrolled_count: cls.enrolled_count ?? 0,
+        is_internal: cls.is_internal === 1 || cls.is_internal === true,
+        is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
+        allow_trial: cls.allow_trial === 1 || cls.allow_trial === true,
+        location: cls.location,
+        level: cls.level,
+        age_tag: cls.age_group ?? cls.age_tag,
+        tag_values: extractClassTagValues(cls),
+        postponed_from: cls.postponed_from ?? null,
+        attendance_confirmed: cls.attendance_confirmed === 1 || cls.attendance_confirmed === true,
+      }));
+      setClasses(transformedClasses);
     } catch (error) {
       console.error('Error loading classes:', error);
       setClasses(FALLBACK_CLASSES);
@@ -289,17 +334,28 @@ export default function ClassesPage() {
 
   async function loadInstructors() {
     try {
-      const response = await api.get<{ id: string; name: string; profile_image_url: string | null; created_at: string }[]>('admin/instructors?demo=1').catch(() => ({ success: true, data: FALLBACK_INSTRUCTORS }));
-      if (response.success && Array.isArray(response.data)) {
-        setInstructors(response.data.map((inst: any) => ({
+      const endpoints = ['admin/instructors', 'admin/instructors?demo=1'];
+      let rows: any[] = [];
+      for (const endpoint of endpoints) {
+        try {
+          const response = await api.get<any[]>(endpoint);
+          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
+            rows = response.data;
+            break;
+          }
+        } catch {
+          // Try next endpoint.
+        }
+      }
+      const sourceRows = rows.length > 0 ? rows : FALLBACK_INSTRUCTORS;
+      setInstructors(
+        sourceRows.map((inst: any) => ({
           id: String(inst.id),
           name: inst.name || '',
           profile_image_url: inst.profile_image_url ?? null,
           created_at: inst.created_at || new Date().toISOString(),
-        })));
-      } else {
-        setInstructors(FALLBACK_INSTRUCTORS);
-      }
+        }))
+      );
     } catch (error) {
       console.error('Error loading instructors:', error);
       setInstructors(FALLBACK_INSTRUCTORS);
@@ -533,7 +589,7 @@ export default function ClassesPage() {
 
   function openEditModal(classItem: Class) {
     setEditingClass(classItem);
-    setEditAllRepeats(false);
+    setEditAllRepeats(true);
     setForm({
       name: classItem.name,
       name_zh_tw: classItem.name_zh_tw ?? classItem.name ?? '',
@@ -632,10 +688,8 @@ export default function ClassesPage() {
             const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
             const updateData = {
               name: nameForApi,
-              name_zh_tw: form.name_zh_tw.trim() || undefined,
-              name_zh_cn: form.name_zh_cn.trim() || undefined,
-              name_en: form.name_en.trim() || undefined,
-              program_code: form.class_code,
+              ...buildClassNamePayload(form),
+              ...buildClassCodePayload(form.class_code),
               instructor: form.instructor,
               substitute_instructor: form.substitute_instructor || null,
               start_time: formatDateAsLocalDateTime(newClassStart),
@@ -664,10 +718,8 @@ export default function ClassesPage() {
           const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
           const updateData = {
             name: nameForApi,
-            name_zh_tw: form.name_zh_tw.trim() || undefined,
-            name_zh_cn: form.name_zh_cn.trim() || undefined,
-            name_en: form.name_en.trim() || undefined,
-            program_code: form.class_code,
+            ...buildClassNamePayload(form),
+            ...buildClassCodePayload(form.class_code),
             instructor: form.instructor,
             substitute_instructor: form.substitute_instructor || null,
             start_time: startISO,
@@ -688,10 +740,13 @@ export default function ClassesPage() {
             const updatedClass: Class = {
               id: response.data.id.toString(),
               name: response.data.name ?? nameForApi,
-              name_zh_tw: response.data.name_zh_tw ?? (form.name_zh_tw.trim() || undefined),
-              name_zh_cn: response.data.name_zh_cn ?? (form.name_zh_cn.trim() || undefined),
-              name_en: response.data.name_en ?? (form.name_en.trim() || undefined),
-              class_code: response.data.program_code || '',
+              name_zh_tw:
+                getClassNameByLang(response.data, 'zh_tw') ?? (form.name_zh_tw.trim() || undefined),
+              name_zh_cn:
+                getClassNameByLang(response.data, 'zh_cn') ?? (form.name_zh_cn.trim() || undefined),
+              name_en:
+                getClassNameByLang(response.data, 'en') ?? (form.name_en.trim() || undefined),
+              class_code: response.data.class_code || response.data.program_code || '',
               instructor: response.data.instructor || '',
               substitute_instructor: response.data.substitute_instructor || null,
               start_time: response.data.start_time,
@@ -769,13 +824,11 @@ export default function ClassesPage() {
           end_time: endTimeOfDay,
           number_of_lessons: total,
           name: nameForApi,
-          name_zh_tw: form.name_zh_tw.trim() || undefined,
-          name_zh_cn: form.name_zh_cn.trim() || undefined,
-          name_en: form.name_en.trim() || undefined,
+          ...buildClassNamePayload(form),
           instructor: form.instructor,
           capacity: form.capacity,
           location: form.location,
-          program_code: form.class_code || undefined,
+          ...buildClassCodePayload(form.class_code || ''),
           level: selectedLevelCode,
           age_group: selectedAgeTagCode,
           tag_values: form.tag_values,
@@ -787,7 +840,10 @@ export default function ClassesPage() {
           createdClasses.push({
             id: String(c.id),
             name: c.name,
-            class_code: c.program_code || '',
+            name_zh_tw: getClassNameByLang(c, 'zh_tw'),
+            name_zh_cn: getClassNameByLang(c, 'zh_cn'),
+            name_en: getClassNameByLang(c, 'en'),
+            class_code: c.class_code || c.program_code || '',
             lesson_number: c.lesson_number != null ? Number(c.lesson_number) : null,
             instructor: c.instructor,
             substitute_instructor: null,
@@ -861,16 +917,14 @@ export default function ClassesPage() {
       const nameForApi = form.name_zh_tw.trim() || form.name_zh_cn.trim() || form.name_en.trim() || form.name.trim();
       const classData = {
         name: nameForApi,
-        name_zh_tw: form.name_zh_tw.trim() || undefined,
-        name_zh_cn: form.name_zh_cn.trim() || undefined,
-        name_en: form.name_en.trim() || undefined,
+        ...buildClassNamePayload(form),
         instructor: form.instructor,
         date: adjustedDateStr,
         start_time: adjustedStartTimeStr,
         end_time: adjustedEndTimeStr,
         capacity: form.capacity,
         location: form.location,
-        program_code: form.class_code,
+        ...buildClassCodePayload(form.class_code),
         level: selectedLevelCode,
         age_group: selectedAgeTagCode,
         tag_values: form.tag_values,
@@ -886,7 +940,10 @@ export default function ClassesPage() {
           const createdClass: Class = {
             id: response.data.id.toString(),
             name: response.data.name,
-            class_code: response.data.program_code || '',
+            name_zh_tw: getClassNameByLang(response.data, 'zh_tw'),
+            name_zh_cn: getClassNameByLang(response.data, 'zh_cn'),
+            name_en: getClassNameByLang(response.data, 'en'),
+            class_code: response.data.class_code || response.data.program_code || '',
             instructor: response.data.instructor || '',
             substitute_instructor: null,
             start_time: response.data.start_time,
@@ -958,7 +1015,10 @@ export default function ClassesPage() {
         const updatedClass: Class = {
           id: response.data.id.toString(),
           name: response.data.name,
-          class_code: response.data.program_code || '',
+          name_zh_tw: getClassNameByLang(response.data, 'zh_tw'),
+          name_zh_cn: getClassNameByLang(response.data, 'zh_cn'),
+          name_en: getClassNameByLang(response.data, 'en'),
+          class_code: response.data.class_code || response.data.program_code || '',
           instructor: response.data.instructor || '',
           substitute_instructor: response.data.substitute_instructor || null,
           start_time: response.data.start_time,
@@ -2077,10 +2137,14 @@ export default function ClassesPage() {
       {showModal && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onMouseDown={(e) => {
+            backdropMouseDownRef.current = e.target === e.currentTarget;
+          }}
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
+            if (backdropMouseDownRef.current && e.target === e.currentTarget) {
               setShowModal(false);
             }
+            backdropMouseDownRef.current = false;
           }}
         >
           <div className="bg-white rounded-lg max-w-md w-full mx-4 flex flex-col max-h-[90vh]">
@@ -2122,7 +2186,6 @@ export default function ClassesPage() {
                 </div>
               )}
               <form onSubmit={handleSubmit} className="space-y-4" id="class-form">
-              <p className="text-xs text-gray-500">{t('admin.classes.classNameMultilangHint', '請輸入三種語言的課程名稱，前台將依使用者語言顯示。至少填寫一種。')}</p>
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">繁體中文</label>
                 <input
@@ -2193,7 +2256,6 @@ export default function ClassesPage() {
                       <option key={inst.id} value={inst.name}>{inst.name}</option>
                     ))}
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">{t('admin.classes.substituteInstructorHint')}</p>
                 </div>
               )}
               {formTagTypes.map((tt) => {
@@ -2203,11 +2265,11 @@ export default function ClassesPage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">{getTagTypeLabel(tt.code)}</label>
                     <select
                       required={tt.code === 'level' || tt.code === 'age'}
-                      value={form.tag_values[tt.code] ?? ''}
+                      value={form.tag_values?.[tt.code] ?? ''}
                       onChange={(e) =>
-                        setForm({
-                          ...form,
-                          level: tt.code === 'level' ? (e.target.value as CourseLevel) : form.level,
+                        setForm((prev) => ({
+                          ...prev,
+                          level: tt.code === 'level' ? (e.target.value as CourseLevel) : prev.level,
                           ...(tt.code === 'age'
                             ? (() => {
                                 const parsed = parseAgeRange(e.target.value);
@@ -2215,10 +2277,10 @@ export default function ClassesPage() {
                               })()
                             : {}),
                           tag_values: {
-                            ...form.tag_values,
+                            ...(prev.tag_values ?? {}),
                             [tt.code]: e.target.value,
                           },
-                        })
+                        }))
                       }
                       className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     >
@@ -2241,7 +2303,6 @@ export default function ClassesPage() {
                   className="w-full min-h-[48px] text-base touch-manipulation"
                   ariaLabel={t('admin.classes.firstLessonDate')}
                 />
-                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.firstLessonDateHint')}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.startTime')}</label>
@@ -2272,7 +2333,6 @@ export default function ClassesPage() {
                     ))}
                   </select>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.startTimeHint')}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.endTime')}</label>
@@ -2303,7 +2363,6 @@ export default function ClassesPage() {
                     ))}
                   </select>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.endTimeHint')}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.capacity')}</label>
@@ -2335,8 +2394,8 @@ export default function ClassesPage() {
                   <input
                     type="checkbox"
                     id="repeat_weekly"
-                    checked={form.repeat_weekly}
-                    onChange={(e) => setForm({ ...form, repeat_weekly: e.target.checked })}
+                    checked={!!form.repeat_weekly}
+                    onChange={(e) => setForm((prev) => ({ ...prev, repeat_weekly: e.target.checked }))}
                     className="h-4 w-4 text-primary focus:ring-primary border-gray-300 rounded"
                   />
                   <label htmlFor="repeat_weekly" className="ml-2 text-sm text-gray-700">
@@ -2344,19 +2403,23 @@ export default function ClassesPage() {
                   </label>
                 </div>
               )}
-              {form.repeat_weekly && !editingClass && (
+              {!!form.repeat_weekly && !editingClass && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.totalLessons')}</label>
                   <input
                     type="number"
                     min={1}
                     max={99}
-                    required={form.repeat_weekly}
-                    value={form.total_lessons}
-                    onChange={(e) => setForm({ ...form, total_lessons: Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)) })}
+                    required={!!form.repeat_weekly}
+                    value={Number.isFinite(Number(form.total_lessons)) ? Number(form.total_lessons) : 1}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        total_lessons: Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)),
+                      }))
+                    }
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   />
-                  <p className="text-xs text-gray-500 mt-1">{t('admin.classes.totalLessonsHint')}</p>
                 </div>
               )}
               <div className="flex items-center">

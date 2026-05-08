@@ -819,7 +819,6 @@ export default function ClassAttendancePage() {
               </div>
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.attendance.refundRemarks')}</label>
-                <p className="text-xs text-gray-500 mb-2">{t('admin.attendance.refundRemarksHint')}</p>
                 <textarea
                   value={refundModal.remarks}
                   onChange={(e) => setRefundModal((prev) => ({ ...prev, remarks: e.target.value }))}

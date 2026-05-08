@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
-import { loadSimpleSitePage } from '../../lib/sitePageContent';
+import { getSitePageContentForLocale, loadSimpleSitePage } from '../../lib/sitePageContent';
 
 type Mode = 'html' | 'legacy';
 
@@ -13,7 +13,7 @@ interface PageState {
 }
 
 export default function PrivacyPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState<PageState>({ title: '', html: '', legacy: '', mode: 'legacy' });
   const [loading, setLoading] = useState(true);
 
@@ -26,11 +26,12 @@ export default function PrivacyPage() {
         const saved = await loadSimpleSitePage('privacy');
         if (cancelled) return;
         if (saved && (saved.title || saved.contentHtml)) {
+          const localizedHtml = getSitePageContentForLocale(saved.contentHtml || '', i18n.language);
           setState({
             title: saved.title || t('privacy.title'),
-            html: saved.contentHtml || '',
+            html: localizedHtml,
             legacy: t('privacy.content'),
-            mode: saved.contentHtml && saved.contentHtml.trim() !== '' ? 'html' : 'legacy',
+            mode: localizedHtml && localizedHtml.trim() !== '' ? 'html' : 'legacy',
           });
         } else {
           setState({
@@ -56,7 +57,7 @@ export default function PrivacyPage() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, i18n.language]);
 
   if (loading) {
     return (

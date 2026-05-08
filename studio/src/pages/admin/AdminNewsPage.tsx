@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
-import { api } from '../../lib/api';
+import { ApiError, api } from '../../lib/api';
 import {
   getStoredNewsPosts,
   saveStoredNewsPosts,
@@ -69,6 +69,7 @@ export default function AdminNewsPage() {
   const { t, i18n } = useTranslation();
   const [posts, setPosts] = useState<StoredNewsPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [publicVisibleIds, setPublicVisibleIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [editingPost, setEditingPost] = useState<StoredNewsPost | null>(null);
   const [form, setForm] = useState({
@@ -84,6 +85,7 @@ export default function AdminNewsPage() {
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
+  const submitLockRef = useRef(false);
   const modalContentRef = useRef<HTMLDivElement>(null);
 
   const closeModal = useCallback(() => {
@@ -102,7 +104,21 @@ export default function AdminNewsPage() {
     try {
       const res = await api.get<StoredNewsPost[]>('/admin/news');
       if (res.success && Array.isArray(res.data) && res.data.length >= 0) {
-        setPosts(res.data.map(toPostItem));
+        const adminPosts = res.data.map(toPostItem);
+        setPosts(adminPosts);
+        try {
+          const pub = await api.get<Array<{ id: string | number }>>('/news', {
+            limit: 200,
+            lang: 'zh-TW',
+          });
+          if (pub.success && Array.isArray(pub.data)) {
+            setPublicVisibleIds(new Set(pub.data.map((p) => String(p.id))));
+          } else {
+            setPublicVisibleIds(new Set());
+          }
+        } catch {
+          setPublicVisibleIds(new Set());
+        }
         setLoading(false);
         return;
       }
@@ -110,6 +126,7 @@ export default function AdminNewsPage() {
       // API unavailable: use localStorage demo
     }
     setPosts(getStoredNewsPosts());
+    setPublicVisibleIds(new Set());
     setLoading(false);
   }
 
@@ -164,7 +181,11 @@ export default function AdminNewsPage() {
           setForm((f) => ({ ...f, image_url: url }));
           return;
         } catch (uploadErr) {
-          console.warn('News cover upload failed, falling back to inline data URL', uploadErr);
+          console.warn('News cover upload failed', uploadErr);
+          alert(t('admin.news.imageUploadError', '圖片上傳失敗，請稍後再試或改用其他圖片。'));
+          setImageFile(null);
+          input.value = '';
+          return;
         }
       }
       const forInline = await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION);
@@ -186,51 +207,103 @@ export default function AdminNewsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submitLockRef.current || saving) return;
     if (!hasAtLeastOneTitle) return;
+    submitLockRef.current = true;
     setSaving(true);
-    const published_at = form.published_at ? `${form.published_at}T12:00:00.000Z` : new Date().toISOString();
-    // Backend news table currently supports legacy `title/content` only.
-    // Send fallback fields so PATCH/POST can actually update DB.
+    const toMySqlDateTime = (dateOnly?: string): string => {
+      if (dateOnly && /^\d{4}-\d{2}-\d{2}$/.test(dateOnly)) {
+        return `${dateOnly} 00:00:00`;
+      }
+      const d = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+    const published_at = toMySqlDateTime(form.published_at);
+    const safeImageUrl = typeof form.image_url === 'string' && form.image_url.startsWith('data:') && !isDemoMode()
+      ? null
+      : form.image_url;
     const fallbackTitle = form.title_zh_tw.trim() || form.title_zh_cn.trim() || form.title_en.trim() || '';
     const fallbackContent = form.content_zh_tw.trim() || form.content_zh_cn.trim() || form.content_en.trim() || '';
-    const body = {
-      title: fallbackTitle,
-      content: fallbackContent,
+    const modernBody = {
       title_zh_tw: form.title_zh_tw.trim() || undefined,
       title_zh_cn: form.title_zh_cn.trim() || undefined,
       title_en: form.title_en.trim() || undefined,
       content_zh_tw: form.content_zh_tw.trim() || undefined,
       content_zh_cn: form.content_zh_cn.trim() || undefined,
       content_en: form.content_en.trim() || undefined,
-      image_url: form.image_url,
-      imageUrl: form.image_url,
+      image_url: safeImageUrl,
       published_at,
       show_as_popup: form.show_as_popup,
     };
+    const legacyBody = {
+      title: fallbackTitle,
+      content: fallbackContent,
+      image_url: safeImageUrl,
+      published_at,
+      show_as_popup: form.show_as_popup,
+    };
+    const combinedBody = {
+      ...legacyBody,
+      ...modernBody,
+    };
+    const localBody = {
+      ...combinedBody,
+    };
     try {
       try {
+        // Try fully-compatible payload first (legacy + multilingual fields).
+        // If backend rejects unknown multilingual keys, fall back to legacy-only.
+        const bodies = [combinedBody, legacyBody];
         if (editingPost) {
-          const res = await api.patch(`/admin/news/${editingPost.id}`, body);
-          if (res.success) {
-            await loadPosts();
-            closeModal();
-            return;
+          let lastError: unknown = null;
+          for (const body of bodies) {
+            try {
+              const res = await api.patch(`/admin/news/${editingPost.id}`, body);
+              if (res.success) {
+                await loadPosts();
+                closeModal();
+                return;
+              }
+              lastError = new Error('Update news failed');
+            } catch (candidateErr) {
+              // Compatibility fallback for different backend schemas.
+              lastError = candidateErr;
+              if (!(candidateErr instanceof ApiError)) break;
+            }
           }
+          throw (lastError ?? new Error('Update news failed'));
         } else {
-          const res = await api.post('/admin/news', body);
-          if (res.success) {
-            await loadPosts();
-            closeModal();
-            return;
+          let lastError: unknown = null;
+          for (const body of bodies) {
+            try {
+              const res = await api.post('/admin/news', body);
+              if (res.success) {
+                await loadPosts();
+                closeModal();
+                return;
+              }
+              lastError = new Error('Create news failed');
+            } catch (candidateErr) {
+              // Compatibility fallback for different backend schemas.
+              lastError = candidateErr;
+              if (!(candidateErr instanceof ApiError)) break;
+            }
           }
+          throw (lastError ?? new Error('Create news failed'));
         }
-      } catch {
-        // Fallback to localStorage when API fails
+      } catch (err) {
+        if (!isDemoMode()) {
+          const msg = err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗');
+          alert(msg);
+          return;
+        }
+        // Demo mode fallback to localStorage when API fails
       }
       if (editingPost) {
-        updateStoredNewsPost(editingPost.id, { ...body });
+        updateStoredNewsPost(editingPost.id, { ...localBody });
       } else {
-        const created = createStoredNewsPost(body);
+        const created = createStoredNewsPost(localBody);
         const next = [...getStoredNewsPosts()];
         next.unshift(created);
         saveStoredNewsPosts(next);
@@ -238,6 +311,7 @@ export default function AdminNewsPage() {
       await loadPosts();
       closeModal();
     } finally {
+      submitLockRef.current = false;
       setSaving(false);
     }
   }
@@ -263,7 +337,7 @@ export default function AdminNewsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Newspaper className="h-7 w-7 text-primary" />
-            {t('admin.news.title', '最新消息管理')}
+            {t('admin.news.title', '最新消息')}
           </h1>
           <button
             type="button"
@@ -274,10 +348,6 @@ export default function AdminNewsPage() {
             {t('admin.news.add', '新增消息')}
           </button>
         </div>
-
-        <p className="text-gray-600 mb-6">
-          {t('admin.news.hint', '此處新增或編輯的消息會顯示於前台「最新消息」頁。後端連線時會同步至資料庫，離線時儲存於瀏覽器本地。')}
-        </p>
 
         {loading ? (
           <div className="flex justify-center py-12">
@@ -322,6 +392,17 @@ export default function AdminNewsPage() {
                           {t('admin.news.popupBadge', '彈窗')}
                         </span>
                       )}
+                      <span
+                        className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                          publicVisibleIds.has(String(post.id))
+                            ? 'bg-green-100 text-green-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {publicVisibleIds.has(String(post.id))
+                          ? t('admin.news.publicVisible', '前台顯示中')
+                          : t('admin.news.publicHidden', '前台未顯示')}
+                      </span>
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -363,9 +444,6 @@ export default function AdminNewsPage() {
                 <h2 id="admin-news-modal-title" className="text-xl font-bold text-gray-900 mb-4">
                   {editingPost ? t('admin.news.edit', '編輯消息') : t('admin.news.add', '新增消息')}
                 </h2>
-                <p className="text-sm text-gray-500 mb-4">
-                  {t('admin.news.multilangHint', '請輸入三種語言的標題與內文，前台將依使用者語言顯示對應內容。至少填寫一種語言的標題。')}
-                </p>
                 <form onSubmit={handleSubmit} className="space-y-6">
                   {/* 繁體中文 */}
                   <fieldset className="space-y-3 rounded-lg border border-gray-200 p-4 bg-gray-50/50">
@@ -466,12 +544,6 @@ export default function AdminNewsPage() {
                         onChange={handleImageChange}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary-dark"
                       />
-                      <p className="text-xs text-gray-500">
-                        {t(
-                          'admin.news.imageHint',
-                          '支援常見圖片格式；大圖會自動壓縮。Demo 會將圖片存於瀏覽器本地。'
-                        )}
-                      </p>
                     </div>
                   </div>
                   <div>

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { loadFaqContent, type FaqItem } from '../../lib/faqContent';
+import { getFaqFieldForLocale, loadFaqContent, type FaqItem } from '../../lib/faqContent';
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -20,7 +20,7 @@ interface PageState {
 }
 
 export default function FAQPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [state, setState] = useState<PageState>({ title: '', intro: '', items: [] });
   const [loading, setLoading] = useState(true);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -37,7 +37,13 @@ export default function FAQPage() {
           setState({
             title: stored.title || t('faq.title'),
             intro: stored.intro || t('faq.subtitle'),
-            items: stored.items.filter((it) => it.question.trim() !== ''),
+            items: stored.items
+              .map((it) => ({
+                ...it,
+                question: getFaqFieldForLocale(it.question, i18n.language),
+                answer_html: getFaqFieldForLocale(it.answer_html, i18n.language),
+              }))
+              .filter((it) => it.question.trim() !== ''),
           });
           return;
         }
@@ -71,7 +77,7 @@ export default function FAQPage() {
     return () => {
       cancelled = true;
     };
-  }, [t]);
+  }, [t, i18n.language]);
 
   const toggleFAQ = (index: number) => {
     setOpenIndex(openIndex === index ? null : index);

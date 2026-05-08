@@ -1,62 +1,188 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { Edit, BookOpen, Image } from 'lucide-react';
-import { ALL_COURSES, type CourseItem } from '../../lib/coursesData';
+import { Edit, BookOpen, Plus, Trash2 } from 'lucide-react';
+import { api } from '../../lib/api';
 import {
+  deleteCourseIntroOverrides,
   getCourseIntroOverrides,
   setCourseIntroOverrides,
+  type CourseIntroLang,
   type CourseIntroOverrides,
 } from '../../lib/courseIntroStorage';
-import {
-  getCoursesPageHero,
-  setCoursesPageHero,
-  type CoursesPageHero,
-} from '../../lib/coursesPageHeroStorage';
+
+const LANG_OPTIONS: Array<{ value: CourseIntroLang; label: string }> = [
+  { value: 'zh-TW', label: '繁中' },
+  { value: 'zh-CN', label: '简中' },
+  { value: 'en', label: 'EN' },
+];
+
+interface AdminCourseIntroOption {
+  /** Use class_code as stable key for overrides. */
+  id: string;
+  classCode: string;
+  nameZhTw: string;
+  nameZhCn: string;
+  nameEn: string;
+  intro: string;
+  note: string;
+}
+
+function pickLocalizedName(course: AdminCourseIntroOption, lang: CourseIntroLang): string {
+  if (lang === 'zh-CN') {
+    return course.nameZhCn || course.nameZhTw || course.nameEn || course.classCode;
+  }
+  if (lang === 'en') {
+    return course.nameEn || course.nameZhTw || course.nameZhCn || course.classCode;
+  }
+  return course.nameZhTw || course.nameZhCn || course.nameEn || course.classCode;
+}
+
+function toAdminCourseOptions(rows: Record<string, unknown>[]): AdminCourseIntroOption[] {
+  const byCode = new Map<string, AdminCourseIntroOption>();
+  for (const row of rows) {
+    const r = row as Record<string, unknown>;
+    const classCode = String(r.class_code ?? r.program_code ?? '').trim();
+    if (!classCode) continue;
+    const nameZhTw = String(r.class_name_zh_tw ?? r.name_zh_tw ?? r.class_name ?? r.name ?? '').trim();
+    const nameZhCn = String(r.class_name_zh_cn ?? r.name_zh_cn ?? '').trim();
+    const nameEn = String(r.class_name_en ?? r.name_en ?? '').trim();
+    const intro = String(r.intro ?? r.description ?? '').trim();
+    const note = String(r.trial_class_name ?? r.class_name ?? r.name ?? classCode).trim();
+    if (!byCode.has(classCode)) {
+      byCode.set(classCode, {
+        id: classCode,
+        classCode,
+        nameZhTw: nameZhTw || nameZhCn || nameEn || classCode,
+        nameZhCn: nameZhCn || '',
+        nameEn: nameEn || '',
+        intro,
+        note,
+      });
+    }
+  }
+  return Array.from(byCode.values()).sort((a, b) =>
+    pickLocalizedName(a, 'zh-TW').localeCompare(pickLocalizedName(b, 'zh-TW'))
+  );
+}
 
 export default function AdminCourseIntroPage() {
   const { t } = useTranslation();
-  const [courses, setCourses] = useState<CourseItem[]>(ALL_COURSES);
+  const [courses, setCourses] = useState<AdminCourseIntroOption[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const [coursesLoadFailed, setCoursesLoadFailed] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [editingCourse, setEditingCourse] = useState<CourseItem | null>(null);
+  const [selectedCourseId, setSelectedCourseId] = useState('');
   const [form, setForm] = useState<CourseIntroOverrides>({});
-  const [heroForm, setHeroForm] = useState<CoursesPageHero>({});
-  const [heroSaved, setHeroSaved] = useState(false);
+  const [activeLang, setActiveLang] = useState<CourseIntroLang>('zh-TW');
 
   useEffect(() => {
-    setHeroForm(getCoursesPageHero());
+    let cancelled = false;
+    (async () => {
+      setCoursesLoading(true);
+      setCoursesLoadFailed(false);
+      try {
+        const adminRes = await api.get<Record<string, unknown>[]>('/admin/classes');
+        const rows = adminRes.success && Array.isArray(adminRes.data) ? adminRes.data : [];
+        if (!cancelled && rows.length > 0) {
+          setCourses(toAdminCourseOptions(rows));
+        } else {
+          const res = await api.get<Record<string, unknown>[]>('/classes');
+          if (cancelled) return;
+          const fallbackRows = res.success && Array.isArray(res.data) ? res.data : [];
+          setCourses(toAdminCourseOptions(fallbackRows));
+          if (fallbackRows.length === 0) setCoursesLoadFailed(true);
+        }
+      } catch {
+        if (!cancelled) {
+          setCourses([]);
+          setCoursesLoadFailed(true);
+        }
+      }
+      if (!cancelled) setCoursesLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    setCourses(ALL_COURSES);
-  }, []);
+  function getFormValue(field: 'title' | 'content' | 'note', lang: CourseIntroLang): string {
+    if (field === 'title') {
+      if (lang === 'zh-TW') return form.name_zh_tw ?? '';
+      if (lang === 'zh-CN') return form.name_zh_cn ?? '';
+      return form.name_en ?? '';
+    }
+    if (field === 'content') {
+      if (lang === 'zh-TW') return form.intro_zh_tw ?? '';
+      if (lang === 'zh-CN') return form.intro_zh_cn ?? '';
+      return form.intro_en ?? '';
+    }
+    if (lang === 'zh-TW') return form.trial_class_name_zh_tw ?? '';
+    if (lang === 'zh-CN') return form.trial_class_name_zh_cn ?? '';
+    return form.trial_class_name_en ?? '';
+  }
 
-  function openEdit(course: CourseItem) {
-    setEditingCourse(course);
+  function setFormValue(field: 'title' | 'content' | 'note', lang: CourseIntroLang, value: string) {
+    setForm((prev) => {
+      if (field === 'title') {
+        if (lang === 'zh-TW') return { ...prev, name_zh_tw: value };
+        if (lang === 'zh-CN') return { ...prev, name_zh_cn: value };
+        return { ...prev, name_en: value };
+      }
+      if (field === 'content') {
+        if (lang === 'zh-TW') return { ...prev, intro_zh_tw: value };
+        if (lang === 'zh-CN') return { ...prev, intro_zh_cn: value };
+        return { ...prev, intro_en: value };
+      }
+      if (lang === 'zh-TW') return { ...prev, trial_class_name_zh_tw: value };
+      if (lang === 'zh-CN') return { ...prev, trial_class_name_zh_cn: value };
+      return { ...prev, trial_class_name_en: value };
+    });
+  }
+
+  function openCreate() {
+    setSelectedCourseId('');
+    setForm({});
+    setActiveLang('zh-TW');
+    setShowModal(true);
+  }
+
+  function openEdit(course: AdminCourseIntroOption) {
+    setSelectedCourseId(course.id);
     const overrides = getCourseIntroOverrides(course.id) || {};
     setForm({
-      name_zh_tw: overrides.name_zh_tw ?? course.name,
-      name_zh_cn: overrides.name_zh_cn ?? '',
-      name_en: overrides.name_en ?? '',
+      name_zh_tw: overrides.name_zh_tw ?? course.nameZhTw,
+      name_zh_cn: overrides.name_zh_cn ?? course.nameZhCn,
+      name_en: overrides.name_en ?? course.nameEn,
       intro_zh_tw: overrides.intro_zh_tw ?? course.intro,
       intro_zh_cn: overrides.intro_zh_cn ?? '',
       intro_en: overrides.intro_en ?? '',
-      trial_class_name_zh_tw: overrides.trial_class_name_zh_tw ?? course.trial_class_name,
+      trial_class_name_zh_tw: overrides.trial_class_name_zh_tw ?? course.note,
       trial_class_name_zh_cn: overrides.trial_class_name_zh_cn ?? '',
       trial_class_name_en: overrides.trial_class_name_en ?? '',
     });
+    setActiveLang('zh-TW');
     setShowModal(true);
+  }
+
+  function handleDelete(course: AdminCourseIntroOption) {
+    const ok = window.confirm(
+      t('admin.courseIntro.confirmDelete', '確定刪除此課程介紹內容？')
+    );
+    if (!ok) return;
+    deleteCourseIntroOverrides(course.id);
   }
 
   function closeModal() {
     setShowModal(false);
-    setEditingCourse(null);
+    setSelectedCourseId('');
+    setForm({});
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!editingCourse) return;
-    setCourseIntroOverrides(editingCourse.id, {
+    if (!selectedCourseId) return;
+    setCourseIntroOverrides(selectedCourseId, {
       name_zh_tw: form.name_zh_tw?.trim() || undefined,
       name_zh_cn: form.name_zh_cn?.trim() || undefined,
       name_en: form.name_en?.trim() || undefined,
@@ -70,198 +196,148 @@ export default function AdminCourseIntroPage() {
     closeModal();
   }
 
-  function saveHero(e: React.FormEvent) {
-    e.preventDefault();
-    setCoursesPageHero(heroForm);
-    setHeroSaved(true);
-    setTimeout(() => setHeroSaved(false), 2000);
-  }
+  const selectedCourse = courses.find((course) => course.id === selectedCourseId) || null;
 
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 mb-2">
-          <BookOpen className="h-7 w-7 text-primary" />
-          {t('admin.courseIntro.title', '課堂介紹（課程介紹）')}
-        </h1>
-        <p className="text-gray-600 text-sm mb-6">
-          {t('admin.courseIntro.hint', '編輯各課程的名稱、簡介與試堂名稱，請輸入三種語言。前台「課程介紹」頁將依使用者語言顯示。')}
-        </p>
-
-        {/* 課程介紹頁頂部區塊：圖片 + 晉升流程文字 */}
-        <form onSubmit={saveHero} className="mb-8 bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
-            <Image className="h-5 w-5 text-primary" />
-            <h2 className="font-semibold text-gray-900">
-              {t('admin.courseIntro.heroBlockTitle', '課程介紹頁頂部區塊（晉升流程）')}
-            </h2>
-          </div>
-          <div className="p-4 space-y-4">
-            <p className="text-sm text-gray-500">
-              {t('admin.courseIntro.heroBlockHint', '設定前台「課程介紹」頁最頂的圖片與左側說明文字。圖片建議比例 16:9 或 4:3，寬度 800–1200px；過大會自動縮小顯示，不會裁切。')}
-            </p>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('admin.courseIntro.heroImageUrl', '圖片網址')}
-              </label>
-              <input
-                type="text"
-                value={heroForm.image_url ?? ''}
-                onChange={(e) => setHeroForm((f) => ({ ...f, image_url: e.target.value || undefined }))}
-                placeholder="/images/Upgrade.png 或完整 URL"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">{t('admin.courseIntro.heroTitle', '標題（三語）')}</p>
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">繁體中文</label>
-                  <input type="text" value={heroForm.title_zh_tw ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, title_zh_tw: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="舞蹈等級晉升流程（示意）" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">简体中文</label>
-                  <input type="text" value={heroForm.title_zh_cn ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, title_zh_cn: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">English</label>
-                  <input type="text" value={heroForm.title_en ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, title_en: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </div>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">{t('admin.courseIntro.heroDesc', '說明內文（三語）')}</p>
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">繁體中文</label>
-                  <textarea rows={2} value={heroForm.desc_zh_tw ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, desc_zh_tw: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y" placeholder="學生完成指定堂數及達到導師評核標準後…" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">简体中文</label>
-                  <textarea rows={2} value={heroForm.desc_zh_cn ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, desc_zh_cn: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">English</label>
-                  <textarea rows={2} value={heroForm.desc_en ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, desc_en: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y" />
-                </div>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-700 mb-2">{t('admin.courseIntro.heroNote', '備註（三語，選填）')}</p>
-              <div className="space-y-2">
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">繁體中文</label>
-                  <input type="text" value={heroForm.note_zh_tw ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, note_zh_tw: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" placeholder="以上為示意說明；實際晉升準則以中心最新安排為準。" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">简体中文</label>
-                  <input type="text" value={heroForm.note_zh_cn ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, note_zh_cn: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-500 mb-0.5">English</label>
-                  <input type="text" value={heroForm.note_en ?? ''} onChange={(e) => setHeroForm((f) => ({ ...f, note_en: e.target.value || undefined }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark">
-                {heroSaved ? t('common.saved', '已儲存') : t('common.save', '儲存')}
-              </button>
-            </div>
-          </div>
-        </form>
+        <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <BookOpen className="h-7 w-7 text-primary" />
+            {t('admin.courseIntro.title', '課堂介紹')}
+          </h1>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            {t('common.add', '新增')}
+          </button>
+        </div>
 
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <ul className="divide-y divide-gray-200">
-            {courses.map((course) => (
-              <li key={course.id} className="flex items-center justify-between gap-4 p-4 hover:bg-gray-50">
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-gray-900 truncate">{course.name}</p>
-                  <p className="text-sm text-gray-500 truncate">{course.program_code} · {course.trial_class_name}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openEdit(course)}
-                  className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                  title={t('common.edit', '編輯')}
-                >
-                  <Edit className="h-4 w-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
+          {coursesLoading ? (
+            <div className="p-6 text-sm text-gray-500">{t('common.loading', '載入中…')}</div>
+          ) : courses.length === 0 ? (
+            <div className="p-6 text-sm text-gray-500">
+              {coursesLoadFailed
+                ? t('admin.courseIntro.loadFailed', '無法從 API 載入課程資料，請稍後再試。')
+                : t('admin.courseIntro.empty', '目前沒有可用課程資料。')}
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-200">
+              {courses.map((course) => (
+                <li key={course.id} className="flex items-center justify-between gap-4 p-4 hover:bg-gray-50">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-gray-900 truncate">{pickLocalizedName(course, 'zh-TW')}</p>
+                    <p className="text-sm text-gray-500 truncate">{course.classCode}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEdit(course)}
+                      className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+                      title={t('common.edit', '編輯')}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(course)}
+                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                      title={t('common.delete', '刪除')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
-      {showModal && editingCourse && (
+      {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/50" onClick={closeModal} aria-hidden />
             <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true">
               <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
-                  {t('admin.courseIntro.editTitle', '編輯課堂介紹')} · {editingCourse.name}
-                </h2>
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* 課程名稱 */}
-                  <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">{t('admin.courseIntro.courseName', '課程名稱')}</p>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">繁體中文</label>
-                        <input type="text" value={form.name_zh_tw ?? ''} onChange={(e) => setForm((f) => ({ ...f, name_zh_tw: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">简体中文</label>
-                        <input type="text" value={form.name_zh_cn ?? ''} onChange={(e) => setForm((f) => ({ ...f, name_zh_cn: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">English</label>
-                        <input type="text" value={form.name_en ?? ''} onChange={(e) => setForm((f) => ({ ...f, name_en: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      </div>
-                    </div>
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {t('common.add', '新增')} · {t('admin.courseIntro.title', '課堂介紹')}
+                  </h2>
+                  <div className="inline-flex items-center rounded-md border border-gray-200 p-0.5 bg-white">
+                    {LANG_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setActiveLang(option.value)}
+                        className={`px-2.5 py-1 text-xs rounded ${
+                          activeLang === option.value
+                            ? 'bg-primary text-white'
+                            : 'text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
                   </div>
-                  {/* 課程簡介 */}
+                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">{t('admin.courseIntro.intro', '課程簡介')}</p>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">繁體中文</label>
-                        <textarea rows={3} value={form.intro_zh_tw ?? ''} onChange={(e) => setForm((f) => ({ ...f, intro_zh_tw: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">简体中文</label>
-                        <textarea rows={3} value={form.intro_zh_cn ?? ''} onChange={(e) => setForm((f) => ({ ...f, intro_zh_cn: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">English</label>
-                        <textarea rows={3} value={form.intro_en ?? ''} onChange={(e) => setForm((f) => ({ ...f, intro_en: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y" />
-                      </div>
-                    </div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('admin.courseIntro.courseName', '課程名稱')}
+                    </label>
+                    <select
+                      value={selectedCourseId}
+                      onChange={(e) => setSelectedCourseId(e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+                      required
+                    >
+                      <option value="">{t('admin.classNotice.selectClass', '請選擇')}</option>
+                      {courses.map((course) => (
+                        <option key={course.id} value={course.id}>
+                          {pickLocalizedName(course, activeLang)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                  {/* 試堂名稱 */}
+
                   <div>
-                    <p className="text-sm font-medium text-gray-700 mb-2">{t('admin.courseIntro.trialClassName', '試堂名稱')}</p>
-                    <div className="space-y-2">
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">繁體中文</label>
-                        <input type="text" value={form.trial_class_name_zh_tw ?? ''} onChange={(e) => setForm((f) => ({ ...f, trial_class_name_zh_tw: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">简体中文</label>
-                        <input type="text" value={form.trial_class_name_zh_cn ?? ''} onChange={(e) => setForm((f) => ({ ...f, trial_class_name_zh_cn: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-500 mb-0.5">English</label>
-                        <input type="text" value={form.trial_class_name_en ?? ''} onChange={(e) => setForm((f) => ({ ...f, trial_class_name_en: e.target.value }))} className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm" />
-                      </div>
-                    </div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('common.courseCode', '課程 Code')}
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedCourse?.classCode ?? ''}
+                      readOnly
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600"
+                    />
                   </div>
-                  <div className="flex justify-end gap-2 pt-4">
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('admin.courseIntro.intro', '內文')}
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={getFormValue('content', activeLang)}
+                      onChange={(e) => setFormValue('content', activeLang, e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={closeModal} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
                       {t('common.cancel', '取消')}
                     </button>
-                    <button type="submit" className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
+                      disabled={!selectedCourseId}
+                    >
                       {t('common.save', '儲存')}
                     </button>
                   </div>

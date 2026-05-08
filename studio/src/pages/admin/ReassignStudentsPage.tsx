@@ -767,7 +767,7 @@ export default function ReassignStudentsPage() {
             <div>
               <p className="font-medium text-amber-900">{t('admin.attendance.classNotFound')}</p>
               <p className="text-sm text-amber-800 mt-1">
-                {classId ? t('admin.attendance.classNotFoundHint', '請返回課程列表，再從該課程的出席按堂進入「重新分配學生」。') : t('admin.attendance.invalidClassId', '無效的課程連結。')}
+                {t('admin.attendance.invalidClassId', '無效的課程連結。')}
               </p>
               <button
                 onClick={() => navigate('/admin/classes')}

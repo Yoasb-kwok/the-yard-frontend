@@ -1,5 +1,5 @@
 /**
- * Contact page content — dedicated API (`/api/contact` + `/api/admin/contact/*`).
+ * Contact page content — dedicated API (`/api/contact` + `/api/admin/contact*`).
  *
  * Data model:
  *   - Settings are singleton (`contact_page`): title, intro.
@@ -36,6 +36,19 @@ export interface ContactContent {
   branches: ContactBranch[];
 }
 
+export type ContactLocale = 'zh-TW' | 'zh-CN' | 'en';
+
+interface PackedContactI18nValue {
+  schemaVersion: 1;
+  values: {
+    'zh-TW': string;
+    'zh-CN': string;
+    en: string;
+  };
+}
+
+const CONTACT_I18N_PREFIX = '__CONTACT_I18N__';
+
 function newClientId(): string {
   return `new-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
@@ -58,6 +71,89 @@ export function createDefaultContactContent(): ContactContent {
     intro: '',
     branches: [],
   };
+}
+
+function emptyPackedValues() {
+  return {
+    'zh-TW': '',
+    'zh-CN': '',
+    en: '',
+  };
+}
+
+function normalizeContactLocale(lang?: string): ContactLocale {
+  if (!lang) return 'zh-TW';
+  if (lang === 'zh-CN' || lang.toLowerCase() === 'zh-cn') return 'zh-CN';
+  if (lang === 'en' || lang.toLowerCase().startsWith('en')) return 'en';
+  return 'zh-TW';
+}
+
+function parsePackedI18n(raw: string): PackedContactI18nValue | null {
+  const value = raw.trim();
+  if (!value.startsWith(CONTACT_I18N_PREFIX)) return null;
+  const jsonText = value.slice(CONTACT_I18N_PREFIX.length).trim();
+  if (!jsonText) return null;
+  try {
+    const parsed = JSON.parse(jsonText) as Partial<PackedContactI18nValue>;
+    if (!parsed || parsed.schemaVersion !== 1 || !parsed.values) return null;
+    return {
+      schemaVersion: 1,
+      values: {
+        'zh-TW':
+          typeof parsed.values['zh-TW'] === 'string' ? parsed.values['zh-TW'] : '',
+        'zh-CN':
+          typeof parsed.values['zh-CN'] === 'string' ? parsed.values['zh-CN'] : '',
+        en: typeof parsed.values.en === 'string' ? parsed.values.en : '',
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function stringifyPackedI18n(values: PackedContactI18nValue['values']): string {
+  return `${CONTACT_I18N_PREFIX}${JSON.stringify({ schemaVersion: 1, values })}`;
+}
+
+export function getContactFieldForLocale(raw: string, lang?: string): string {
+  const packed = parsePackedI18n(raw || '');
+  if (!packed) return raw || '';
+  const locale = normalizeContactLocale(lang);
+  if (packed.values[locale].trim()) return packed.values[locale];
+  if (packed.values['zh-TW'].trim()) return packed.values['zh-TW'];
+  if (packed.values['zh-CN'].trim()) return packed.values['zh-CN'];
+  if (packed.values.en.trim()) return packed.values.en;
+  return '';
+}
+
+export function getContactFieldForLocaleExact(raw: string, lang?: string): string {
+  const locale = normalizeContactLocale(lang);
+  const packed = parsePackedI18n(raw || '');
+  if (!packed) {
+    return locale === 'zh-TW' ? raw || '' : '';
+  }
+  return packed.values[locale] || '';
+}
+
+export function setContactFieldForLocale(raw: string, lang: string, nextValue: string): string {
+  const locale = normalizeContactLocale(lang);
+  const packed = parsePackedI18n(raw || '');
+  const values = packed ? { ...packed.values } : emptyPackedValues();
+  if (!packed && (raw || '').trim() !== '') {
+    values['zh-TW'] = raw;
+  }
+  values[locale] = nextValue;
+  return stringifyPackedI18n(values);
+}
+
+export function branchHasVisibleText(branch: ContactBranch): boolean {
+  return (
+    getContactFieldForLocale(branch.name).trim() !== '' ||
+    getContactFieldForLocale(branch.address).trim() !== '' ||
+    getContactFieldForLocale(branch.hours).trim() !== '' ||
+    getContactFieldForLocale(branch.map_query).trim() !== '' ||
+    !!branch.image_url
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -172,7 +268,7 @@ export const loadContactContent = loadPublicContact;
 /** Load admin view (settings + ALL branches incl. is_active=0). */
 export async function loadAdminContact(): Promise<ContactContent> {
   const [settingsRes, branchesRes] = await Promise.all([
-    api.get('/admin/contact/settings'),
+    api.get('/admin/contact'),
     api.get<unknown[]>('/admin/contact/branches'),
   ]);
 
@@ -236,7 +332,7 @@ function extractId(res: { data?: unknown; id?: unknown; insertId?: unknown }): n
  * Persist the full content by diff-syncing against the server.
  *
  * Steps (in order, so a failure partway through leaves a consistent state):
- *   1. PATCH `/admin/contact/settings` (title, intro)
+ *   1. PATCH `/admin/contact` (title, intro)
  *   2. Fetch current server branches
  *   3. DELETE any server branch that was removed locally
  *   4. POST new (string-id) branches, PATCH existing (number-id) branches
@@ -245,7 +341,7 @@ function extractId(res: { data?: unknown; id?: unknown; insertId?: unknown }): n
  */
 export async function saveAdminContact(current: ContactContent): Promise<ContactContent> {
   // 1. Settings
-  const settingsRes = await api.patch('/admin/contact/settings', {
+  const settingsRes = await api.patch('/admin/contact', {
     title: current.title.trim(),
     intro: current.intro.trim(),
   });

@@ -18,6 +18,9 @@ export interface HomeAboutBlock {
   id: string;
   image_url: string | null;
   body_html: string;
+  body_html_zh_tw?: string;
+  body_html_zh_cn?: string;
+  body_html_en?: string;
   /** 未設定時依組別 index 交錯：偶數左圖右文、奇數左文右圖 */
   layout?: HomeAboutBlockLayout;
 }
@@ -41,6 +44,9 @@ export function createEmptyBlock(index?: number): HomeAboutBlock {
     id: newBlockId(),
     image_url: null,
     body_html: '<p></p>',
+    body_html_zh_tw: '<p></p>',
+    body_html_zh_cn: '<p></p>',
+    body_html_en: '<p></p>',
     layout: defaultLayoutForIndex(i),
   };
 }
@@ -78,8 +84,11 @@ function normalizeBlocks(raw: unknown): HomeAboutBlock[] {
     const image_url =
       typeof o.image_url === 'string' && o.image_url.trim() !== '' ? o.image_url.trim() : null;
     const body_html = typeof o.body_html === 'string' ? o.body_html : '<p></p>';
+    const body_html_zh_tw = typeof o.body_html_zh_tw === 'string' ? o.body_html_zh_tw : undefined;
+    const body_html_zh_cn = typeof o.body_html_zh_cn === 'string' ? o.body_html_zh_cn : undefined;
+    const body_html_en = typeof o.body_html_en === 'string' ? o.body_html_en : undefined;
     const layout = readLayoutField(o.layout);
-    out.push({ id, image_url, body_html, layout });
+    out.push({ id, image_url, body_html, body_html_zh_tw, body_html_zh_cn, body_html_en, layout });
   }
   return out.length > 0 ? out : createDefaultHomeAboutBlocks(4);
 }
@@ -112,11 +121,27 @@ export function serializeHomeAboutBlocks(blocks: HomeAboutBlock[]): string {
     blocks: blocks.map((b, i) => ({
       id: b.id,
       image_url: b.image_url && b.image_url.trim() !== '' ? b.image_url.trim() : null,
-      body_html: b.body_html || '<p></p>',
+      body_html: typeof b.body_html === 'string' ? b.body_html : '',
+      // Backend validates these as string fields (empty string allowed).
+      body_html_zh_tw: typeof b.body_html_zh_tw === 'string' ? b.body_html_zh_tw : '',
+      body_html_zh_cn: typeof b.body_html_zh_cn === 'string' ? b.body_html_zh_cn : '',
+      body_html_en: typeof b.body_html_en === 'string' ? b.body_html_en : '',
       layout: effectiveBlockLayout(b, i),
     })),
   };
   return JSON.stringify(payload);
+}
+
+export type HomeAboutLang = 'zh-TW' | 'zh-CN' | 'en';
+
+export function getHomeAboutBlockBodyByLang(block: HomeAboutBlock, lang: HomeAboutLang): string {
+  if (lang === 'zh-TW') {
+    return block.body_html_zh_tw || block.body_html || '<p></p>';
+  }
+  if (lang === 'zh-CN') {
+    return block.body_html_zh_cn || block.body_html_zh_tw || block.body_html || '<p></p>';
+  }
+  return block.body_html_en || block.body_html_zh_tw || block.body_html || '<p></p>';
 }
 
 /** 將舊版整段 HTML／純文字轉成區塊（整段放第一組，其餘組空白） */
@@ -141,7 +166,8 @@ export function siteAboutHasVisibleContent(title: string, blocks: HomeAboutBlock
   if (title.trim() !== '') return true;
   return blocks.some((b) => {
     const hasImg = !!(b.image_url && b.image_url.trim());
-    const text = (b.body_html || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
-    return hasImg || text !== '';
+    const texts = [b.body_html, b.body_html_zh_tw, b.body_html_zh_cn, b.body_html_en]
+      .map((v) => (v || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim());
+    return hasImg || texts.some((v) => v !== '');
   });
 }

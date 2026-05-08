@@ -643,9 +643,6 @@ export default function TrialApplicationsPage() {
                                 >
                                   {savingId === app.id ? '...' : t('common.save')}
                                 </button>
-                                <span className="text-xs text-gray-500">
-                                  {t('admin.trialApplications.saveAllHint', '一次儲存：狀態、備註、分配班別與堂數')}
-                                </span>
                               </div>
                             </div>
                           </td>

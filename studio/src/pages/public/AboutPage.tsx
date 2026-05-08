@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { getHomeAboutContent } from '../../lib/homeAboutStorage';
 import {
   effectiveBlockLayout,
+  getHomeAboutBlockBodyByLang,
   legacyContentToBlocks,
   parseHomeAboutContentField,
   siteAboutHasVisibleContent,
@@ -29,7 +30,7 @@ function blocksFromStoredContent(content: string): HomeAboutBlock[] {
 }
 
 export default function AboutPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [booting, setBooting] = useState(true);
   const [dynamic, setDynamic] = useState<{ title: string; blocks: HomeAboutBlock[] } | null>(null);
 
@@ -37,9 +38,7 @@ export default function AboutPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get<{ page_key?: string; title: string; content: string }>(
-          '/site-content/home-about'
-        );
+        const res = await api.get<{ title: string; content: string; updated_at?: string }>('/about');
         if (
           !cancelled &&
           res.success &&
@@ -89,6 +88,7 @@ export default function AboutPage() {
   if (dynamic && siteAboutHasVisibleContent(dynamic.title, dynamic.blocks)) {
     const heroSrc = ABOUT_IMAGES.hero;
     const heading = dynamic.title.trim() || t('about.title');
+    const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
 
     return (
       <PublicLayout>
@@ -127,9 +127,10 @@ export default function AboutPage() {
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
+                      {/** About text is stored per language and falls back safely to legacy body_html. */}
                       <div
                         className="about-wysiwyg max-w-none text-gray-600 leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: block.body_html || '<p></p>' }}
+                        dangerouslySetInnerHTML={{ __html: getHomeAboutBlockBodyByLang(block, lang) }}
                       />
                     </div>
                   </div>

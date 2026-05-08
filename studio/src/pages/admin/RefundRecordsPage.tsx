@@ -187,7 +187,6 @@ export default function RefundRecordsPage() {
             <div className="py-16 text-center">
               <RotateCcw className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-600">{t('admin.refundRecords.noRecords')}</p>
-              <p className="text-sm text-gray-500 mt-1">{t('admin.refundRecords.noRecordsHint')}</p>
             </div>
           ) : (
             <>

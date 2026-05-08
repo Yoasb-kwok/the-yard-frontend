@@ -700,15 +700,6 @@ export default function AdminTagsPage() {
           </div>
         )}
 
-        <div className="rounded-md bg-blue-50 border border-blue-200 p-3 text-xs text-blue-800 space-y-1">
-          <p className="font-semibold">{t('admin.tags.hintTitle', '使用提示')}</p>
-          <ul className="list-disc pl-5 space-y-0.5">
-            <li>{t('admin.tags.hint.code', '代碼 (code) 是課程資料儲存用的穩定識別字，建議使用英文小寫、數字、- 或 _。')}</li>
-            <li>{t('admin.tags.hint.active', '停用 (取消啟用) 會把標籤從前台選單隱藏，但仍保留在已有課程上。')}</li>
-            <li>{t('admin.tags.hint.delete', '若標籤已被課程使用，後端會拒絕刪除；請改為停用。')}</li>
-            <li>{t('admin.tags.hint.types', '需要更多主題 (例如舞種、難度)？請按右上角「管理主題」新增。')}</li>
-          </ul>
-        </div>
       </div>
 
       {typesModalOpen && (
@@ -792,13 +783,6 @@ function ManageTypesModal({
           >
             <X className="h-5 w-5" />
           </button>
-        </div>
-
-        <div className="px-5 py-3 text-sm text-gray-600 border-b border-gray-100">
-          {t(
-            'admin.tags.typesModalDescription',
-            '新增、重新命名、停用或刪除標籤主題。系統內建主題（程度、年齡、課程分類）僅可重新命名或停用，無法刪除。'
-          )}
         </div>
 
         {typesErrorMsg && (
@@ -952,13 +936,7 @@ function ManageTypesModal({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50 rounded-b-lg">
-          <div className="text-xs text-gray-500">
-            {t(
-              'admin.tags.typesModalHint',
-              '主題 code 作為資料庫鍵值 (例如 level / age / dance_style)，建議使用英文小寫、數字、- 或 _。'
-            )}
-          </div>
+        <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-gray-200 bg-gray-50 rounded-b-lg">
           <div className="flex items-center gap-2">
             <button
               type="button"

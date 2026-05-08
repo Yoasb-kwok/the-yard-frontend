@@ -454,10 +454,6 @@ export default function UsersPage() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">{t('admin.users.title')}</h1>
         </div>
-        <p className="text-sm text-gray-600 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3">
-          {t('admin.users.accountMembersHint')}
-        </p>
-
         <div className="bg-white rounded-lg shadow-md p-6">
           {bulkMessage && (
             <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800 text-sm">

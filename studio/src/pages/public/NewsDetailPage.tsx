@@ -16,6 +16,30 @@ interface NewsPost {
   published_at: string;
 }
 
+function pickTextByLang(
+  row: any,
+  lang: 'zh-TW' | 'zh-CN' | 'en',
+  kind: 'title' | 'content'
+): string {
+  const byLang =
+    lang === 'zh-TW'
+      ? row?.[`${kind}_zh_tw`]
+      : lang === 'zh-CN'
+      ? row?.[`${kind}_zh_cn`]
+      : row?.[`${kind}_en`];
+  return byLang || row?.[kind] || '';
+}
+
+function toNewsPost(row: any, lang: 'zh-TW' | 'zh-CN' | 'en'): NewsPost {
+  return {
+    id: String(row?.id ?? ''),
+    title: pickTextByLang(row, lang, 'title'),
+    content: pickTextByLang(row, lang, 'content'),
+    image_url: row?.image_url ?? row?.imageUrl ?? null,
+    published_at: row?.published_at || row?.created_at || new Date().toISOString(),
+  };
+}
+
 export default function NewsDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t, i18n } = useTranslation();
@@ -34,9 +58,9 @@ export default function NewsDetailPage() {
     }
     const lang = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en';
     try {
-      const res = await api.get<{ id: string; title: string; content: string; image_url: string | null; published_at: string }>(`/news/${id}`, { lang });
+      const res = await api.get<any>(`/news/${id}`, { lang, _t: Date.now() });
       if (res.success && res.data) {
-        setPost(res.data);
+        setPost(toNewsPost(res.data, lang));
         setLoading(false);
         return;
       }
@@ -46,8 +70,7 @@ export default function NewsDetailPage() {
     const stored = getStoredNewsPosts();
     const fromStored = stored.find((p) => p.id === id);
     if (fromStored) {
-      const { created_at: _, ...p } = fromStored;
-      setPost(p);
+      setPost(toNewsPost(fromStored, lang));
     } else {
       const demo = getDemoNewsPosts(i18n.language);
       const foundPost = demo.find((p) => p.id === id);

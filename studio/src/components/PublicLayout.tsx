@@ -316,7 +316,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
             <div>
               <h3 className="text-sm font-semibold text-white mb-3">{t('footer.company')}</h3>
               <ul className="space-y-2">
-                <li><a href="https://www.theyard.com.hk/" target="_blank" rel="noopener noreferrer" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.about')}</a></li>
+                <li><Link to="/about" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.about')}</Link></li>
                 <li><Link to="/contact" className="text-sm text-white/90 hover:text-accent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-primary-dark rounded">{t('nav.contact')}</Link></li>
               </ul>
             </div>

@@ -671,9 +671,6 @@ export default function InstructorsPage() {
                           placeholder="https://example.com/image.jpg"
                           className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                         />
-                        <p className="text-xs text-gray-500 mt-1">
-                          {t('admin.instructors.urlHint') || 'Enter a direct image URL (recommended for large images)'}
-                        </p>
                       </div>
                     ) : (
                       <div>
@@ -689,9 +686,6 @@ export default function InstructorsPage() {
                             className="hidden"
                           />
                         </label>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {t('admin.instructors.imageHint') || 'Image will be compressed automatically. For large images, use URL option instead.'}
-                        </p>
                       </div>
                     )}
                   </div>
@@ -716,7 +710,6 @@ export default function InstructorsPage() {
               {/* 老師簡介（三語） */}
               <div className="space-y-3 pt-2 border-t border-gray-200">
                 <p className="text-sm font-medium text-gray-700">{t('admin.instructors.introSection')}</p>
-                <p className="text-xs text-gray-500">{t('admin.instructors.multilangHint', '請輸入三種語言的簡介，前台將依使用者語言顯示。')}</p>
                 <fieldset className="space-y-2 rounded border border-gray-200 p-3 bg-gray-50/50">
                   <legend className="text-xs font-medium text-gray-700 px-1">繁體中文</legend>
                   <textarea
@@ -756,7 +749,6 @@ export default function InstructorsPage() {
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     placeholder={t('admin.instructors.awardsPlaceholder')}
                   />
-                  <p className="text-xs text-gray-400 mt-0.5">{t('admin.instructors.awardsHint')}</p>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -799,7 +791,6 @@ export default function InstructorsPage() {
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
                     placeholder={t('admin.instructors.backgroundImagePlaceholder')}
                   />
-                  <p className="text-xs text-gray-400 mt-0.5">{t('admin.instructors.backgroundImageHint')}</p>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.iconKey')}</label>
@@ -820,14 +811,12 @@ export default function InstructorsPage() {
                     <option value="breaking">breaking</option>
                     <option value="classical">classical</option>
                   </select>
-                  <p className="text-xs text-gray-400 mt-0.5">{t('admin.instructors.iconHint')}</p>
                 </div>
               </div>
 
               {/* Teacher intro preview – matches 導師主頁 card */}
               {form.name.trim() && (
                 <div className="pt-4 border-t border-gray-200">
-                  <p className="text-xs font-medium text-gray-500 mb-2">{t('admin.instructors.introPreviewHint')}</p>
                   <InstructorIntroCard instructorName={form.name.trim()} imageUrl={imagePreview} compact profile={formToProfile()} />
                   <p className="text-xs text-gray-400 mt-2">{t('admin.instructors.publicPageSync')}</p>
                 </div>
