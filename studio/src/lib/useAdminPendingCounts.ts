@@ -13,13 +13,14 @@ const DEMO_COUNTS: AdminPendingCounts = {
 };
 
 const ZERO_COUNTS: AdminPendingCounts = { pendingApplications: 0, pendingTrials: 0 };
+let lastKnownCounts: AdminPendingCounts = ZERO_COUNTS;
 
 /**
  * Returns counts of items needing admin action (改期/病假 待處理申請, 試堂 pending).
  * Used for red badge on left sidebar. Only fetches when isAdmin is true.
  */
 export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
-  const [counts, setCounts] = useState<AdminPendingCounts>(() => (isAdmin ? DEMO_COUNTS : ZERO_COUNTS));
+  const [counts, setCounts] = useState<AdminPendingCounts>(() => (isAdmin ? lastKnownCounts : ZERO_COUNTS));
 
   useEffect(() => {
     if (!isAdmin) {
@@ -31,11 +32,13 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
       .then((res: unknown) => {
         const data = (res as { data?: AdminPendingCounts })?.data;
         if (data && typeof data.pendingApplications === 'number' && typeof data.pendingTrials === 'number') {
+          lastKnownCounts = data;
           setCounts(data);
         }
       })
       .catch(() => {
-        setCounts(isDemoMode() ? DEMO_COUNTS : ZERO_COUNTS);
+        const fallback = isDemoMode() ? (lastKnownCounts.pendingApplications || lastKnownCounts.pendingTrials ? lastKnownCounts : DEMO_COUNTS) : lastKnownCounts;
+        setCounts(fallback);
       });
   }, [isAdmin]);
 

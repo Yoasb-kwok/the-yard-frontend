@@ -10,6 +10,10 @@
  *   選填：contactNumber, countryCode, username（legacy key: nickName）, dateOfBirth, sex, parentsName,
  *         residentialDistrict, hasJoinedCourses, hasDanceExperience,
  *         howDidYouHear, promoCode
+ *   確認信：前端可加 sendConfirmationEmail=true（可選）要求後端在成功後寄出
+ *         「試堂申請已提交」確認信給提交的 email。
+ *   臨時密碼信：前端可加 sendTemporaryPasswordEmail=true（可選）要求後端在「新建帳號」時
+ *         以 email 寄出隨機臨時密碼（建議一次性／需首次登入即改密碼）。
  *   建議：`trialClassName` — 使用者所選試堂在畫面上顯示的名稱（與 programCode/classId 一併送），
  *         供後端寫入 trial_applications，避免僅依 classId 解析錯誤時 admin 列表全變成同一課名。
  *

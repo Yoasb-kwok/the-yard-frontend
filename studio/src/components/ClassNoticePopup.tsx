@@ -73,6 +73,13 @@ export default function ClassNoticePopup() {
       setLoading(false);
       return;
     }
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setNotices([]);
+      setOpen(false);
+      setLoading(false);
+      return;
+    }
     if (!getClassNoticePopupEnabled()) {
       setLoading(false);
       return;

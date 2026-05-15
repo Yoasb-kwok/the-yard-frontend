@@ -7,10 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { formatDate, isExpiringSoon } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import { getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
+import {
+  getFallbackUpcomingClasses,
+  shouldUseDemoUpcomingClasses,
+  type EnrolledClass,
+} from '../../lib/studentEnrollments';
 import { getLocationInfo } from '../../lib/locationInfo';
-import { buildNotification, buildPendingLeaveNotifications, type ApiNotification, type NotificationItem } from '../../lib/studentNotifications';
-import { Calendar, Coins, AlertCircle, Home, ShoppingBag, Bell, BookOpen, TrendingDown, User, ChevronRight, Plus, MapPin } from 'lucide-react';
+import { Calendar, Coins, AlertCircle, Home, ShoppingBag, BookOpen, TrendingDown, User, ChevronRight, Plus, MapPin } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 
 interface UserToken {
@@ -69,9 +72,6 @@ function tokensFromPaidOrders(payload: any): UserToken[] {
 
 /** Same shape as EnrolledClass so dashboard and schedule use same data */
 type UpcomingClass = EnrolledClass;
-
-/** One source of truth: same enrollments as SchedulePage & sidebar so counts match */
-const FALLBACK_UPCOMING_CLASSES: UpcomingClass[] = getFallbackUpcomingClasses();
 
 /** 試堂／報名記錄（所有可能的 backend 狀態） */
 type TrialStatus =
@@ -149,8 +149,6 @@ const FALLBACK_TOKEN_USAGE: TokenUsageItem[] = [
   { id: 'u3', date: new Date(Date.now() - 7 * 86400000).toISOString(), class_name: '兒童芭蕾 A', change: -1 },
 ];
 
-/** 通知由 API 取得，失敗時為空 */
-
 function emptyAddForm(): AddProfileData & { has_joined_courses: boolean } {
   return { full_name: '', nick_name: '', date_of_birth: '', sex: null, parents_name: '', contact_number: '', residential_district: '', has_joined_courses: false, level: null };
 }
@@ -163,7 +161,6 @@ export default function DashboardPage() {
   const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
   const [trialApplications, setTrialApplications] = useState<TrialApplicationItem[]>([]);
   const [trialApplicationsLoaded, setTrialApplicationsLoaded] = useState(false);
-  const [rawNotifications, setRawNotifications] = useState<ApiNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyAddForm());
@@ -228,12 +225,24 @@ export default function DashboardPage() {
 
   async function loadData() {
     setLoading(true);
+    const fallbackUpcomingClasses =
+      shouldUseDemoUpcomingClasses(profile?.id)
+        ? getFallbackUpcomingClasses(profile?.id ?? undefined, profile?.full_name ?? undefined)
+        : [];
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setTokens([]);
+      setTrialApplications([]);
+      setTrialApplicationsLoaded(false);
+      setUpcomingClasses(fallbackUpcomingClasses);
+      setLoading(false);
+      return;
+    }
     try {
       const profileId = profile?.id;
-      const [tokensRes, classesRes, notifRes, trialRes] = await Promise.all([
+      const [tokensRes, classesRes, trialRes] = await Promise.all([
         api.get('/student/tokens').catch(() => api.get('/user-tokens')).catch(() => ({ success: false, data: [] })),
         api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes'),
-        api.get<{ data?: ApiNotification[] }>('/student/notifications').catch(() => ({ success: true, data: [] })),
         api.get<{ success?: boolean; data?: TrialApplicationItem[] }>('/student/trial-applications').catch(() => ({ success: false, data: [] })),
       ]);
       let tokensData = normalizeUserTokens(tokensRes);
@@ -242,7 +251,6 @@ export default function DashboardPage() {
         tokensData = tokensFromPaidOrders(ordersRes);
       }
       let classesData = (classesRes as any).data;
-      const notifData = (notifRes as any).data;
       const trialData = (trialRes as any).data;
       setTokens(tokensData);
       setTrialApplications(Array.isArray(trialData) ? trialData : []);
@@ -250,34 +258,18 @@ export default function DashboardPage() {
       if (Array.isArray(classesData) && profileId) {
         classesData = classesData.filter((e: UpcomingClass) => (e.profile_id || e.user_id || '') === profileId);
       }
-      setUpcomingClasses(Array.isArray(classesData) && classesData.length > 0 ? classesData : getFallbackUpcomingClasses(profileId ?? undefined, profile?.full_name ?? undefined));
-      setRawNotifications(Array.isArray(notifData) ? notifData : []);
+      setUpcomingClasses(Array.isArray(classesData) && classesData.length > 0 ? classesData : fallbackUpcomingClasses);
     } catch {
       setTokens([]);
       setTrialApplications([]);
       setTrialApplicationsLoaded(false);
-      setUpcomingClasses(getFallbackUpcomingClasses(profile?.id ?? undefined, profile?.full_name ?? undefined));
-      setRawNotifications([]);
+      setUpcomingClasses(fallbackUpcomingClasses);
     } finally {
       setLoading(false);
     }
   }
 
   const totalTokens = tokens.reduce((sum, tok) => sum + tok.remaining_tokens, 0);
-  /** 只顯示訊息中心內容（全班消息、個人課堂、代幣、請假），不顯示首頁「最新消息」；並加入「請假申請待定中」*/
-  const notifications = useMemo(
-    () => {
-      const fromApi = rawNotifications
-        .filter((n) => n.type !== 'news')
-        .map((n) => buildNotification(n, t));
-      const pendingLeave = buildPendingLeaveNotifications(upcomingClasses, t);
-      const combined = [...fromApi, ...pendingLeave].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      return combined;
-    },
-    [rawNotifications, upcomingClasses, t, i18n.language]
-  );
   const expiringTokens = tokens.filter(tok => isExpiringSoon(tok.expiry_date));
   
   // Get the earliest expiry date from all tokens
@@ -338,38 +330,6 @@ export default function DashboardPage() {
             </div>
           );
         })()}
-
-        {/* 最新消息：標示哪位學生，多與 admin 相關（請假回覆、下堂提醒、全班通知） */}
-        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <h2 className="text-lg md:text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <Bell className="h-5 w-5 text-primary" />
-              {t('dashboard.notificationsTitle')}
-            </h2>
-            <Link to="/notifications" className="text-sm font-medium text-primary hover:underline">
-              {t('notifications.title', '訊息中心')} →
-            </Link>
-          </div>
-          <ul className="space-y-3">
-            {notifications.length === 0 ? (
-              <li className="py-4 text-center text-gray-500 text-sm">{t('notifications.noNotifications', '暫無通知')}</li>
-            ) : (
-              notifications.slice(0, 5).map((n) => (
-                <li key={n.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    {n.studentName && (
-                      <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded mb-1.5 inline-block">
-                        {t('notifications.forStudent', { studentName: n.studentName }, `有關：${n.studentName}`)}
-                      </span>
-                    )}
-                    <div className="font-medium text-gray-900">{n.title}</div>
-                    <div className="text-sm text-gray-600 mt-0.5">{n.message}</div>
-                  </div>
-                </li>
-              ))
-            )}
-          </ul>
-        </div>
 
         {/* 小朋友主頁入口：每個小朋友可上不同課堂 */}
         {profiles && profiles.length > 0 && (
@@ -514,9 +474,6 @@ export default function DashboardPage() {
                 {expiringTokens.length} {t('dashboard.tokensExpiring')}
               </div>
             </div>
-          )}
-          {totalTokens > 0 && (
-            <p className="text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">{t('dashboard.newPackageExpiryNote')}</p>
           )}
           <div className="mt-4 pt-4 border-t border-gray-100">
             <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">

@@ -54,8 +54,8 @@ const MOCK_COUPONS: { [key: string]: { id: string; discount_type: 'percentage' |
   'SAVE50': { id: '2', discount_type: 'fixed', discount_value: 50 },
 };
 
-// Student ID format: std + digits (e.g. std123456). Valid codes get 10% off for testing.
-const REFERRAL_CODE_REGEX = /^std\d+$/i;
+// Student ID format: yayakid + digits (e.g. yayakid1). Valid codes get 10% off for testing.
+const REFERRAL_CODE_REGEX = /^yayakid\d+$/i;
 
 export default function ShopPage() {
   const { t } = useTranslation();
@@ -297,7 +297,7 @@ export default function ShopPage() {
                     <div>
                       <input
                         type="text"
-                        placeholder="Referral code (e.g. std123456)"
+                        placeholder="Referral code (e.g. yayakid1)"
                         value={referralCode}
                         onChange={(e) => setReferralCode(e.target.value)}
                         className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"

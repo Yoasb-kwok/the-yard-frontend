@@ -8,8 +8,12 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatDateTime, getLessonDates, getLessonDatesSkipHolidays } from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
-import { api } from '../../lib/api';
-import { getFallbackUpcomingClasses, type EnrolledClass } from '../../lib/studentEnrollments';
+import { api, ApiError } from '../../lib/api';
+import {
+  getFallbackUpcomingClasses,
+  shouldUseDemoUpcomingClasses,
+  type EnrolledClass,
+} from '../../lib/studentEnrollments';
 import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
 import { getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
@@ -85,8 +89,6 @@ async function compressImageToDataUrl(file: File): Promise<string> {
     img.src = url;
   });
 }
-
-const FALLBACK_UPCOMING_CLASSES: EnrolledClass[] = getFallbackUpcomingClasses();
 
 type ViewType = 'month' | 'week' | 'day';
 
@@ -362,16 +364,27 @@ export default function SchedulePage() {
   async function loadEnrolledClasses() {
     setLoading(true);
     setError(null);
+    const fallbackUpcomingClasses =
+      shouldUseDemoUpcomingClasses(profile?.id)
+        ? getFallbackUpcomingClasses(profile?.id, profile?.full_name)
+        : [];
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setEnrollments(fallbackUpcomingClasses);
+      setLessonLeaveRequests({});
+      setLoading(false);
+      return;
+    }
     try {
       const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes');
       const data = (response as any).data;
-      let list: EnrolledClass[] = Array.isArray(data) ? data : FALLBACK_UPCOMING_CLASSES;
+      let list: EnrolledClass[] = Array.isArray(data) ? data : fallbackUpcomingClasses;
       if (profile?.id && Array.isArray(data)) {
         const filtered = data.filter((e: EnrolledClass) => (e.profile_id || e.user_id || '') === profile.id);
         if (filtered.length > 0) list = filtered;
-        else list = getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined);
+        else list = fallbackUpcomingClasses;
       } else if (!Array.isArray(data) || data.length === 0) {
-        list = getFallbackUpcomingClasses(profile?.id, profile?.full_name);
+        list = fallbackUpcomingClasses;
       }
       setEnrollments(list);
       setLessonLeaveRequests((prev) => {
@@ -389,9 +402,13 @@ export default function SchedulePage() {
         return next;
       });
     } catch (err) {
-      console.error('Error loading enrolled classes:', err);
-      setError(err instanceof Error ? err.message : t('schedule.loadError'));
-      setEnrollments(getFallbackUpcomingClasses(profile?.id, profile?.full_name));
+      const isTokenOrAuthError =
+        (err instanceof ApiError && [401, 403, 422].includes(err.status)) ||
+        (err instanceof Error && /please provide token|token/i.test(err.message));
+      if (!isTokenOrAuthError) {
+        setError(err instanceof Error ? err.message : t('schedule.loadError'));
+      }
+      setEnrollments(fallbackUpcomingClasses);
     } finally {
       setLoading(false);
     }
@@ -660,12 +677,11 @@ export default function SchedulePage() {
             </h2>
           </div>
           <div className="p-4 md:p-6">
-          {/* View switcher: Month | Week | Day — visible on phone and desktop */}
+          {/* View switcher: Month | Week — visible on phone and desktop */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
             <div className="flex rounded-lg border border-gray-200 p-0.5 bg-gray-50">
               <button type="button" onClick={() => setView('month')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${view === 'month' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>{t('calendar.month')}</button>
               <button type="button" onClick={() => setView('week')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${view === 'week' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>{t('calendar.week')}</button>
-              <button type="button" onClick={() => setView('day')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${view === 'day' ? 'bg-primary text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}>{t('calendar.day')}</button>
             </div>
           </div>
           <div className="flex items-center justify-between mb-4">

@@ -104,6 +104,22 @@ function profileFromUser(u: DemoUser) {
   };
 }
 
+function parseStudentIdSequence(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const m = value.trim().toLowerCase().match(/^yayakid(\d+)$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function getNextStudentId(users: DemoUser[]): string {
+  const maxSeq = users.reduce((max, u) => {
+    const seq = parseStudentIdSequence(u.student_id);
+    return seq != null && seq > max ? seq : max;
+  }, 0);
+  return `yayakid${maxSeq + 1}`;
+}
+
 function classWithStats(c: DemoClass) {
   const db = getDb();
   const enrolled = db.enrollments.filter(
@@ -174,6 +190,19 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       idLastFour?: string;
       countryCode?: string;
       mobile?: string;
+      nickName?: string | null;
+      nick_name?: string | null;
+      dateOfBirth?: string | null;
+      date_of_birth?: string | null;
+      sex?: boolean | null;
+      parentsName?: string | null;
+      parents_name?: string | null;
+      contactNumber?: string | null;
+      contact_number?: string | null;
+      residentialDistrict?: string | null;
+      residential_district?: string | null;
+      hasJoinedCourses?: boolean | null;
+      has_joined_courses?: boolean | null;
     };
     const email = (b.email || '').trim();
     if (!email || !b.password) return err('Email and password required.');
@@ -192,7 +221,14 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       country_code: b.countryCode || '852',
       id_last_four: b.idLastFour,
       id_first_four: b.idLastFour,
-      student_id: `std${100000 + Math.floor(Math.random() * 899999)}`,
+      student_id: getNextStudentId(db.users),
+      nick_name: b.nick_name ?? b.nickName ?? null,
+      date_of_birth: b.date_of_birth ?? b.dateOfBirth ?? null,
+      sex: b.sex ?? null,
+      parents_name: b.parents_name ?? b.parentsName ?? null,
+      contact_number: b.contact_number ?? b.contactNumber ?? b.mobile ?? null,
+      residential_district: b.residential_district ?? b.residentialDistrict ?? null,
+      has_joined_courses: b.has_joined_courses ?? b.hasJoinedCourses ?? null,
       created_at: new Date().toISOString(),
     };
     mutate((d) => {
@@ -241,8 +277,19 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
 
   if (method === 'POST' && path === '/user/forgot-password') {
     const b = body as { email?: string; mobile?: string; countryCode?: string };
-    const target = b.email ?? `${b.countryCode ?? ''}${b.mobile ?? ''}`;
+    const email = (b.email ?? '').toString().trim().toLowerCase();
+    const mobileRaw = `${b.countryCode ?? ''}${b.mobile ?? ''}`.trim();
+    const target = email || mobileRaw;
     if (!target) return err('Email or mobile required.');
+    const db = getDb();
+    const exists = email
+      ? db.users.some((u) => String(u.email ?? '').trim().toLowerCase() === email)
+      : db.users.some((u) => {
+          const m = String(u.mobile ?? '').trim();
+          if (!m) return false;
+          return m === mobileRaw || mobileRaw.endsWith(m);
+        });
+    if (!exists) return err('User not found.');
     mutate((d) => {
       d.otps[target] = '123456';
     });
@@ -802,6 +849,8 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     const cls = t.assigned_class_id
       ? d.classes.find((c) => String(c.id) === String(t.assigned_class_id))
       : null;
+    const resolvedProgramCode =
+      t.preferred_program || cls?.program_code || null;
     return {
       id: t.id,
       applicant_name: t.student_name,
@@ -818,7 +867,11 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
         t.requested_trial_class_name ||
         t.preferred_program ||
         '',
+      course_code: resolvedProgramCode,
+      program_code: resolvedProgramCode,
+      class_code: resolvedProgramCode,
       class_name: t.assigned_class_name || cls?.name || '',
+      branch: t.preferred_location ?? cls?.location ?? null,
       preferred_datetime: t.preferred_date,
       preferred_date: t.preferred_date,
       trial_date: cls?.start_time || t.preferred_date,
@@ -837,6 +890,58 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && path === '/admin/trial-applications') {
     const db = getDb();
     return ok(db.trialApplications.map(toAdminTrialRow));
+  }
+  if (method === 'POST' && path === '/admin/trial-applications') {
+    const raw = (body ?? {}) as Record<string, unknown>;
+    const applicantName = String(raw.applicant_name ?? raw.full_name ?? raw.student_name ?? '').trim();
+    const applicantPhone = String(raw.applicant_phone ?? raw.contact_number ?? raw.mobile ?? '').trim();
+    const trialClass = String(
+      raw.trial_class ?? raw.class_name ?? raw.trialClassName ?? raw.requested_trial_class_name ?? ''
+    ).trim();
+    const courseCode = String(
+      raw.course_code ?? raw.class_code ?? raw.program_code ?? raw.programCode ?? raw.preferred_program ?? ''
+    ).trim();
+    const preferredDate = String(
+      raw.preferred_datetime ?? raw.preferred_date ?? raw.trial_date ?? new Date().toISOString()
+    ).trim();
+    const branch = String(raw.branch ?? raw.location ?? raw.preferred_location ?? '').trim();
+    const notes = String(raw.notes ?? '').trim();
+    const createdAt = String(raw.applied_at ?? raw.created_at ?? new Date().toISOString()).trim();
+    const classId = String(raw.class_id ?? raw.assigned_class_id ?? '').trim();
+    const rawStatus = String(raw.status ?? 'pending').trim().toLowerCase();
+
+    if (!applicantName || !applicantPhone || !trialClass) {
+      return err('Missing required fields: applicant_name, applicant_phone, trial_class');
+    }
+
+    const dbStatus: DemoTrialApplication['status'] =
+      rawStatus === 'cancelled'
+        ? 'cancelled'
+        : rawStatus === 'confirmed'
+          ? 'assigned'
+          : 'pending';
+
+    const created: DemoTrialApplication = {
+      id: nextId('trial'),
+      student_name: applicantName,
+      email: `trial_${Date.now()}@demo.local`,
+      mobile: applicantPhone,
+      preferred_date: preferredDate || new Date().toISOString(),
+      preferred_location: branch || undefined,
+      preferred_program: courseCode || trialClass,
+      requested_trial_class_name: trialClass,
+      assigned_class_id: classId || null,
+      assigned_class_name: null,
+      assigned_lessons: null,
+      status: dbStatus,
+      notes: notes || null,
+      user_id: null,
+      created_at: createdAt || new Date().toISOString(),
+    };
+    mutate((d) => {
+      d.trialApplications.unshift(created);
+    });
+    return ok(toAdminTrialRow(created));
   }
   const adminTrialId = matches('/admin/trial-applications/:id', path);
   if (method === 'PATCH' && adminTrialId) {
@@ -1668,6 +1773,17 @@ function createTrialApplication(req: MockRequest): MockResponse {
     return s.length > 0 ? s : undefined;
   })();
   const notes: string | undefined = raw.notes ?? raw.howDidYouHear;
+  const sendConfirmationEmail = raw.sendConfirmationEmail !== false;
+  const sendTemporaryPasswordEmail = raw.sendTemporaryPasswordEmail !== false;
+
+  const generateTemporaryPassword = (length = 12): string => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+    let result = '';
+    for (let i = 0; i < length; i += 1) {
+      result += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return result;
+  };
 
   if (!email || !studentName) return err('Missing fields: email, fullName');
 
@@ -1676,16 +1792,17 @@ function createTrialApplication(req: MockRequest): MockResponse {
   const accountCreated = !existing;
   let u = existing;
   if (!u) {
+    const temporaryPassword = generateTemporaryPassword(12);
     u = {
       id: nextId('user'),
       email,
-      // Demo: new trial accounts share the standard demo password.
-      password: 'demo1234',
+      // Demo mode: mimic backend random temporary password generation.
+      password: temporaryPassword,
       name: studentName,
       role: 'student',
       mobile,
       country_code: countryCode ?? '852',
-      student_id: `std${100000 + Math.floor(Math.random() * 899999)}`,
+      student_id: getNextStudentId(db.users),
       date_of_birth: dateOfBirth,
       must_change_password: true,
       created_at: new Date().toISOString(),
@@ -1718,9 +1835,10 @@ function createTrialApplication(req: MockRequest): MockResponse {
     applicationId: Number(created.id.replace(/\D/g, '')) || Date.now(),
     existingUser: !accountCreated,
     accountCreated,
-    emailSent: accountCreated,
+    emailSent: accountCreated ? sendTemporaryPasswordEmail : false,
+    confirmationEmailSent: sendConfirmationEmail,
     message: accountCreated
-      ? '已建立新帳號；臨時密碼已寄到 email（demo 模式：demo1234）'
+      ? '已建立新帳號；臨時密碼已寄到 email。'
       : '試堂申請已紀錄，請用你原本的帳號登入查看。',
     data: created,
   } as MockResponse;

@@ -73,6 +73,11 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
     }
   }, [userMenuOpen]);
 
+  // Reset page scroll on public route changes.
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname, location.search]);
+
   return (
     <div className="min-h-screen bg-cream">
       <a

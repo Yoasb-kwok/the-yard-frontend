@@ -17,18 +17,28 @@ export function ageRangeToTag(lowest: number, oldest: number): string {
   return `${l}-${Math.max(l, h)}`;
 }
 
-/**
- * Derive age group from date of birth using (today - DOB).
- * Returns '5-8' | '9-12' | '13-16' if age falls in range, otherwise null.
- */
-export function getAgeTagFromDateOfBirth(dob: string | null): AgeTag | null {
+/** Calculate exact age from DOB using today's date. */
+export function getAgeFromDateOfBirth(dob: string | null): number | null {
   if (!dob) return null;
   const birth = new Date(dob);
   if (isNaN(birth.getTime())) return null;
   const today = new Date();
   let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  if (!Number.isFinite(age) || age < 0) return null;
+  return age;
+}
+
+/**
+ * Derive age group from date of birth using (today - DOB).
+ * Returns '5-8' | '9-12' | '13-16' if age falls in range, otherwise null.
+ */
+export function getAgeTagFromDateOfBirth(dob: string | null): AgeTag | null {
+  const age = getAgeFromDateOfBirth(dob);
+  if (age == null) return null;
   if (age >= 5 && age <= 8) return '5-8';
   if (age >= 9 && age <= 12) return '9-12';
   if (age >= 13 && age <= 16) return '13-16';

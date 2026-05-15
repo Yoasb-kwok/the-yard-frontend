@@ -1,108 +1,21 @@
 import { useState } from 'react';
 import Layout from '../../components/Layout';
-import { useAuth, CourseLevel, AddProfileData } from '../../contexts/AuthContext';
-import { getAgeTagFromDateOfBirth } from '../../lib/utils';
-import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
+import { useAuth } from '../../contexts/AuthContext';
+import { getAgeFromDateOfBirth } from '../../lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { User, Copy, Check, Pencil, Trash2, KeyRound } from 'lucide-react';
-import DateSelect from '../../components/DateSelect';
+import { User, Copy, Check, KeyRound } from 'lucide-react';
 import AccountSecurityCard from '../../components/AccountSecurityCard';
 
-const emptyForm = (): AddProfileData & { has_joined_courses: boolean } => ({
-  full_name: '',
-  nick_name: '',
-  date_of_birth: '',
-  sex: null,
-  parents_name: '',
-  contact_number: '',
-  residential_district: '',
-  has_joined_courses: false,
-  level: null,
-});
-
 export default function ProfilePage() {
-  const { profile, user, profiles, addProfile, updateProfile, deleteProfile, refreshMe, requirePasswordChange } = useAuth();
+  const { profile, user, profiles, refreshMe, requirePasswordChange } = useAuth();
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  const [message, setMessage] = useState('');
   const [copied, setCopied] = useState(false);
-  const [modalMode, setModalMode] = useState<'add' | 'edit' | null>(null);
-  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
-  const [form, setForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyForm());
 
   if (!profile) return null;
 
-  const hasMultipleProfiles = profiles.length > 1;
   const isStudent = profile.role === 'student';
-  const firstProfile = profiles[0];
-  const canDelete = hasMultipleProfiles && firstProfile && profile.id !== firstProfile.id;
-
-  // Open Add modal: reset form and pre-fill from first profile
-  const openAddModal = () => {
-    setForm({
-      ...emptyForm(),
-      parents_name: firstProfile?.parents_name ?? '',
-      contact_number: firstProfile?.contact_number ?? firstProfile?.mobile ?? '',
-      residential_district: firstProfile?.residential_district ?? '',
-    });
-    setModalMode('add');
-    setEditingProfileId(null);
-  };
-
-  // Open Edit modal: fill from the profile
-  const openEditModal = (p: (typeof profiles)[0]) => {
-    setForm({
-      full_name: p.full_name,
-      nick_name: p.nick_name ?? '',
-      date_of_birth: p.date_of_birth ?? '',
-      sex: p.sex,
-      parents_name: p.parents_name ?? '',
-      contact_number: p.contact_number ?? p.mobile ?? '',
-      residential_district: p.residential_district ?? '',
-      has_joined_courses: p.has_joined_courses ?? false,
-      level: p.level,
-    });
-    setModalMode('edit');
-    setEditingProfileId(p.id);
-  };
-
-  const closeModal = () => {
-    setModalMode(null);
-    setEditingProfileId(null);
-    setForm(emptyForm());
-  };
-
-  const handleSubmitMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.full_name.trim()) return;
-    const payload: AddProfileData = {
-      full_name: form.full_name.trim(),
-      nick_name: form.nick_name || null,
-      date_of_birth: form.date_of_birth || null,
-      sex: form.sex,
-      parents_name: form.parents_name || null,
-      contact_number: form.contact_number || null,
-      residential_district: form.residential_district || null,
-      has_joined_courses: form.has_joined_courses,
-      level: form.level,
-    };
-    if (modalMode === 'add') {
-      addProfile(payload);
-      setMessage(t('profile.memberAdded'));
-    } else if (modalMode === 'edit' && editingProfileId) {
-      updateProfile(editingProfileId, payload);
-      setMessage(t('profile.memberUpdated'));
-    }
-    closeModal();
-  };
-
-  const handleDeleteMember = (p: (typeof profiles)[0]) => {
-    if (p.id === firstProfile?.id) return;
-    if (!window.confirm(t('profile.confirmDeleteFamilyMember', { name: p.full_name }))) return;
-    deleteProfile(p.id);
-    setMessage(t('profile.memberDeleted'));
-  };
 
   // Extract country code and contact number
   const getContactParts = (contactNumber: string | null): { countryCode: string; number: string } => {
@@ -170,12 +83,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {message && (
-          <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded">
-            {message}
-          </div>
-        )}
-
         {requirePasswordChange && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded flex items-center gap-2">
             <KeyRound className="h-5 w-5 flex-shrink-0" />
@@ -195,36 +102,6 @@ export default function ProfilePage() {
               <h2 className="text-xl md:text-2xl font-semibold text-gray-900 mb-1">{profile.full_name}</h2>
               <p className="text-sm md:text-base text-gray-600">{getRoleLabel(profile.role)}</p>
             </div>
-            {isStudent && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  onClick={openAddModal}
-                  className="flex items-center gap-1.5 rounded-md border border-primary bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20"
-                >
-                  <User className="h-4 w-4" />
-                  {t('profile.addFamilyMember')}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openEditModal(profile)}
-                  className="flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Pencil className="h-4 w-4" />
-                  {t('profile.editFamilyMember')}
-                </button>
-                {canDelete && (
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteMember(profile)}
-                    className="flex items-center gap-1.5 rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    {t('profile.deleteFamilyMember')}
-                  </button>
-                )}
-              </div>
-            )}
           </div>
 
           <div className="space-y-3 md:space-y-4">
@@ -293,23 +170,17 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Age Group (derived from date of birth) - Show for students */}
+                {/* Student age (derived from date of birth) - Show for students */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {t('profile.ageTag')}
+                    {t('profile.studentAge', '學生歲數')}
                   </label>
                   <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
                     {(() => {
-                      const ageTag = getAgeTagFromDateOfBirth(profile.date_of_birth);
-                      return ageTag ? (
-                        <span className={`inline-block text-sm font-semibold px-3 py-1.5 rounded border ${
-                          ageTag === '5-8' 
-                            ? 'bg-teal-100 text-teal-800 border-teal-200'
-                            : ageTag === '9-12'
-                            ? 'bg-cyan-100 text-cyan-800 border-cyan-200'
-                            : 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                        }`}>
-                          {t(`calendar.ageTag.${ageTag}`)}
+                      const age = getAgeFromDateOfBirth(profile.date_of_birth);
+                      return age != null ? (
+                        <span className="inline-block text-sm font-semibold px-3 py-1.5 rounded border bg-teal-100 text-teal-800 border-teal-200">
+                          {`${age}${t('calendar.ageTag.yearsOld', '歲')}`}
                         </span>
                       ) : (
                         <span className="text-gray-500">{t('profile.notProvided')}</span>
@@ -432,123 +303,6 @@ export default function ProfilePage() {
           initialOpenPasswordModal={requirePasswordChange || searchParams.get('changePassword') === '1'}
         />
       </div>
-
-      {modalMode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-4 shadow-xl sm:p-6">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">
-              {modalMode === 'add' ? t('profile.addFamilyMember') : t('profile.editFamilyMember')}
-            </h3>
-            <form onSubmit={handleSubmitMember} className="space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.fullName')} <span className="text-red-600">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={form.full_name}
-                  onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.nickName')}</label>
-                <input
-                  type="text"
-                  value={form.nick_name}
-                  onChange={(e) => setForm((f) => ({ ...f, nick_name: e.target.value }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.dateOfBirth')}</label>
-                <DateSelect
-                  birthDateMode
-                  value={form.date_of_birth || ''}
-                  onChange={(v) => setForm((f) => ({ ...f, date_of_birth: v || null }))}
-                  className="w-full"
-                  ariaLabel={t('profile.dateOfBirth')}
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.sex')}</label>
-                <select
-                  value={form.sex === true ? 'male' : form.sex === false ? 'female' : ''}
-                  onChange={(e) => setForm((f) => ({ ...f, sex: e.target.value === 'male' ? true : e.target.value === 'female' ? false : null }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">{t('profile.notProvided')}</option>
-                  <option value="male">{t('profile.male')}</option>
-                  <option value="female">{t('profile.female')}</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.parentsName')}</label>
-                <input
-                  type="text"
-                  value={form.parents_name || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, parents_name: e.target.value || null }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.contactNumber')}</label>
-                <input
-                  type="text"
-                  value={form.contact_number || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, contact_number: e.target.value || null }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.residentialDistrict')}</label>
-                <select
-                  value={form.residential_district || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, residential_district: e.target.value || null }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">{t('profile.notProvided')}</option>
-                  {HK_DISTRICT_KEYS.map((key) => (
-                    <option key={key} value={key}>{t(`districts.${key}`)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.hasJoinedCourses')}</label>
-                <label className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={form.has_joined_courses}
-                    onChange={(e) => setForm((f) => ({ ...f, has_joined_courses: e.target.checked }))}
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-                  />
-                  <span className="text-sm text-gray-700">{t('common.yes')}</span>
-                </label>
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-gray-700">{t('profile.level')}</label>
-                <select
-                  value={form.level || ''}
-                  onChange={(e) => setForm((f) => ({ ...f, level: (e.target.value || null) as CourseLevel | null }))}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="">{t('profile.notProvided')}</option>
-                  <option value="entry">{t('calendar.level.entry')}</option>
-                  <option value="intermediate">{t('calendar.level.intermediate')}</option>
-                  <option value="advanced">{t('calendar.level.advanced')}</option>
-                </select>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={closeModal} className="rounded-md border border-gray-300 px-4 py-2 text-gray-700 hover:bg-gray-50">
-                  {t('common.cancel')}
-                </button>
-                <button type="submit" className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark">
-                  {modalMode === 'add' ? t('common.create') : t('common.save')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </Layout>
   );

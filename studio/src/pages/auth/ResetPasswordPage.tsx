@@ -5,7 +5,14 @@ import PublicLayout from '../../components/PublicLayout';
 import { api } from '../../lib/api';
 import { Lock, ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
-type ResetState = { email?: string; otp?: string; usePhone?: boolean; countryCode?: string; mobile?: string };
+type ResetState = {
+  email?: string;
+  otp?: string;
+  usePhone?: boolean;
+  countryCode?: string;
+  mobile?: string;
+  tempToken?: string | null;
+};
 
 export default function ResetPasswordPage() {
   const { t } = useTranslation();
@@ -39,8 +46,21 @@ export default function ResetPasswordPage() {
     setLoading(true);
     try {
       const body = state.usePhone
-        ? { countryCode: state.countryCode, mobile: state.mobile, otp: state.otp, newPassword }
-        : { email: state.email, otp: state.otp, newPassword };
+        ? {
+            countryCode: state.countryCode,
+            mobile: state.mobile,
+            otp: state.otp,
+            tempToken: state.tempToken,
+            newPassword,
+            confirmPassword,
+          }
+        : {
+            email: state.email,
+            otp: state.otp,
+            tempToken: state.tempToken,
+            newPassword,
+            confirmPassword,
+          };
       const res = await api.post<{ success?: boolean; msg?: string }>('user/reset-password', body);
       if (!res.success) throw new Error(res.msg || t('common.error'));
       setSuccess(true);

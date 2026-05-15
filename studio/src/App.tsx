@@ -54,6 +54,7 @@ import ReassignStudentsPage from './pages/admin/ReassignStudentsPage';
 import HolidaysPage from './pages/admin/HolidaysPage';
 import RefundRecordsPage from './pages/admin/RefundRecordsPage';
 import TrialApplicationsPage from './pages/admin/TrialApplicationsPage';
+import AdminTrialApplicationCreatePage from './pages/admin/AdminTrialApplicationCreatePage';
 import AuditLogPage from './pages/admin/AuditLogPage';
 import AdminClassNoticePage from './pages/admin/AdminClassNoticePage';
 import AdminCourseIntroPage from './pages/admin/AdminCourseIntroPage';
@@ -223,6 +224,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <TrialApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/trial-applications/new"
+            element={
+              <ProtectedRoute requireAdmin>
+                <AdminTrialApplicationCreatePage />
               </ProtectedRoute>
             }
           />

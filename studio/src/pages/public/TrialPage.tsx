@@ -77,6 +77,7 @@ export default function TrialPage() {
     accountCreated?: boolean;
     existingUser?: boolean;
     emailSent?: boolean;
+    confirmationEmailSent?: boolean;
     message?: string;
   } | null>(null);
   const [error, setError] = useState('');
@@ -188,10 +189,25 @@ export default function TrialPage() {
           parentsName: (profile.parents_name || '').trim() || undefined,
           residentialDistrict: (profile.residential_district || '').trim() || undefined,
           hasJoinedCourses: profile.has_joined_courses !== undefined && profile.has_joined_courses !== null ? profile.has_joined_courses : undefined,
+          // Ask backend to send trial-application confirmation email on success.
+          sendConfirmationEmail: true,
+          confirmationEmailType: 'trial_application_submitted',
+          // Ask backend to send one-time temporary password email when account is auto-created.
+          sendTemporaryPasswordEmail: true,
+          temporaryPasswordEmailType: 'trial_account_created',
+          language: i18n.language || 'zh-TW',
         };
-        const res = await api.post<{ success?: boolean; applicationId?: number; existingUser?: boolean }>(TRIAL_APPLY_ENDPOINT, payload);
+        const res = await api.post<{
+          success?: boolean;
+          applicationId?: number;
+          existingUser?: boolean;
+          confirmationEmailSent?: boolean;
+        }>(TRIAL_APPLY_ENDPOINT, payload);
         if (res?.success) {
-          setTrialSuccessResult({ existingUser: true });
+          setTrialSuccessResult({
+            existingUser: true,
+            confirmationEmailSent: res.confirmationEmailSent,
+          });
           setSuccess(true);
           setTimeout(() => navigate('/dashboard'), 3000);
         } else {
@@ -248,6 +264,13 @@ export default function TrialPage() {
         hasDanceExperience: hasDanceExperience !== null ? hasDanceExperience : undefined,
         howDidYouHear: howDidYouHear || undefined,
         promoCode: promoCode.trim() || undefined,
+        // Ask backend to send trial-application confirmation email on success.
+        sendConfirmationEmail: true,
+        confirmationEmailType: 'trial_application_submitted',
+        // Ask backend to send one-time temporary password email when account is auto-created.
+        sendTemporaryPasswordEmail: true,
+        temporaryPasswordEmailType: 'trial_account_created',
+        language: i18n.language || 'zh-TW',
       };
 
       const res = await api.post<{
@@ -256,6 +279,7 @@ export default function TrialPage() {
         existingUser?: boolean;
         accountCreated?: boolean;
         emailSent?: boolean;
+        confirmationEmailSent?: boolean;
         message?: string;
         msg?: string;
       }>(TRIAL_APPLY_ENDPOINT, payload);
@@ -267,6 +291,7 @@ export default function TrialPage() {
           // Backend defaults to true when account is newly created; undefined is treated as
           // "unknown" and will still show the generic success message.
           emailSent: res.emailSent ?? res.accountCreated,
+          confirmationEmailSent: res.confirmationEmailSent,
           message: res.message ?? res.msg,
         });
         setSuccess(true);
@@ -316,7 +341,6 @@ export default function TrialPage() {
                   </p>
                 )}
                 <p className="text-gray-600 mb-2">{t('trial.applicationSubmittedDescLoggedIn')}</p>
-                <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
                 <Link to="/dashboard" className="inline-block mt-2 text-primary font-medium hover:underline">
                   {t('trial.viewTrialStatus', '查看我的試堂申請狀態')}
                 </Link>
@@ -325,7 +349,6 @@ export default function TrialPage() {
             ) : trialSuccessResult?.existingUser ? (
               <>
                 <p className="text-gray-600 mb-4">{t('trial.existingUserApplicationSubmitted')}</p>
-                <p className="text-gray-600 mb-4">{t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}</p>
                 <Link
                   to="/login"
                   className="inline-block mt-2 px-4 py-2 bg-primary text-white rounded-md font-medium hover:bg-primary-dark"
@@ -352,9 +375,6 @@ export default function TrialPage() {
                 <p className="text-gray-700 mb-4">
                   {t('trial.loginAccountLabel')}：
                   <span className="font-mono text-primary break-all">{email}</span>
-                </p>
-                <p className="text-gray-600 mb-4">
-                  {t('trial.successContactYou', '我們會盡快聯絡你確認時間。')}
                 </p>
                 <Link
                   to="/login"

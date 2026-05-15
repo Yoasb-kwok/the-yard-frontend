@@ -18,6 +18,9 @@ export default function OTPVerificationPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(60);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
@@ -27,6 +30,14 @@ export default function OTPVerificationPage() {
   useEffect(() => {
     if (!email && !usePhone) navigate('/forgot-password');
   }, [email, usePhone, navigate]);
+
+  useEffect(() => {
+    if (success || resendCooldown <= 0) return;
+    const timer = window.setInterval(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [resendCooldown, success]);
 
   const handleChange = (index: number, value: string) => {
     // Only allow digits
@@ -98,14 +109,61 @@ export default function OTPVerificationPage() {
       setTimeout(() => {
         navigate('/reset-password', {
           state: usePhone
-            ? { usePhone: true, countryCode: state.countryCode, mobile: state.mobile, otp: otpString }
-            : { email, otp: otpString },
+            ? {
+                usePhone: true,
+                countryCode: state.countryCode,
+                mobile: state.mobile,
+                otp: otpString,
+                tempToken: (res as any).tempToken ?? (res as any).data?.tempToken ?? null,
+              }
+            : {
+                email,
+                otp: otpString,
+                tempToken: (res as any).tempToken ?? (res as any).data?.tempToken ?? null,
+              },
         });
       }, 800);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('otpVerification.verificationFailed'));
+      const msg = err instanceof Error ? err.message : '';
+      const lower = String(msg).toLowerCase();
+      const isOtpMismatch =
+        lower.includes('invalid') ||
+        lower.includes('expired') ||
+        lower.includes('incorrect') ||
+        lower.includes('otp');
+      if (isOtpMismatch) {
+        setError(t('otpVerification.otpIncorrect'));
+      } else {
+        setError(msg || t('otpVerification.verificationFailed'));
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResend() {
+    setError('');
+    setResendMessage('');
+    if (resendCooldown > 0 || resendLoading) return;
+    setResendLoading(true);
+    try {
+      const body = usePhone
+        ? { countryCode: state.countryCode, mobile: state.mobile }
+        : { email };
+      const res = await api.post('user/forgot-password', body);
+      if (!res.success) throw new Error(res.msg || t('common.error'));
+      setResendCooldown(60);
+      setResendMessage(t('otpVerification.resendSent', { defaultValue: '驗證碼已重新發送。' }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : t('common.error');
+      const lower = String(msg).toLowerCase();
+      if (lower.includes('not found') || lower.includes('no such user') || lower.includes('user does not exist')) {
+        setError(t('forgotPassword.userNotFound', { defaultValue: '沒有該用戶' }));
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -138,6 +196,11 @@ export default function OTPVerificationPage() {
               {error && (
                 <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
                   {error}
+                </div>
+              )}
+              {resendMessage && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded">
+                  {resendMessage}
                 </div>
               )}
 
@@ -176,17 +239,22 @@ export default function OTPVerificationPage() {
               <div className="text-center space-y-2">
                 <p className="text-sm text-gray-600">
                   {t('otpVerification.didntReceive')}{' '}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      navigate('/forgot-password', {
-                        state: usePhone ? { usePhone: true, countryCode: state.countryCode, mobile: state.mobile } : { email },
-                      })
-                    }
-                    className="font-medium text-primary hover:text-primary-dark"
-                  >
-                    {t('otpVerification.resend')}
-                  </button>
+                  {resendCooldown > 0 ? (
+                    <span className="font-medium text-gray-500">
+                      {t('otpVerification.resendIn', { defaultValue: '{{seconds}}s 後可重新發送', seconds: resendCooldown })}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResend}
+                      disabled={resendLoading}
+                      className="font-medium text-primary hover:text-primary-dark disabled:opacity-60"
+                    >
+                      {resendLoading
+                        ? t('forgotPassword.sending', { defaultValue: '發送中...' })
+                        : t('otpVerification.resend')}
+                    </button>
+                  )}
                 </p>
                 <div>
                   <Link

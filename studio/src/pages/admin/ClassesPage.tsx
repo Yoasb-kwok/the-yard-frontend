@@ -204,7 +204,7 @@ export default function ClassesPage() {
     tag_values: {} as Record<string, string>,
   });
   const formTagTypes = useMemo(
-    () => tagTypes.filter((tt) => tt.code !== 'category'),
+    () => tagTypes,
     [tagTypes]
   );
   const dynamicTagTypes = useMemo(

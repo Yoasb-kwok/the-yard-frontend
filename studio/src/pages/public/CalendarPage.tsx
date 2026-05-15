@@ -110,8 +110,7 @@ export default function CalendarPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(() => {
-    if (viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam)) return viewParam;
-    if (typeof window !== 'undefined' && window.innerWidth < 768) return 'day';
+    if (viewParam && ['week', 'month'].includes(viewParam)) return viewParam;
     return 'week';
   });
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -168,7 +167,11 @@ export default function CalendarPage() {
   const displayLessonsBase = !isStudent
     ? lessons
     : calendarFilterMode === 'suggested'
-      ? lessons.filter((l) => l.level === profile?.level && l.age_tag === profileAgeTag)
+      ? lessons.filter(
+          (l) =>
+            (!profile?.level || l.level === profile.level) &&
+            (!profileAgeTag || l.age_tag === profileAgeTag)
+        )
       : lessons;
   const displayLessons = useMemo(() => {
     let list = displayLessonsBase;
@@ -219,31 +222,14 @@ export default function CalendarPage() {
   // Update view when URL parameter changes
   useEffect(() => {
     const viewParam = searchParams.get('view') as ViewType | null;
-    if (viewParam && ['day', 'threeDay', 'week', 'month'].includes(viewParam)) {
-      const isMobile = window.innerWidth < 768; // md breakpoint
-      // On desktop, threeDay is not in the main tabs; redirect to day
-      if (!isMobile && viewParam === 'threeDay') {
-        setView('day');
-        setSearchParams({ view: 'day' });
-      } else {
-        setView(viewParam);
-      }
+    if (viewParam && ['week', 'month'].includes(viewParam)) {
+      setView(viewParam);
+    } else if (viewParam) {
+      // Backward compatibility: normalize old URLs to week view.
+      setView('week');
+      setSearchParams({ view: 'week' });
     }
   }, [searchParams, setSearchParams]);
-
-  // Handle window resize - only switch threeDay to day when going to desktop
-  useEffect(() => {
-    const handleResize = () => {
-      const isMobile = window.innerWidth < 768; // md breakpoint
-      if (!isMobile && view === 'threeDay') {
-        setView('day');
-        setSearchParams({ view: 'day' });
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [view, setSearchParams]);
 
   async function loadLessons() {
     setLessonsLoading(true);
@@ -1064,7 +1050,8 @@ export default function CalendarPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setView('day');
+                        setView('week');
+                        setSearchParams({ view: 'week' });
                         setCurrentDate(new Date(day));
                       }}
                       className="text-xs text-primary font-medium hover:underline cursor-pointer mt-0.5 w-full text-left"
@@ -1093,7 +1080,7 @@ export default function CalendarPage() {
           {/* View Switcher and Navigation */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div className="flex flex-wrap items-center gap-2">
-              {/* Primary: 月 / 週 (Month | Week), then Day */}
+              {/* Primary: 月 / 週 (Month | Week) */}
               <button
                 onClick={() => {
                   setView('month');
@@ -1119,33 +1106,6 @@ export default function CalendarPage() {
                 }`}
               >
                 {t('calendar.week')}
-              </button>
-              <button
-                onClick={() => {
-                  setView('day');
-                  setSearchParams({ view: 'day' });
-                }}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'day'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {t('calendar.day')}
-              </button>
-              {/* 3 Days only on mobile */}
-              <button
-                onClick={() => {
-                  setView('threeDay');
-                  setSearchParams({ view: 'threeDay' });
-                }}
-                className={`md:hidden px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'threeDay'
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {t('calendar.threeDay')}
               </button>
             </div>
 

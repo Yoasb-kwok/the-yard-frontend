@@ -4,15 +4,22 @@ import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, User, CreditCard, Phone, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import PublicLayout from '../../components/PublicLayout';
+import DateSelect from '../../components/DateSelect';
+import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 
 export default function RegisterPage() {
   const { t } = useTranslation();
-  const [accountType, setAccountType] = useState<'one' | 'multiple'>('one');
   const [fullName, setFullName] = useState('');
+  const [nickName, setNickName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [sex, setSex] = useState<boolean | null>(null);
+  const [parentsName, setParentsName] = useState('');
   const [idLastFour, setIdLastFour] = useState('');
   const [countryCode, setCountryCode] = useState('852');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
+  const [residentialDistrict, setResidentialDistrict] = useState('');
+  const [hasJoinedCourses, setHasJoinedCourses] = useState<boolean | null>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -49,13 +56,13 @@ export default function RegisterPage() {
         email,
         password,
         fullName,
-        null,
-        null,
-        null,
-        null,
+        nickName.trim() || null,
+        dateOfBirth || null,
+        sex,
+        parentsName.trim() || null,
         fullMobile,
-        null,
-        null,
+        residentialDistrict || null,
+        hasJoinedCourses,
         { idLastFour, countryCode, mobile }
       );
       navigate('/login');
@@ -90,32 +97,9 @@ export default function RegisterPage() {
             )}
             <div className="rounded-md shadow-sm space-y-4">
               <div>
-                <p className="block text-sm font-medium text-gray-700 mb-2">{t('register.accountType')}</p>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="accountType"
-                      checked={accountType === 'one'}
-                      onChange={() => setAccountType('one')}
-                      className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
-                    />
-                    <span className="text-sm text-gray-900">{t('register.oneChild')}</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="accountType"
-                      checked={accountType === 'multiple'}
-                      onChange={() => setAccountType('multiple')}
-                      className="h-4 w-4 text-primary border-gray-300 focus:ring-primary"
-                    />
-                    <span className="text-sm text-gray-900">{t('register.multipleChildren')}</span>
-                  </label>
-                </div>
-                {accountType === 'multiple' && (
-                  <p className="mt-2 text-xs text-gray-500">{t('register.multipleChildrenHint')}</p>
-                )}
+                <p className="text-xs text-gray-500">
+                  {t('register.multipleChildrenHint')}
+                </p>
               </div>
               <div>
                 <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
@@ -139,6 +123,67 @@ export default function RegisterPage() {
                 </div>
               </div>
               <div>
+                <label htmlFor="nickName" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('profile.nickName')}
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                    <User className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <input
+                    id="nickName"
+                    name="nickName"
+                    type="text"
+                    className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    placeholder={t('profile.nickName')}
+                    value={nickName}
+                    onChange={(e) => setNickName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('profile.dateOfBirth')}
+                </label>
+                <DateSelect
+                  id="dateOfBirth"
+                  birthDateMode
+                  value={dateOfBirth}
+                  onChange={setDateOfBirth}
+                  className="w-full appearance-none relative block border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                  ariaLabel={t('profile.dateOfBirth')}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('profile.sex')}
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="sex"
+                      value="male"
+                      checked={sex === true}
+                      onChange={() => setSex(true)}
+                      className="mr-2"
+                    />
+                    {t('profile.male')}
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="sex"
+                      value="female"
+                      checked={sex === false}
+                      onChange={() => setSex(false)}
+                      className="mr-2"
+                    />
+                    {t('profile.female')}
+                  </label>
+                </div>
+              </div>
+              <div>
                 <label htmlFor="idLastFour" className="block text-sm font-medium text-gray-700 mb-1">
                   {t('register.idLastFour')}
                 </label>
@@ -159,6 +204,66 @@ export default function RegisterPage() {
                     onChange={(e) => setIdLastFour(e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase())}
                   />
                 </div>
+              </div>
+              <div>
+                <label htmlFor="residentialDistrict" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('profile.residentialDistrict')}
+                </label>
+                <select
+                  id="residentialDistrict"
+                  name="residentialDistrict"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  value={residentialDistrict}
+                  onChange={(e) => setResidentialDistrict(e.target.value)}
+                >
+                  <option value="">{t('districts.pleaseSelect')}</option>
+                  {HK_DISTRICT_KEYS.map((key) => (
+                    <option key={key} value={key}>{t(`districts.${key}`)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('profile.hasJoinedCourses')}
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="hasJoinedCourses"
+                      value="yes"
+                      checked={hasJoinedCourses === true}
+                      onChange={() => setHasJoinedCourses(true)}
+                      className="mr-2"
+                    />
+                    {t('common.yes')}
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="hasJoinedCourses"
+                      value="no"
+                      checked={hasJoinedCourses === false}
+                      onChange={() => setHasJoinedCourses(false)}
+                      className="mr-2"
+                    />
+                    {t('common.no')}
+                  </label>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="parentsName" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('profile.parentsName')}
+                </label>
+                <input
+                  id="parentsName"
+                  name="parentsName"
+                  type="text"
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  placeholder={t('profile.parentsName')}
+                  value={parentsName}
+                  onChange={(e) => setParentsName(e.target.value)}
+                />
               </div>
               <div>
                 <label htmlFor="mobile" className="block text-sm font-medium text-gray-700 mb-1">

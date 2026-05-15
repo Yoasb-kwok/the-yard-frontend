@@ -6,7 +6,11 @@ import { useHolidays } from '../lib/useHolidays';
 import { api } from '../lib/api';
 import { getLessonDatesSkipHolidays, getLessonDates, formatDateTimeRange } from '../lib/utils';
 import { getLocationInfo } from '../lib/locationInfo';
-import { getFallbackUpcomingClasses, type EnrolledClass } from '../lib/studentEnrollments';
+import {
+  getFallbackUpcomingClasses,
+  shouldUseDemoUpcomingClasses,
+  type EnrolledClass,
+} from '../lib/studentEnrollments';
 import { MapPin } from 'lucide-react';
 
 export default function StudentSidebarSchedule() {
@@ -23,6 +27,19 @@ export default function StudentSidebarSchedule() {
       setLoading(false);
       return;
     }
+    const fallbackUpcomingClasses =
+      shouldUseDemoUpcomingClasses(profile.id)
+        ? getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined)
+        : [];
+    const token = localStorage.getItem('token');
+    if (!token) {
+      const sorted = [...fallbackUpcomingClasses].sort(
+        (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
+      );
+      setEnrollments(sorted);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     api
       .get<{ data?: EnrolledClass[] }>('/student/upcoming-classes')
@@ -33,14 +50,14 @@ export default function StudentSidebarSchedule() {
           list = list.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
         }
         if (list.length === 0) {
-          list = getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined);
+          list = fallbackUpcomingClasses;
         }
         const sorted = [...list].sort(
           (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
         );
         setEnrollments(sorted);
       })
-      .catch(() => setEnrollments(getFallbackUpcomingClasses(profile?.id, profile?.full_name)))
+      .catch(() => setEnrollments(fallbackUpcomingClasses))
       .finally(() => setLoading(false));
   }, [profile?.id, profile?.full_name]);
 

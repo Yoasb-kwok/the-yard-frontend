@@ -33,6 +33,15 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setRawNotifications([]);
+      setEnrollments([]);
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
     setLoading(true);
     Promise.all([
       api.get<{ data?: ApiNotification[] }>('/student/notifications'),

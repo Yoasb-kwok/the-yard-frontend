@@ -67,11 +67,17 @@ export default function Layout({ children }: LayoutProps) {
 
   // Student: 儀表板／付款記錄／訊息中心 只在 Dashboard 區顯示；點選子女（課程表、我的資料）時只顯示 我的課程表、我的資料 + 最新通知
   const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history' || location.pathname === '/notifications';
-  const studentNavItemsDashboard = [
-    { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
-    { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
-    { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
-  ];
+  const primaryProfileId = profiles[0]?.id ?? null;
+  const isMasterAccountView = !!primaryProfileId && activeProfileId === primaryProfileId;
+  const studentNavItemsDashboard = isMasterAccountView
+    ? [
+        { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
+        { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
+      ]
+    : [
+        { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
+        { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
+      ];
   const studentNavItemsScheduleProfile = [
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
     { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },
@@ -605,6 +611,7 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
 
+          {!isAdmin && (
           <footer className="bg-primary-dark text-white border-t border-primary mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
@@ -682,6 +689,7 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
         </footer>
+          )}
         </main>
       </div>
 

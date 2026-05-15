@@ -86,6 +86,28 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const STUDENT_ID_PREFIX = 'yayakid';
+const STUDENT_ID_COUNTER_KEY = 'studio_student_id_counter';
+let hasWarnedMissingAuthProvider = false;
+
+const fallbackAuthContext: AuthContextType = {
+  user: null,
+  profile: null,
+  profiles: [],
+  activeProfileId: null,
+  switchProfile: () => {},
+  addProfile: () => {},
+  updateProfile: () => {},
+  deleteProfile: () => {},
+  session: null,
+  loading: false,
+  signIn: async () => {},
+  signUp: async () => {},
+  signOut: async () => {},
+  isAdmin: false,
+  requirePasswordChange: false,
+  refreshMe: async () => {},
+};
 
 // Hardcoded accounts. Each account has profiles: [main, ...subAccounts]. Sub-accounts let one parent manage multiple children (e.g. 陳小明 family: 陳小明, 陳小美, 陳大明).
 const HARDCODED_ACCOUNTS: Record<
@@ -123,7 +145,7 @@ const HARDCODED_ACCOUNTS: Record<
         role: 'student' as const,
         mobile: '85291234567',
         id_first_four: 'S123',
-        student_id: 'std123456',
+        student_id: 'yayakid1',
         nick_name: '小明',
         date_of_birth: '2010-05-15',
         sex: true, // male
@@ -140,7 +162,7 @@ const HARDCODED_ACCOUNTS: Record<
         role: 'student' as const,
         mobile: '85291234567',
         id_first_four: null,
-        student_id: 'std123457',
+        student_id: 'yayakid2',
         nick_name: '小美',
         date_of_birth: '2012-08-20',
         sex: false, // female
@@ -157,7 +179,7 @@ const HARDCODED_ACCOUNTS: Record<
         role: 'student' as const,
         mobile: '85291234567',
         id_first_four: null,
-        student_id: 'std123458',
+        student_id: 'yayakid3',
         nick_name: '大明',
         date_of_birth: '2008-03-10',
         sex: true, // male
@@ -536,6 +558,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const parsed = JSON.parse(storedSession);
         if (parsed.user?.email === loginIdentifier) {
+          const fallbackToken =
+            parsed.authToken ??
+            localStorage.getItem('token') ??
+            `sheet_${parsed.user?.id ?? loginIdentifier}_${Date.now()}`;
+          localStorage.setItem('token', String(fallbackToken));
           setUser(parsed.user);
           setSession(parsed.session ?? null);
           if (parsed.profiles?.length) {
@@ -548,6 +575,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfiles(null);
             setActiveProfileId(null);
           }
+          try {
+            localStorage.setItem(
+              'auth_session',
+              JSON.stringify({
+                ...parsed,
+                authToken: String(fallbackToken),
+              })
+            );
+          } catch (_) {}
           return;
         }
       } catch (_) {}
@@ -556,11 +592,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     throw new Error('Invalid email or password');
   }
 
-  // Generate unique Student ID (format: std + 6 random digits)
+  function parseStudentIdSequence(value: unknown): number | null {
+    if (typeof value !== 'string') return null;
+    const m = value.trim().toLowerCase().match(/^yayakid(\d+)$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  // Generate unique Student ID (format: yayakid1, yayakid2, ...)
   function generateStudentId(): string {
-    // Generate 6 random digits
-    const randomDigits = Math.floor(100000 + Math.random() * 900000).toString();
-    return `std${randomDigits}`;
+    let maxSeq = 0;
+
+    const fromCounter = Number(localStorage.getItem(STUDENT_ID_COUNTER_KEY) || '0');
+    if (Number.isFinite(fromCounter) && fromCounter > maxSeq) {
+      maxSeq = fromCounter;
+    }
+
+    const fromProfiles = (profiles ?? [])
+      .map((p) => parseStudentIdSequence(p.student_id))
+      .filter((n): n is number => n != null);
+    if (fromProfiles.length > 0) {
+      maxSeq = Math.max(maxSeq, ...fromProfiles);
+    }
+
+    try {
+      const stored = localStorage.getItem('auth_session');
+      if (stored) {
+        const parsed = JSON.parse(stored) as { profiles?: Array<{ student_id?: string | null }> };
+        const fromStored = (parsed.profiles ?? [])
+          .map((p) => parseStudentIdSequence(p.student_id))
+          .filter((n): n is number => n != null);
+        if (fromStored.length > 0) {
+          maxSeq = Math.max(maxSeq, ...fromStored);
+        }
+      }
+    } catch (_) {}
+
+    const next = maxSeq + 1;
+    localStorage.setItem(STUDENT_ID_COUNTER_KEY, String(next));
+    return `${STUDENT_ID_PREFIX}${next}`;
   }
 
   async function signUp(
@@ -577,7 +648,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     extra?: { idLastFour: string; countryCode: string; mobile: string }
   ) {
     const confirmPassword = password;
-    const body: Record<string, string> = {
+    const body: Record<string, string | boolean | null> = {
       email,
       password,
       confirmPassword,
@@ -585,6 +656,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       idLastFour: extra?.idLastFour ?? '',
       countryCode: extra?.countryCode ?? '852',
       mobile: extra?.mobile ?? contactNumber ?? '',
+      // Student profile fields (first child) — send both camelCase and snake_case
+      // for backend compatibility during API migration.
+      nickName: nickName ?? null,
+      nick_name: nickName ?? null,
+      dateOfBirth: dateOfBirth ?? null,
+      date_of_birth: dateOfBirth ?? null,
+      sex: sex,
+      parentsName: parentsName ?? null,
+      parents_name: parentsName ?? null,
+      contactNumber: contactNumber ?? null,
+      contact_number: contactNumber ?? null,
+      residentialDistrict: residentialDistrict ?? null,
+      residential_district: residentialDistrict ?? null,
+      hasJoinedCourses: hasJoinedCourses,
+      has_joined_courses: hasJoinedCourses,
     };
     try {
       const res = await api.post('user/register', body) as {
@@ -600,13 +686,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.success && u) {
         const userObj: User = { id: String(u.ID ?? u.id), email: u.email ?? email };
         const profileData = regBody.profile ?? res.profile ?? {};
+        const backendStudentId =
+          profileData.student_id ??
+          profileData.studentId ??
+          u.student_id ??
+          u.studentId ??
+          null;
         const profileObj: Profile = {
           id: userObj.id,
           full_name: u.name ?? fullName,
           role: 'student',
           mobile: profileData.mobile ?? contactNumber ?? null,
           id_first_four: profileData.id_first_four ?? extra?.idLastFour ?? null,
-          student_id: profileData.student_id ?? null,
+          student_id:
+            typeof backendStudentId === 'string' && backendStudentId.trim().length > 0
+              ? backendStudentId
+              : generateStudentId(),
           nick_name: nickName,
           date_of_birth: dateOfBirth,
           sex: sex,
@@ -657,6 +752,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       level: null,
     };
     const sessionObj: Session = { user: userObj };
+    const fallbackToken = `sheet_${userObj.id}_${Date.now()}`;
+    localStorage.setItem('token', fallbackToken);
     setUser(userObj);
     setProfiles([profileObj]);
     setActiveProfileId(profileObj.id);
@@ -666,6 +763,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       profiles: [profileObj],
       activeProfileId: profileObj.id,
       session: sessionObj,
+      authToken: fallbackToken,
     });
     if (password) localStorage.setItem(`user_password_${email}`, password);
   }
@@ -731,7 +829,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    if (!hasWarnedMissingAuthProvider) {
+      hasWarnedMissingAuthProvider = true;
+      console.warn('useAuth called without AuthProvider. Falling back to unauthenticated state.');
+    }
+    return fallbackAuthContext;
   }
   return context;
 }

@@ -36,3 +36,11 @@ export interface EnrolledClass {
 export function getFallbackUpcomingClasses(profileId?: string, profileName?: string): EnrolledClass[] {
   return getFallbackEnrolledClassesForStudent(profileId, profileName);
 }
+
+/**
+ * Only inject demo enrollments for known demo profiles.
+ * New real users should see empty upcoming classes when no data exists.
+ */
+export function shouldUseDemoUpcomingClasses(profileId?: string): boolean {
+  return Boolean(profileId && DEMO_PROFILE_IDS.includes(profileId));
+}
