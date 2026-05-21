@@ -22,7 +22,7 @@ export function TableSortButton({ label, sortKey, currentSortKey, sortDir, onSor
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className="inline-flex items-center gap-1 text-left font-medium text-gray-500 uppercase hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded px-1 py-0.5"
+        className="inline-flex items-start gap-1 text-left font-medium text-gray-500 uppercase hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded px-1 py-0.5 whitespace-normal"
       >
         <span>{label}</span>
         {isActive ? (

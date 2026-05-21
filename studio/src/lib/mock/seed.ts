@@ -272,9 +272,10 @@ export function buildSeed(): DemoDb {
   const trialApplications: DemoDb['trialApplications'] = [
     {
       id: 'trial_001',
-      student_name: '林小朋友',
-      email: 'lin@example.com',
-      mobile: '91111111',
+      student_name: '陳小美',
+      email: 'student@demo.com',
+      mobile: '62345678',
+      user_id: 'user_001',
       country_code: '852',
       date_of_birth: '2016-07-10',
       preferred_date: iso(daysFromNow(5)),

@@ -65,22 +65,25 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [userMenuOpen]);
 
-  // Student: 儀表板／付款記錄／訊息中心 只在 Dashboard 區顯示；點選子女（課程表、我的資料）時只顯示 我的課程表、我的資料 + 最新通知
-  const isOnDashboardSection = location.pathname === '/dashboard' || location.pathname === '/payment-history' || location.pathname === '/notifications';
+  // Student: 主帳戶區（儀表板、訊息中心）；子女帳戶區（課程表、我的資料、購買記錄）+ 最新通知
   const primaryProfileId = profiles[0]?.id ?? null;
   const isMasterAccountView = !!primaryProfileId && activeProfileId === primaryProfileId;
+  const isOnDashboardSection =
+    location.pathname === '/dashboard' || location.pathname === '/notifications';
+
+  const resetToMasterProfile = () => {
+    if (!isAdmin && primaryProfileId) switchProfile(primaryProfileId);
+  };
   const studentNavItemsDashboard = isMasterAccountView
     ? [
         { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
         { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
       ]
-    : [
-        { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
-        { path: '/payment-history', icon: Receipt, label: t('nav.paymentHistory') },
-      ];
+    : [{ path: '/dashboard', icon: Home, label: t('nav.dashboard') }];
   const studentNavItemsScheduleProfile = [
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
     { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },
+    { path: '/payment-history', icon: Receipt, label: t('nav.purchaseHistory') },
   ];
   const studentNavItems = isOnDashboardSection ? studentNavItemsDashboard : studentNavItemsScheduleProfile;
 
@@ -208,7 +211,10 @@ export default function Layout({ children }: LayoutProps) {
                     {user && (
                       <Link
                         to={isAdmin ? '/admin' : '/dashboard'}
-                        onClick={() => setUserMenuOpen(false)}
+                        onClick={() => {
+                          resetToMasterProfile();
+                          setUserMenuOpen(false);
+                        }}
                         className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                       >
                         <LayoutDashboard className="h-4 w-4" />
@@ -320,7 +326,10 @@ export default function Layout({ children }: LayoutProps) {
                     <div className="pt-2 space-y-2">
                       <Link
                         to="/dashboard"
-                        onClick={() => setMobileMenuOpen(false)}
+                        onClick={() => {
+                          resetToMasterProfile();
+                          setMobileMenuOpen(false);
+                        }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-base font-medium rounded-lg bg-white text-gray-700 hover:bg-gray-100 active:bg-gray-200 ring-1 ring-gray-300"
                       >
                         <LayoutDashboard className="h-5 w-5 text-gray-500" />
@@ -470,6 +479,9 @@ export default function Layout({ children }: LayoutProps) {
                   <Link
                     key={item.path}
                     to={item.path}
+                    onClick={() => {
+                      if (item.path === '/dashboard') resetToMasterProfile();
+                    }}
                     className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                       isActive(item.path)
                         ? 'bg-primary-lighter text-primary'
@@ -561,7 +573,10 @@ export default function Layout({ children }: LayoutProps) {
                       <Link
                         key={item.path}
                         to={item.path}
-                        onClick={() => setSidebarOpen(false)}
+                        onClick={() => {
+                          if (item.path === '/dashboard') resetToMasterProfile();
+                          setSidebarOpen(false);
+                        }}
                         className={`group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                           isActive(item.path)
                             ? 'bg-primary-lighter text-primary'
@@ -600,7 +615,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="max-w-7xl mx-auto">
               {!isAdmin && requirePasswordChange && (
                 <Link
-                  to="/profile?changePassword=1"
+                  to="/dashboard?changePassword=1"
                   className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800 hover:bg-amber-100"
                 >
                   <KeyRound className="h-5 w-5 flex-shrink-0" />

@@ -1,5 +1,10 @@
 import type { AgeTag } from '../contexts/AuthContext';
 
+/** Detect whitespace in identifiers such as usernames. */
+export function containsWhitespace(value: string): boolean {
+  return /\s/.test(value);
+}
+
 /** Parse "X-Y" age tag to lowest/oldest. Defaults to 5-8 if invalid. */
 export function parseAgeRange(ageTag: string | undefined): { lowest: number; oldest: number } {
   if (!ageTag || typeof ageTag !== 'string') return { lowest: 5, oldest: 8 };
@@ -52,6 +57,16 @@ export function formatDate(date: string | Date, locale: string = 'en-US'): strin
     month: 'short',
     day: 'numeric',
   });
+}
+
+/** Compact calendar date: dd/mm/yy (e.g. 19/05/26). */
+export function formatDateDdMmYy(date: string | Date): string {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '–';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = String(d.getFullYear()).slice(-2);
+  return `${day}/${month}/${year}`;
 }
 
 export function formatDateTime(date: string | Date, locale: string = 'en-US'): string {

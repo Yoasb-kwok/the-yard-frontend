@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
@@ -13,7 +13,7 @@ import { api, ApiError } from '../../lib/api';
 import { TRIAL_APPLY_ENDPOINT, trialApplyClassIdentifiers } from '../../lib/trialApplyFlow';
 import type { TrialNavClassData } from '../../lib/trialClassDataFromQuery';
 import { trialNavClassDataFromSearchParams } from '../../lib/trialClassDataFromQuery';
-import { formatDateTimeRange } from '../../lib/utils';
+import { containsWhitespace, formatDateTimeRange } from '../../lib/utils';
 import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 
 type ClassData = TrialNavClassData;
@@ -44,6 +44,24 @@ function getTrialClassOptions(): ClassData[] {
 }
 
 const TRIAL_CLASS_OPTIONS = getTrialClassOptions();
+const TRIAL_FORM_DRAFT_KEY = 'trialApplicationDraft.v1';
+
+type TrialFormDraft = {
+  classData?: ClassData | null;
+  fullName: string;
+  nickName: string;
+  dateOfBirth: string;
+  sex: boolean | null;
+  parentsName: string;
+  countryCode: string;
+  contactNumber: string;
+  email: string;
+  residentialDistrict: string;
+  hasJoinedCourses: boolean | null;
+  hasDanceExperience: boolean | null;
+  howDidYouHear: string;
+  promoCode: string;
+};
 
 export default function TrialPage() {
   const { t, i18n } = useTranslation();
@@ -150,6 +168,65 @@ export default function TrialPage() {
     [effectiveClassData?.instructor]
   );
 
+  const saveDraft = (forcedClassData?: ClassData | null) => {
+    const draft: TrialFormDraft = {
+      classData: forcedClassData ?? effectiveClassData ?? null,
+      fullName,
+      nickName,
+      dateOfBirth,
+      sex,
+      parentsName,
+      countryCode,
+      contactNumber,
+      email,
+      residentialDistrict,
+      hasJoinedCourses,
+      hasDanceExperience,
+      howDidYouHear,
+      promoCode,
+    };
+    localStorage.setItem(TRIAL_FORM_DRAFT_KEY, JSON.stringify(draft));
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) return;
+    const raw = localStorage.getItem(TRIAL_FORM_DRAFT_KEY);
+    if (!raw) return;
+    try {
+      const draft = JSON.parse(raw) as Partial<TrialFormDraft>;
+      if (typeof draft.fullName === 'string') setFullName(draft.fullName);
+      if (typeof draft.nickName === 'string') setNickName(draft.nickName);
+      if (typeof draft.dateOfBirth === 'string') setDateOfBirth(draft.dateOfBirth);
+      if (draft.sex === true || draft.sex === false || draft.sex === null) setSex(draft.sex);
+      if (typeof draft.parentsName === 'string') setParentsName(draft.parentsName);
+      if (typeof draft.countryCode === 'string') setCountryCode(draft.countryCode);
+      if (typeof draft.contactNumber === 'string') setContactNumber(draft.contactNumber);
+      if (typeof draft.email === 'string') setEmail(draft.email);
+      if (typeof draft.residentialDistrict === 'string') setResidentialDistrict(draft.residentialDistrict);
+      if (draft.hasJoinedCourses === true || draft.hasJoinedCourses === false || draft.hasJoinedCourses === null) {
+        setHasJoinedCourses(draft.hasJoinedCourses);
+      }
+      if (draft.hasDanceExperience === true || draft.hasDanceExperience === false || draft.hasDanceExperience === null) {
+        setHasDanceExperience(draft.hasDanceExperience);
+      }
+      if (typeof draft.howDidYouHear === 'string') setHowDidYouHear(draft.howDidYouHear);
+      if (typeof draft.promoCode === 'string') setPromoCode(draft.promoCode);
+      if (!classData && !selectedTrialClass && draft.classData) {
+        setSelectedTrialClass(draft.classData);
+      }
+      localStorage.removeItem(TRIAL_FORM_DRAFT_KEY);
+    } catch {
+      localStorage.removeItem(TRIAL_FORM_DRAFT_KEY);
+    }
+  }, [classData, isLoggedIn, selectedTrialClass]);
+
+  const handleTrialLoginRequired = (draftClassData?: ClassData | null) => {
+    saveDraft(draftClassData);
+    navigate('/trial/login-required', {
+      state: { returnTo: `${location.pathname}${location.search}` },
+    });
+  };
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
@@ -215,7 +292,9 @@ export default function TrialPage() {
           setTimeout(() => navigate('/dashboard'), 3000);
         }
       } catch (err: unknown) {
-        if (err instanceof ApiError && err.status === 409) {
+        if (err instanceof ApiError && err.status === 409 && err.code === 'TRIAL_LOGIN_REQUIRED') {
+          handleTrialLoginRequired(effectiveClassData);
+        } else if (err instanceof ApiError && err.status === 409) {
           setError(t('trial.emailAlreadyRegistered'));
         } else {
           const msg = err instanceof ApiError ? err.message : (err as Error)?.message || t('common.error');
@@ -234,6 +313,11 @@ export default function TrialPage() {
     // 新 API 只要求 classId, fullName, email；其餘為選填
     if (!fullName.trim() || !email.trim()) {
       setError(t('trial.fullName') + ' / ' + t('trial.email') + ' ' + t('common.required'));
+      return;
+    }
+
+    if (containsWhitespace(nickName)) {
+      setError(t('common.usernameNoSpaces'));
       return;
     }
 
@@ -301,6 +385,10 @@ export default function TrialPage() {
       // 後端回傳非 2xx 理論上會 throw ApiError；這裡是保險的泛用錯誤
       setError((res as { msg?: string })?.msg || t('common.error'));
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 409 && err.code === 'TRIAL_LOGIN_REQUIRED') {
+        handleTrialLoginRequired(effectiveClassData);
+        return;
+      }
       if (err instanceof ApiError && err.status === 409) {
         setError(t('trial.emailAlreadyRegistered'));
         return;

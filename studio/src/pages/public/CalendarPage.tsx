@@ -48,8 +48,9 @@ type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshu
 const TIME_GRID_START_HOUR = 8;
 const TIME_GRID_END_HOUR = 22;
 const TIME_GRID_ROW_HEIGHT_PX = 48;
-/** 週視圖方塊最小高度，讓不同時長的課程方塊視覺一致 */
-const WEEK_VIEW_EVENT_MIN_HEIGHT_PX = 48;
+/** 日／週時間格課程方塊最小高度，避免短課程被壓扁 */
+const TIME_GRID_EVENT_MIN_HEIGHT_PX = 48;
+const WEEK_VIEW_EVENT_MIN_HEIGHT_PX = TIME_GRID_EVENT_MIN_HEIGHT_PX;
 /** 重疊時段內每個課程方塊的最小寬度（px），以便完整顯示課程名稱 */
 const WEEK_VIEW_OVERLAP_EVENT_MIN_WIDTH_PX = 100;
 
@@ -110,7 +111,7 @@ export default function CalendarPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(() => {
-    if (viewParam && ['week', 'month'].includes(viewParam)) return viewParam;
+    if (viewParam && ['day', 'week', 'month'].includes(viewParam)) return viewParam;
     return 'week';
   });
   const [currentDate, setCurrentDate] = useState(() => new Date());
@@ -222,12 +223,14 @@ export default function CalendarPage() {
   // Update view when URL parameter changes
   useEffect(() => {
     const viewParam = searchParams.get('view') as ViewType | null;
-    if (viewParam && ['week', 'month'].includes(viewParam)) {
+    if (viewParam && ['day', 'week', 'month'].includes(viewParam)) {
       setView(viewParam);
+    } else if (viewParam === 'threeDay') {
+      setView('day');
+      setSearchParams({ view: 'day' }, { replace: true });
     } else if (viewParam) {
-      // Backward compatibility: normalize old URLs to week view.
       setView('week');
-      setSearchParams({ view: 'week' });
+      setSearchParams({ view: 'week' }, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
@@ -374,6 +377,7 @@ export default function CalendarPage() {
       if (displayEnd <= displayStart) em += 24 * 60;
       sm = Math.max(startMin, Math.min(endMin, sm));
       em = Math.max(startMin, Math.min(endMin, em));
+      if (em <= sm) em = Math.min(endMin, sm + 60);
       if (sm < em) events.push({ lesson, _postponedFrom, startMinutes: sm, endMinutes: em });
     }
     events.sort((a, b) => a.startMinutes - b.startMinutes);
@@ -623,7 +627,7 @@ export default function CalendarPage() {
             );
             return (
               <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                <div className="flex border-b" style={{ minHeight: gridHeightPx }}>
+                <div className="flex border-b" style={{ height: gridHeightPx }}>
                   <div className="w-14 flex-shrink-0 border-r bg-gray-50/80">
                     {hourLabels.map((label) => (
                       <div
@@ -636,9 +640,18 @@ export default function CalendarPage() {
                     ))}
                   </div>
                   <div
-                    className="flex-1 relative min-w-0"
-                    style={{ minHeight: gridHeightPx }}
+                    className="flex-1 relative min-w-0 flex-shrink-0"
+                    style={{ height: gridHeightPx }}
                   >
+                    {hourLabels.map((_, i) => (
+                      <div
+                        key={`day-hour-line-${i}`}
+                        className="absolute left-0 right-0 border-t border-gray-100 pointer-events-none"
+                        style={{ top: i * TIME_GRID_ROW_HEIGHT_PX }}
+                        aria-hidden
+                      />
+                    ))}
+                    <div className="absolute inset-0">
                     {isNarrowScreen
                       ? getSlotBlocks(dayEvents, currentDate).map((block) => {
                           if (block.type === 'single') {
@@ -655,14 +668,14 @@ export default function CalendarPage() {
                                 className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
                                 style={{
                                   top: topPx + 2,
-                                  height: Math.max(heightPx - 4, 24),
+                                  height: Math.max(heightPx - 4, TIME_GRID_EVENT_MIN_HEIGHT_PX),
                                   backgroundColor: locationColors.lighter,
                                   borderLeft: `4px solid ${locationColors.primary}`,
                                 }}
                                 title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
                               >
-                                <div className="p-1.5 h-full overflow-hidden flex flex-col justify-center">
-                                  <span className="text-sm font-semibold text-gray-900 truncate">{lesson.name}</span>
+                                <div className="p-1.5 h-full overflow-hidden flex flex-col justify-start gap-0.5">
+                                  <span className="text-sm font-semibold text-gray-900 truncate leading-tight">{lesson.name}</span>
                                   <span className="text-xs text-gray-600 truncate">{formatTime(new Date(lesson.start_time))}</span>
                                 </div>
                               </button>
@@ -678,7 +691,7 @@ export default function CalendarPage() {
                               className="absolute left-0.5 right-0.5 flex items-center gap-2 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
                               style={{
                                 top: topPx + 2,
-                                height: Math.max(heightPx - 4, 40),
+                                height: Math.max(heightPx - 4, TIME_GRID_EVENT_MIN_HEIGHT_PX),
                               }}
                               aria-label={t('calendar.sameTimeTapToPick', { count: block.events.length })}
                             >
@@ -707,24 +720,25 @@ export default function CalendarPage() {
                           key={lesson.id}
                           type="button"
                           onClick={() => handleLessonClick(lesson)}
-                          className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                          className={`absolute text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
                           style={{
                             top: topPx + 2,
-                            height: Math.max(heightPx - 4, 24),
-                            left: `${leftAdj}%`,
-                            width: `${widthAdj}%`,
+                            height: Math.max(heightPx - 4, TIME_GRID_EVENT_MIN_HEIGHT_PX),
+                            left: totalColumns > 1 ? `calc(${leftAdj}% + 2px)` : 2,
+                            width: totalColumns > 1 ? `calc(${widthAdj}% - 4px)` : 'calc(100% - 4px)',
                             backgroundColor: locationColors.lighter,
                             borderLeft: `4px solid ${locationColors.primary}`,
                           }}
                           title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
                         >
-                          <div className="p-1.5 h-full overflow-hidden flex flex-col justify-center">
-                            <span className="text-sm font-semibold text-gray-900 truncate">{lesson.name}</span>
+                          <div className="p-1.5 h-full overflow-hidden flex flex-col justify-start gap-0.5">
+                            <span className="text-sm font-semibold text-gray-900 truncate leading-tight">{lesson.name}</span>
                             <span className="text-xs text-gray-600 truncate">{formatTime(new Date(lesson.start_time))}</span>
                           </div>
                         </button>
                       );
                     })}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1080,21 +1094,23 @@ export default function CalendarPage() {
           {/* View Switcher and Navigation */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div className="flex flex-wrap items-center gap-2">
-              {/* Primary: 月 / 週 (Month | Week) */}
+              {/* Primary: 日 / 週 / 月 */}
               <button
+                type="button"
                 onClick={() => {
-                  setView('month');
-                  setSearchParams({ view: 'month' });
+                  setView('day');
+                  setSearchParams({ view: 'day' });
                 }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  view === 'month'
+                  view === 'day'
                     ? 'bg-primary text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {t('calendar.month')}
+                {t('calendar.day')}
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setView('week');
                   setSearchParams({ view: 'week' });
@@ -1106,6 +1122,20 @@ export default function CalendarPage() {
                 }`}
               >
                 {t('calendar.week')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setView('month');
+                  setSearchParams({ view: 'month' });
+                }}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                  view === 'month'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {t('calendar.month')}
               </button>
             </div>
 

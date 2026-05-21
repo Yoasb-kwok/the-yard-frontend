@@ -647,9 +647,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hasJoinedCourses: boolean | null,
     extra?: { idLastFour: string; countryCode: string; mobile: string }
   ) {
+    const normalizedEmail = email.trim().toLowerCase();
     const confirmPassword = password;
     const body: Record<string, string | boolean | null> = {
-      email,
+      email: normalizedEmail,
       password,
       confirmPassword,
       fullName,
@@ -728,12 +729,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
     } catch (apiErr) {
-      const msg = apiErr instanceof Error ? apiErr.message : '';
-      if (msg && !msg.includes('Network')) throw apiErr;
+      const isBackendUnreachable =
+        (apiErr instanceof ApiError && [502, 503, 504, 0].includes(apiErr.status)) ||
+        (apiErr instanceof Error && /Network|fetch|ECONNREFUSED|Failed to fetch/i.test(apiErr.message));
+      if (!isBackendUnreachable) {
+        throw apiErr;
+      }
     }
 
     // Fallback: local-only account (no API)
-    const userObj: User = { id: `user-${Date.now()}`, email };
+    if (localStorage.getItem(`user_password_${normalizedEmail}`)) {
+      throw new Error('Email already exists.');
+    }
+    const userObj: User = { id: `user-${Date.now()}`, email: normalizedEmail };
     const studentId = generateStudentId();
     const profileObj: Profile = {
       id: userObj.id,
@@ -765,7 +773,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session: sessionObj,
       authToken: fallbackToken,
     });
-    if (password) localStorage.setItem(`user_password_${email}`, password);
+    if (password) localStorage.setItem(`user_password_${normalizedEmail}`, password);
   }
 
   async function signOut() {

@@ -27,13 +27,15 @@ interface ApiResponse<T = any> {
   msg?: string;
   /** Some error handlers use `message` instead of `msg`; both are read on HTTP errors. */
   message?: string;
+  /** Optional backend error code, e.g. TRIAL_LOGIN_REQUIRED */
+  code?: string;
   token?: string;
   user?: any;
   profile?: any;
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
     this.name = 'ApiError';
   }
@@ -122,7 +124,13 @@ async function request<T = any>(
         (typeof data.msg === 'string' && data.msg.trim()) ||
         (typeof data.message === 'string' && data.message.trim()) ||
         `Request failed (${response.status})`;
-      throw new ApiError(response.status, errText);
+      const errCode =
+        typeof data.code === 'string'
+          ? data.code
+          : (data.data && typeof (data.data as { code?: unknown }).code === 'string')
+            ? ((data.data as { code: string }).code)
+            : undefined;
+      throw new ApiError(response.status, errText, errCode);
     }
 
     return data;

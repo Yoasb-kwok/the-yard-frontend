@@ -12,7 +12,7 @@ import { api, ApiError } from '../../lib/api';
 
 export type { CourseItem, CourseType };
 
-type SortOption = 'ageGroup' | 'level' | 'name' | 'weekday';
+type SortOption = 'ageGroup' | 'level' | 'name';
 
 const WEEKDAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
 
@@ -265,8 +265,6 @@ export default function CoursesPage() {
           return getLevelSortKey(a.level) - getLevelSortKey(b.level) || (a.name || '').localeCompare(b.name || '');
         case 'name':
           return (a.name || '').localeCompare(b.name || '');
-        case 'weekday':
-          return a.weekday - b.weekday || (a.name || '').localeCompare(b.name || '');
         default:
           return 0;
       }
@@ -350,7 +348,6 @@ export default function CoursesPage() {
                 <option value="ageGroup">{t('courses.sortByAgeGroup', '年齡組別')}</option>
                 <option value="level">{t('courses.sortByLevel', '課程難度')}</option>
                 <option value="name">{t('courses.sortByName', '課程名稱')}</option>
-                <option value="weekday">{t('courses.sortByWeekday', '星期幾')}</option>
               </select>
             </div>
           </div>

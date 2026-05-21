@@ -16,6 +16,7 @@ import TermsPage from './pages/public/TermsPage';
 import PrivacyPage from './pages/public/PrivacyPage';
 import FAQPage from './pages/public/FAQPage';
 import TrialPage from './pages/public/TrialPage';
+import TrialLoginRequiredPage from './pages/public/TrialLoginRequiredPage';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -84,6 +85,7 @@ function App() {
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/faq" element={<FAQPage />} />
           <Route path="/trial" element={<TrialPage />} />
+          <Route path="/trial/login-required" element={<TrialLoginRequiredPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />

@@ -659,6 +659,18 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
               remaining_tokens: t.balance,
               expiry_date: t.expires_at.slice(0, 10),
             }));
+          const mobileDigits = (v: string | undefined) => String(v ?? '').replace(/\D/g, '');
+          const uMobile = mobileDigits(u.mobile);
+          const has_trial_application = db.trialApplications.some((t) => {
+            if (t.user_id && t.user_id === u.id) return true;
+            if (email && t.email && email.toLowerCase() === t.email.toLowerCase()) return true;
+            const tMobile = mobileDigits(t.mobile);
+            if (uMobile && tMobile && uMobile === tMobile) return true;
+            const uName = (u.name ?? '').trim();
+            const tName = (t.student_name ?? '').trim();
+            if (uName && tName && uName === tName) return true;
+            return false;
+          });
           return {
             id: u.id,
             email,
@@ -673,6 +685,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
             date_of_birth: u.date_of_birth,
             level: u.level,
             has_joined_courses: u.has_joined_courses,
+            has_trial_application,
             created_at: u.created_at,
             user_tokens: tokens,
           };
@@ -681,15 +694,84 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   const adminUserId = matches('/admin/users/:id', path);
   if (method === 'PATCH' && adminUserId) {
-    const patch = body as Partial<DemoUser>;
+    const patch = (body ?? {}) as Record<string, unknown>;
+    const db = getDb();
+    const existing = db.users.find((x) => x.id === adminUserId.id);
+    if (!existing) return err('User not found');
+    if (patch.email != null) {
+      const newEmail = String(patch.email).trim().toLowerCase();
+      if (!newEmail) return err('Email is required');
+      if (db.users.some((x) => x.id !== existing.id && x.email.toLowerCase() === newEmail)) {
+        return err('Email already in use');
+      }
+    }
+    const loginNameAfterPatch = (() => {
+      if (patch.username != null || patch.nick_name != null) {
+        const un = String(patch.username ?? patch.nick_name ?? '').trim();
+        if (un) {
+          if (/\s/.test(un)) return { error: 'Username cannot contain spaces' as const };
+          return { value: un.toLowerCase() };
+        }
+      }
+      const em =
+        patch.email != null
+          ? String(patch.email).trim().toLowerCase()
+          : existing.email.trim().toLowerCase();
+      if (!em) return { value: '' };
+      return { value: em.includes('@') ? em.split('@')[0] : em };
+    })();
+    if ('error' in loginNameAfterPatch) return err(loginNameAfterPatch.error);
+    const demoLoginName = (u: DemoUser) => {
+      const nick = (u.nick_name ?? '').trim();
+      if (nick) return nick.toLowerCase();
+      const em = u.email.trim().toLowerCase();
+      return em.includes('@') ? em.split('@')[0] : em;
+    };
+    if (
+      (patch.email != null || patch.username != null || patch.nick_name != null) &&
+      loginNameAfterPatch.value &&
+      db.users.some(
+        (x) => x.id !== existing.id && demoLoginName(x) === loginNameAfterPatch.value,
+      )
+    ) {
+      return err('Username already in use');
+    }
     const updated = mutate((d) => {
       const u = d.users.find((x) => x.id === adminUserId.id);
       if (!u) return null;
-      Object.assign(u, patch);
+      if (patch.full_name != null) u.name = String(patch.full_name).trim();
+      if (patch.name != null) u.name = String(patch.name).trim();
+      if (patch.mobile != null) u.mobile = String(patch.mobile).trim();
+      if (patch.id_card_last4 != null || patch.id_last_four != null) {
+        u.id_last_four = String(patch.id_card_last4 ?? patch.id_last_four ?? '').trim();
+      }
+      if (patch.email != null) u.email = String(patch.email).trim().toLowerCase();
+      if (patch.username != null || patch.nick_name != null) {
+        const un = String(patch.username ?? patch.nick_name ?? '').trim();
+        u.nick_name = un || null;
+      }
+      if (patch.student_id != null) u.student_id = patch.student_id ? String(patch.student_id) : undefined;
       return u;
     });
     if (!updated) return err('User not found');
-    return ok(updated);
+    return ok({ success: true, data: updated });
+  }
+  if (method === 'DELETE' && adminUserId) {
+    const removed = mutate((d) => {
+      const idx = d.users.findIndex((x) => x.id === adminUserId.id);
+      if (idx < 0) return null;
+      const [user] = d.users.splice(idx, 1);
+      if (user.role === 'admin') {
+        d.users.splice(idx, 0, user);
+        return null;
+      }
+      d.userTokens = d.userTokens.filter((t) => t.user_id !== adminUserId.id);
+      d.orders = d.orders.filter((o) => o.user_id !== adminUserId.id);
+      d.enrollments = d.enrollments.filter((e) => e.user_id !== adminUserId.id);
+      return user;
+    });
+    if (!removed) return err('User not found or cannot delete this account');
+    return ok({ success: true, msg: 'User deleted.' });
   }
 
   // ---- User tokens admin
@@ -884,6 +966,7 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       applied_at: t.created_at,
       created_at: t.created_at,
       updated_at: t.created_at,
+      user_id: t.user_id ?? null,
     };
   }
 

@@ -38,7 +38,7 @@ export interface TrialApplication {
   promo_code?: string | null;
   applied_at: string;
   updated_at?: string;
-  trial_date?: string; // for "本週試堂" filter
+  trial_date?: string;
 }
 
 const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
@@ -210,8 +210,8 @@ function toSelectableStatus(s: TrialApplication['status']): (typeof SELECTABLE_S
   return 'pending';
 }
 
-const QUICK_FILTERS = ['all', 'not_contacted', 'this_week'] as const;
-type QuickFilter = typeof QUICK_FILTERS[number];
+const TRIAL_BRANCH_LOCATIONS = ['sanpokong', 'causewaybay', 'fotan', 'sheungshui'] as const;
+type BranchFilter = 'all' | (typeof TRIAL_BRANCH_LOCATIONS)[number];
 
 export default function TrialApplicationsPage() {
   const { t, i18n } = useTranslation();
@@ -221,7 +221,7 @@ export default function TrialApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState<TrialApplication['status'] | 'all'>('all');
   const [editStatus, setEditStatus] = useState<Record<string, TrialApplication['status']>>({});
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
-  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [branchFilter, setBranchFilter] = useState<BranchFilter>('all');
   const [savingStatuses, setSavingStatuses] = useState(false);
   const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
   const [openNoteEditorId, setOpenNoteEditorId] = useState<string | null>(null);
@@ -264,34 +264,6 @@ export default function TrialApplicationsPage() {
     return translated !== key ? translated : branch;
   };
 
-  const startOfWeek = (d: Date) => {
-    const x = new Date(d);
-    const day = x.getDay();
-    const diff = day === 0 ? -6 : 1 - day;
-    x.setDate(x.getDate() + diff);
-    x.setHours(0, 0, 0, 0);
-    return x.getTime();
-  };
-  const endOfWeek = (d: Date) => {
-    const x = new Date(startOfWeek(d));
-    x.setDate(x.getDate() + 6);
-    x.setHours(23, 59, 59, 999);
-    return x.getTime();
-  };
-  const thisWeekStart = startOfWeek(new Date());
-  const thisWeekEnd = endOfWeek(new Date());
-
-  const filtered = applications.filter((a) => {
-    const normalizedStatus = toSelectableStatus(a.status);
-    if (quickFilter === 'not_contacted') {
-      if (!['pending'].includes(normalizedStatus)) return false;
-    } else if (quickFilter === 'this_week') {
-      const trialTime = a.trial_date ? new Date(a.trial_date).getTime() : a.preferred_datetime ? new Date(a.preferred_datetime).getTime() : new Date(a.applied_at).getTime();
-      if (trialTime < thisWeekStart || trialTime > thisWeekEnd) return false;
-    }
-    if (statusFilter !== 'all' && normalizedStatus !== statusFilter) return false;
-    return true;
-  });
   const changedRowIds = useMemo(() => {
     return applications
       .filter((a) => {
@@ -335,6 +307,34 @@ export default function TrialApplicationsPage() {
     });
     return map;
   }, [classCodeCandidates]);
+
+  const filtered = useMemo(() => {
+    const resolveApplicationBranch = (a: TrialApplication): string | null => {
+      const direct = String(a.branch ?? '').trim();
+      if (direct) return direct;
+      const classId = a.assigned_class_id ?? a.class_id;
+      if (classId != null) {
+        const fromClass = classLocationById.get(String(classId));
+        if (fromClass) return fromClass;
+      }
+      const className = String(a.assigned_class_name ?? '').trim().toLowerCase();
+      if (className) {
+        const fromName = classLocationByName.get(className);
+        if (fromName) return fromName;
+      }
+      return null;
+    };
+    return applications.filter((a) => {
+      const normalizedStatus = toSelectableStatus(a.status);
+      if (branchFilter !== 'all') {
+        const branch = resolveApplicationBranch(a);
+        if (branch !== branchFilter) return false;
+      }
+      if (statusFilter !== 'all' && normalizedStatus !== statusFilter) return false;
+      return true;
+    });
+  }, [applications, branchFilter, statusFilter, classLocationById, classLocationByName]);
+
   const noteEditorApplication = useMemo(
     () => applications.find((app) => app.id === openNoteEditorId) ?? null,
     [applications, openNoteEditorId]
@@ -348,7 +348,7 @@ export default function TrialApplicationsPage() {
     totalItems: trialTotalItems,
     paginatedItems: paginatedTrial,
     startIndex: trialListStart,
-  } = useTablePagination(filtered, undefined, [quickFilter, statusFilter]);
+  } = useTablePagination(filtered, undefined, [branchFilter, statusFilter]);
 
   useEffect(() => {
     loadApplications();
@@ -600,13 +600,17 @@ export default function TrialApplicationsPage() {
             </button>
             <Filter className="h-5 w-5 text-gray-500" />
             <select
-              value={quickFilter}
-              onChange={(e) => setQuickFilter(e.target.value as QuickFilter)}
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value as BranchFilter)}
               className="border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary"
+              aria-label={t('admin.trialApplications.filterBranch', '分店')}
             >
-              <option value="all">{t('admin.trialApplications.filterAll')}</option>
-              <option value="not_contacted">{t('admin.trialApplications.filterNotContacted', '未聯絡')}</option>
-              <option value="this_week">{t('admin.trialApplications.filterThisWeek', '本週試堂')}</option>
+              <option value="all">{t('admin.trialApplications.filterAllBranches', '全部分店')}</option>
+              {TRIAL_BRANCH_LOCATIONS.map((loc) => (
+                <option key={loc} value={loc}>
+                  {getBranchLabel(loc)}
+                </option>
+              ))}
             </select>
             <select
               value={statusFilter}

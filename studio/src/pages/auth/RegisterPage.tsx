@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Eye, EyeOff, User, CreditCard, Phone, Mail, Lock } from 'lucide-react';
@@ -6,6 +6,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import PublicLayout from '../../components/PublicLayout';
 import DateSelect from '../../components/DateSelect';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
+import { ApiError } from '../../lib/api';
+import { containsWhitespace } from '../../lib/utils';
 
 export default function RegisterPage() {
   const { t } = useTranslation();
@@ -25,14 +27,26 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const errorRef = useRef<HTMLDivElement | null>(null);
   const { signUp } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    errorRef.current?.focus();
+  }, [error]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
     // Validation
+    if (containsWhitespace(nickName)) {
+      setError(t('common.usernameNoSpaces'));
+      return;
+    }
+
     if (idLastFour.length !== 4 || !/^[A-Za-z0-9]{4}$/.test(idLastFour)) {
       setError(t('register.invalidIdCard'));
       return;
@@ -52,11 +66,12 @@ export default function RegisterPage() {
 
     try {
       const fullMobile = `${countryCode}${mobile}`;
+      const normalizedEmail = email.trim().toLowerCase();
       await signUp(
-        email,
+        normalizedEmail,
         password,
         fullName,
-        nickName.trim() || null,
+        nickName || null,
         dateOfBirth || null,
         sex,
         parentsName.trim() || null,
@@ -67,10 +82,34 @@ export default function RegisterPage() {
       );
       navigate('/login');
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError(err.message);
+      const msg = err instanceof Error ? err.message : '';
+      const code = err instanceof ApiError ? err.code : undefined;
+      const lower = String(msg).toLowerCase();
+      if (code === 'MOBILE_ALREADY_EXISTS') {
+        setError(t('register.mobileAlreadyExists'));
+        return;
+      }
+      if (code === 'EMAIL_ALREADY_EXISTS') {
+        setError(t('register.emailAlreadyExists'));
+        return;
+      }
+      const isEmailExists =
+        lower.includes('email already exists') ||
+        lower.includes('already registered') ||
+        lower.includes('email in use') ||
+        lower.includes('duplicate');
+      const isMobileExists =
+        lower.includes('mobile already exists') ||
+        lower.includes('phone already exists') ||
+        lower.includes('mobile number already exists') ||
+        lower.includes('mobile in use') ||
+        lower.includes('phone in use');
+      if (isMobileExists) {
+        setError(t('register.mobileAlreadyExists'));
+      } else if (isEmailExists) {
+        setError(t('register.emailAlreadyExists'));
       } else {
-        setError(t('common.error'));
+        setError(msg || t('common.error'));
       }
     } finally {
       setLoading(false);
@@ -91,7 +130,13 @@ export default function RegisterPage() {
           </div>
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded">
+              <div
+                ref={errorRef}
+                tabIndex={-1}
+                role="alert"
+                aria-live="assertive"
+                className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded"
+              >
                 {error}
               </div>
             )}

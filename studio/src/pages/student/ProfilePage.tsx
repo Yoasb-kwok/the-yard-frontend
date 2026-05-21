@@ -3,43 +3,16 @@ import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { getAgeFromDateOfBirth } from '../../lib/utils';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
-import { User, Copy, Check, KeyRound } from 'lucide-react';
-import AccountSecurityCard from '../../components/AccountSecurityCard';
+import { User, Copy, Check } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { profile, user, profiles, refreshMe, requirePasswordChange } = useAuth();
+  const { profile, profiles } = useAuth();
   const { t } = useTranslation();
-  const [searchParams] = useSearchParams();
   const [copied, setCopied] = useState(false);
 
   if (!profile) return null;
 
   const isStudent = profile.role === 'student';
-
-  // Extract country code and contact number
-  const getContactParts = (contactNumber: string | null): { countryCode: string; number: string } => {
-    if (!contactNumber) {
-      return { countryCode: '', number: '' };
-    }
-    
-    // Check if contact number starts with country codes: 852, 853, or 86
-    if (contactNumber.startsWith('852')) {
-      return { countryCode: '+852', number: contactNumber.substring(3) };
-    } else if (contactNumber.startsWith('853')) {
-      return { countryCode: '+853', number: contactNumber.substring(3) };
-    } else if (contactNumber.startsWith('86')) {
-      return { countryCode: '+86', number: contactNumber.substring(2) };
-    }
-    
-    // If no country code detected but number exists, default to +852 (Hong Kong)
-    // This handles cases where contact number was stored without country code
-    if (contactNumber.length > 0) {
-      return { countryCode: '+852', number: contactNumber };
-    }
-    
-    return { countryCode: '', number: '' };
-  };
 
   // Format date of birth
   const formatDateOfBirth = (dateString: string | null): string => {
@@ -82,13 +55,6 @@ export default function ProfilePage() {
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('profile.title')}</h1>
           </div>
         </div>
-
-        {requirePasswordChange && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-3 rounded flex items-center gap-2">
-            <KeyRound className="h-5 w-5 flex-shrink-0" />
-            <span>{t('auth.requirePasswordChangeBanner')}</span>
-          </div>
-        )}
 
         {isStudent && profiles.length === 1 && (
           <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-sm text-gray-700">
@@ -211,18 +177,6 @@ export default function ProfilePage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('register.email')}
-              </label>
-              <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
-                {user?.email || t('profile.notProvided')}
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                {t('profile.accountSecurityHint', 'To change password, email or mobile, use the "Account & security" section below.')}
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
                 {t('profile.dateOfBirth')}
               </label>
               <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
@@ -240,35 +194,6 @@ export default function ProfilePage() {
                   : t('profile.notProvided')
                 }
               </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('profile.parentsName')}
-              </label>
-              <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base">
-                {profile.parents_name || t('profile.notProvided')}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                {t('profile.contactNumber')}
-              </label>
-              {profile.contact_number ? (
-                <div className="flex rounded-md shadow-sm">
-                  <div className="px-3 py-2 border border-gray-300 border-r-0 rounded-l-md bg-gray-50 text-gray-700 text-sm md:text-base">
-                    {getContactParts(profile.contact_number).countryCode}
-                  </div>
-                  <div className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md bg-gray-50 text-gray-900 text-sm md:text-base">
-                    {getContactParts(profile.contact_number).number}
-                  </div>
-                </div>
-              ) : (
-                <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm md:text-base text-gray-500">
-                  {t('profile.notProvided')}
-                </div>
-              )}
             </div>
 
             <div>
@@ -293,15 +218,6 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="mt-6">
-        <AccountSecurityCard
-          email={user?.email ?? null}
-          mobile={user?.mobile ?? profile?.contact_number ?? profile?.mobile ?? null}
-          onAccountUpdated={() => refreshMe()}
-          initialOpenPasswordModal={requirePasswordChange || searchParams.get('changePassword') === '1'}
-        />
       </div>
 
     </Layout>

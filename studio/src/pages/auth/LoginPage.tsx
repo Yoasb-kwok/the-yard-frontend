@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import PublicLayout from '../../components/PublicLayout';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { isDemoMode } from '../../lib/mock';
+import { containsWhitespace } from '../../lib/utils';
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -31,17 +32,23 @@ export default function LoginPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    if (containsWhitespace(loginIdentifier)) {
+      setError(t('common.usernameNoSpaces'));
+      return;
+    }
+
     setLoading(true);
 
     try {
       const result = await signIn(loginIdentifier.trim(), password);
       if (result?.requirePasswordChange) {
-        navigate('/profile?changePassword=1');
+        navigate('/dashboard?changePassword=1');
         return;
       }
       // Navigate by role (admin vs student)
       const stored = localStorage.getItem('auth_session');
-      let isAdmin = loginIdentifier === 'admin@admin.com';
+      let isAdmin = loginIdentifier.trim() === 'admin@admin.com';
       if (stored) {
         try {
           const parsed = JSON.parse(stored);

@@ -17,6 +17,8 @@ import {
 import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
 import { getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
+import StudentTokenBalanceSection from '../../components/student/StudentTokenBalanceSection';
+import StudentTrialApplicationsSection from '../../components/student/StudentTrialApplicationsSection';
 
 const MAX_DOCUMENT_BASE64_LENGTH = 80000; // ~60KB base64，盡量避開 413（伺服器 body 上限可能好細）
 const MAX_IMAGE_DIMENSION = 600;
@@ -667,6 +669,13 @@ export default function SchedulePage() {
         )}
         {lessonLeaveSuccess && <div className="rounded-xl border border-green-200 bg-green-50 text-green-800 px-4 py-3">{lessonLeaveSuccess}</div>}
         {submitError && <div className="rounded-xl border border-red-200 bg-red-50 text-red-800 px-4 py-3">{submitError}</div>}
+
+        <StudentTokenBalanceSection
+          profileId={profile?.id}
+          profileName={profile?.full_name ?? undefined}
+          upcomingClasses={myEnrollments}
+        />
+        <StudentTrialApplicationsSection profileId={profile?.id} />
 
         {/* Calendar (month / week / day) — 下一堂、接下來所有課程 已改在左側欄顯示 */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" aria-labelledby="schedule-calendar-heading">

@@ -243,9 +243,16 @@ export default function PaymentHistoryPage() {
   return (
     <Layout>
       <div className="space-y-4 md:space-y-6">
-        <div className="flex items-center gap-3">
-          <Receipt className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('paymentHistory.title')}</h1>
+        <div>
+          <div className="flex items-center gap-3">
+            <Receipt className="h-6 w-6 md:h-8 md:w-8 text-primary" />
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('paymentHistory.title')}</h1>
+          </div>
+          {profile?.full_name && (
+            <p className="mt-1 text-sm text-gray-600">
+              {t('paymentHistory.forProfile', { name: profile.full_name })}
+            </p>
+          )}
         </div>
 
         {receiptMessage && (
