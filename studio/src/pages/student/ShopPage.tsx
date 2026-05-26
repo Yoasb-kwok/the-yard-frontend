@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
@@ -21,7 +21,6 @@ interface CartItem {
   quantity: number;
 }
 
-// Mock data
 const MOCK_PACKAGES: TokenPackage[] = [
   {
     id: 1,
@@ -50,17 +49,16 @@ const MOCK_PACKAGES: TokenPackage[] = [
 ];
 
 const MOCK_COUPONS: { [key: string]: { id: string; discount_type: 'percentage' | 'fixed'; discount_value: number } } = {
-  'WELCOME10': { id: '1', discount_type: 'percentage', discount_value: 10 },
-  'SAVE50': { id: '2', discount_type: 'fixed', discount_value: 50 },
+  WELCOME10: { id: '1', discount_type: 'percentage', discount_value: 10 },
+  SAVE50: { id: '2', discount_type: 'fixed', discount_value: 50 },
 };
 
-// Student ID format: yayakid + digits (e.g. yayakid1). Valid codes get 10% off for testing.
 const REFERRAL_CODE_REGEX = /^yayakid\d+$/i;
 
 export default function ShopPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [packages, setPackages] = useState<TokenPackage[]>([]);
+  const [packagesSource, setPackagesSource] = useState<TokenPackage[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState('');
   const [referralCode, setReferralCode] = useState('');
@@ -81,7 +79,7 @@ export default function ShopPage() {
     setLoading(true);
     try {
       const rows = await fetchTokenPackages();
-      setPackages(
+      setPackagesSource(
         rows.map((r) => ({
           id: r.id,
           name: r.name,
@@ -89,23 +87,33 @@ export default function ShopPage() {
           token_count: r.token_count,
           price: r.price,
           validity_days: r.validity_days,
-        }))
+        })),
       );
     } catch {
-      setPackages(MOCK_PACKAGES);
+      setPackagesSource(MOCK_PACKAGES);
     } finally {
       setLoading(false);
     }
   }
 
+  const packages = useMemo(() => {
+    return packagesSource.map((pkg) => {
+      const nameKey = `tokenPackage.packages.${pkg.id}.name`;
+      const descKey = `tokenPackage.packages.${pkg.id}.description`;
+      return {
+        ...pkg,
+        name: t(nameKey, { defaultValue: pkg.name }),
+        description: t(descKey, { defaultValue: pkg.description }),
+      };
+    });
+  }, [packagesSource, t, i18n.language]);
+
   function addToCart(pkg: TokenPackage) {
-    setCart(prev => {
-      const existing = prev.find(item => item.package.id === pkg.id);
+    setCart((prev) => {
+      const existing = prev.find((item) => item.package.id === pkg.id);
       if (existing) {
-        return prev.map(item =>
-          item.package.id === pkg.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
+        return prev.map((item) =>
+          item.package.id === pkg.id ? { ...item, quantity: item.quantity + 1 } : item,
         );
       }
       return [...prev, { package: pkg, quantity: 1 }];
@@ -113,30 +121,27 @@ export default function ShopPage() {
   }
 
   function removeFromCart(pkgId: number) {
-    setCart(prev => prev.filter(item => item.package.id !== pkgId));
+    setCart((prev) => prev.filter((item) => item.package.id !== pkgId));
   }
 
   function updateQuantity(pkgId: number, quantity: number) {
     if (quantity < 1) return;
-    setCart(prev =>
-      prev.map(item =>
-        item.package.id === pkgId ? { ...item, quantity } : item
-      )
+    setCart((prev) =>
+      prev.map((item) => (item.package.id === pkgId ? { ...item, quantity } : item)),
     );
   }
 
   async function applyCoupon() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
     const coupon = MOCK_COUPONS[couponCode.toUpperCase()];
     if (!coupon) {
-      alert('Invalid coupon code');
+      alert(t('shop.invalidCoupon'));
       return;
     }
 
     setAppliedCoupon(coupon);
-    alert('Coupon applied successfully!');
+    alert(t('shop.couponAppliedSuccess'));
   }
 
   async function handleCheckout() {
@@ -159,7 +164,7 @@ export default function ShopPage() {
     }
 
     setSubmitting(true);
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     alert(t('shop.orderPlaced'));
     setCart([]);
     setAppliedCoupon(null);
@@ -180,7 +185,7 @@ export default function ShopPage() {
     return (
       <Layout>
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
         </div>
       </Layout>
     );
@@ -189,7 +194,7 @@ export default function ShopPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900">Token Shop</h1>
+        <h1 className="text-3xl font-bold text-gray-900">{t('shop.title')}</h1>
 
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -201,15 +206,17 @@ export default function ShopPage() {
 
                   <div className="space-y-2 mb-4">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Tokens:</span>
+                      <span className="text-gray-600">{t('shop.tokens')}:</span>
                       <span className="font-medium">{pkg.token_count}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Validity:</span>
-                      <span className="font-medium">{pkg.validity_days} days</span>
+                      <span className="text-gray-600">{t('shop.validity')}:</span>
+                      <span className="font-medium">
+                        {pkg.validity_days} {t('shop.days')}
+                      </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Price:</span>
+                      <span className="text-gray-600">{t('shop.price')}:</span>
                       <span className="text-xl font-bold text-primary">
                         {formatCurrency(pkg.price)}
                       </span>
@@ -217,10 +224,11 @@ export default function ShopPage() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => addToCart(pkg)}
                     className="w-full bg-primary text-white py-2 rounded-md hover:bg-primary-dark transition-colors"
                   >
-                    Add to Cart
+                    {t('shop.addToCart')}
                   </button>
                 </div>
               ))}
@@ -231,11 +239,11 @@ export default function ShopPage() {
             <div className="bg-white rounded-lg shadow-md p-6 sticky top-6">
               <div className="flex items-center mb-4">
                 <ShoppingCart className="h-6 w-6 text-gray-700 mr-2" />
-                <h2 className="text-xl font-semibold text-gray-900">Shopping Cart</h2>
+                <h2 className="text-xl font-semibold text-gray-900">{t('shop.shoppingCart')}</h2>
               </div>
 
               {cart.length === 0 ? (
-                <p className="text-gray-600 text-center py-8">Your cart is empty</p>
+                <p className="text-gray-600 text-center py-8">{t('shop.cartEmpty')}</p>
               ) : (
                 <>
                   <div className="space-y-3 mb-4">
@@ -245,24 +253,29 @@ export default function ShopPage() {
                         <div className="flex items-center justify-between mt-2">
                           <div className="flex items-center space-x-2">
                             <button
+                              type="button"
                               onClick={() => updateQuantity(item.package.id, item.quantity - 1)}
                               className="px-2 py-1 border rounded"
+                              aria-label="-"
                             >
                               -
                             </button>
                             <span>{item.quantity}</span>
                             <button
+                              type="button"
                               onClick={() => updateQuantity(item.package.id, item.quantity + 1)}
                               className="px-2 py-1 border rounded"
+                              aria-label="+"
                             >
                               +
                             </button>
                           </div>
                           <button
+                            type="button"
                             onClick={() => removeFromCart(item.package.id)}
                             className="text-red-600 text-sm"
                           >
-                            Remove
+                            {t('shop.remove')}
                           </button>
                         </div>
                         <div className="text-sm text-gray-600 mt-1">
@@ -276,28 +289,29 @@ export default function ShopPage() {
                     <div className="flex">
                       <input
                         type="text"
-                        placeholder="Coupon code"
+                        placeholder={t('shop.couponCode')}
                         value={couponCode}
                         onChange={(e) => setCouponCode(e.target.value)}
                         className="flex-1 px-3 py-2 border rounded-l-md focus:outline-none focus:ring-2 focus:ring-primary"
                       />
                       <button
+                        type="button"
                         onClick={applyCoupon}
                         className="px-4 py-2 bg-gray-600 text-white rounded-r-md hover:bg-gray-700"
                       >
-                        Apply
+                        {t('shop.apply')}
                       </button>
                     </div>
                     {appliedCoupon && (
                       <div className="flex items-center text-green-600 text-sm">
                         <Check className="h-4 w-4 mr-1" />
-                        Coupon applied
+                        {t('shop.couponApplied')}
                       </div>
                     )}
                     <div>
                       <input
                         type="text"
-                        placeholder="Referral code (e.g. yayakid1)"
+                        placeholder={t('shop.referralCode')}
                         value={referralCode}
                         onChange={(e) => setReferralCode(e.target.value)}
                         className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
@@ -305,7 +319,7 @@ export default function ShopPage() {
                       {referralValid && (
                         <div className="flex items-center text-green-600 text-sm mt-1">
                           <Check className="h-4 w-4 mr-1" />
-                          Referral code applied
+                          {t('shop.referralApplied')}
                         </div>
                       )}
                     </div>
@@ -313,17 +327,17 @@ export default function ShopPage() {
 
                   <div className="space-y-2 mb-4 pt-4 border-t">
                     <div className="flex justify-between text-sm">
-                      <span>Subtotal:</span>
+                      <span>{t('shop.subtotal')}:</span>
                       <span>{formatCurrency(subtotal)}</span>
                     </div>
                     {discount > 0 && (
                       <div className="flex justify-between text-sm text-green-600">
-                        <span>Discount:</span>
+                        <span>{t('shop.discount')}:</span>
                         <span>-{formatCurrency(discount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-lg font-bold">
-                      <span>Total:</span>
+                      <span>{t('shop.total')}:</span>
                       <span>{formatCurrency(total)}</span>
                     </div>
                   </div>
@@ -351,6 +365,7 @@ export default function ShopPage() {
                   )}
 
                   <button
+                    type="button"
                     onClick={handleCheckout}
                     disabled={submitting}
                     className="w-full bg-primary text-white py-3 rounded-md hover:bg-primary-dark transition-colors disabled:opacity-50 font-medium"

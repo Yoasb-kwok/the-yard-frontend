@@ -33,6 +33,25 @@ export interface DemoUser {
   created_at: string;
 }
 
+/** 家長帳戶下的學員子帳戶（或標記為 parent 的主檔聯絡人） */
+export interface DemoProfile {
+  id: string;
+  user_id: string;
+  profile_kind: 'parent' | 'student';
+  full_name: string;
+  student_id?: string | null;
+  nick_name?: string | null;
+  date_of_birth?: string | null;
+  sex?: boolean | null;
+  parents_name?: string | null;
+  contact_number?: string | null;
+  residential_district?: string | null;
+  level?: string | null;
+  mobile?: string | null;
+  id_first_four?: string | null;
+  id_last_four?: string | null;
+}
+
 export interface DemoInstructor {
   id: string;
   name: string;
@@ -81,6 +100,9 @@ export interface DemoEnrollment {
   id: string;
   class_id: string;
   user_id: string;
+  user_token_id?: string | null;
+  /** Tokens charged when enrolling (usually equals lessons enrolled). */
+  tokens_charged?: number;
   student_name?: string;
   status: 'enrolled' | 'attended' | 'absent' | 'cancelled' | 'sick' | 'makeup';
   check_in_time?: string | null;
@@ -336,6 +358,13 @@ export interface DemoNotification {
   is_read: boolean;
   link?: string | null;
   created_at: string;
+  /** Structured notification for 訊息中心 */
+  type?: string;
+  titleKey?: string;
+  messageKey?: string;
+  className?: string;
+  dateTimeStr?: string;
+  studentName?: string;
 }
 
 export interface DemoSimpleContent {
@@ -361,6 +390,7 @@ export interface DemoHomeAbout {
 export interface DemoDb {
   version: number;
   users: DemoUser[];
+  profiles: DemoProfile[];
   otps: Record<string, string>; // email -> otp
   instructors: DemoInstructor[];
   classes: DemoClass[];
@@ -399,6 +429,9 @@ export function getDb(): DemoDb {
     if (raw) {
       const parsed = JSON.parse(raw) as DemoDb;
       if (parsed && typeof parsed === 'object' && parsed.version === 1) {
+        if (!Array.isArray(parsed.profiles)) {
+          parsed.profiles = buildSeed().profiles;
+        }
         cached = parsed;
         return cached;
       }

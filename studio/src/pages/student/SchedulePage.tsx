@@ -6,11 +6,12 @@ import LoadErrorBanner from '../../components/LoadErrorBanner';
 import EmptyState from '../../components/EmptyState';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { formatDateTime, getLessonDates, getLessonDatesSkipHolidays } from '../../lib/utils';
+import { formatDateTime } from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
 import { api, ApiError } from '../../lib/api';
 import {
   getFallbackUpcomingClasses,
+  getLessonDatesForEnrollment,
   shouldUseDemoUpcomingClasses,
   type EnrolledClass,
 } from '../../lib/studentEnrollments';
@@ -422,15 +423,9 @@ export default function SchedulePage() {
     );
   }, [enrollments]);
 
-  /** All lesson dates (4/8/16 per course); skip holidays so 課堂撞 holiday 自動順延 */
+  /** Lesson dates per enrollment = paid/booked slots only (not full course 16). */
   const lessonDatesByEnrollment = useMemo(() => {
-    return myEnrollments.map((e) => {
-      const total = e.total_lessons ?? 8;
-      if (holidayDatesSet.size > 0) {
-        return getLessonDatesSkipHolidays(e.class.start_time, total, holidayDatesSet);
-      }
-      return getLessonDates(e.class.start_time, total);
-    });
+    return myEnrollments.map((e) => getLessonDatesForEnrollment(e, holidayDatesSet));
   }, [myEnrollments, holidayDatesSet]);
 
   /** Attendance rate by local time: 已出席堂數 / 已過嘅課堂數（已舉行） */

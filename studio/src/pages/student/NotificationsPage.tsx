@@ -4,70 +4,164 @@ import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
-import { buildNotification, buildPendingLeaveNotifications, type ApiNotification, type NotificationItem } from '../../lib/studentNotifications';
+import {
+  collectStudentNotifications,
+  normalizeApiNotification,
+  type NotificationItem,
+  type StudentNotificationCategory,
+  type StudentRequestRow,
+} from '../../lib/studentNotifications';
+import type { TrialApplicationItem } from '../../lib/studentTrialApplications';
 import type { EnrolledClass } from '../../lib/studentEnrollments';
-import { Bell, CheckCircle, User, Clock } from 'lucide-react';
+import { getFallbackUpcomingClasses, shouldUseDemoUpcomingClasses } from '../../lib/studentEnrollments';
+import {
+  Bell,
+  BookOpen,
+  CalendarClock,
+  CheckCircle,
+  Clock,
+  RefreshCw,
+  User,
+  XCircle,
+} from 'lucide-react';
+
+type CategoryFilter = 'all' | StudentNotificationCategory;
+
+function NotificationIcon({ item }: { item: NotificationItem }) {
+  if (item.category === 'trial') {
+    return <BookOpen className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" aria-hidden />;
+  }
+  if (item.type.includes('pending')) {
+    return <Clock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" aria-hidden />;
+  }
+  if (item.type.includes('rejected') || item.type.includes('cancelled') || item.type.includes('could_not')) {
+    return <XCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" aria-hidden />;
+  }
+  if (item.category === 'class') {
+    return <CalendarClock className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" aria-hidden />;
+  }
+  if (item.category === 'extension') {
+    return <RefreshCw className="h-5 w-5 text-indigo-600 flex-shrink-0 mt-0.5" aria-hidden />;
+  }
+  if (item.type.includes('approved') || item.type.includes('confirmed')) {
+    return <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" aria-hidden />;
+  }
+  return <CheckCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" aria-hidden />;
+}
 
 export default function NotificationsPage() {
-  const { profile } = useAuth();
+  const { profile, profiles } = useAuth();
   const { t, i18n } = useTranslation();
-  const [rawNotifications, setRawNotifications] = useState<ApiNotification[]>([]);
+  const [apiNotifications, setApiNotifications] = useState<ReturnType<typeof normalizeApiNotification>[]>([]);
+  const [trials, setTrials] = useState<TrialApplicationItem[]>([]);
   const [enrollments, setEnrollments] = useState<EnrolledClass[]>([]);
+  const [studentRequests, setStudentRequests] = useState<StudentRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
+
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
 
-  /** 只顯示訊息中心內容（全班消息、個人課堂、代幣、請假），不顯示首頁「最新消息」；並加入「請假申請待定中」*/
+  const studentDisplayName = profile?.full_name || profiles?.[0]?.full_name || '';
+
   const notifications = useMemo(
-    () => {
-      const fromApi = rawNotifications
-        .filter((n) => n.type !== 'news')
-        .map((n) => buildNotification(n, t));
-      const pendingLeave = buildPendingLeaveNotifications(enrollments, t);
-      const combined = [...fromApi, ...pendingLeave].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      );
-      return combined;
-    },
-    [rawNotifications, enrollments, t, i18n.language]
+    () =>
+      collectStudentNotifications({
+        apiNotifications: apiNotifications.filter((n): n is NonNullable<typeof n> => n !== null),
+        trials,
+        enrollments,
+        studentRequests,
+        studentName: studentDisplayName,
+        t,
+      }),
+    [apiNotifications, trials, enrollments, studentRequests, studentDisplayName, t, i18n.language],
   );
+
+  const filteredNotifications = useMemo(() => {
+    if (categoryFilter === 'all') return notifications;
+    return notifications.filter((n) => n.category === categoryFilter);
+  }, [notifications, categoryFilter]);
+
+  const categoryFilters: { key: CategoryFilter; label: string }[] = [
+    { key: 'all', label: t('notifications.filterAll', '全部') },
+    { key: 'trial', label: t('notifications.filterTrial', '試堂') },
+    { key: 'class', label: t('notifications.filterClass', '課堂') },
+    { key: 'leave', label: t('notifications.filterLeave', '請假') },
+    { key: 'extension', label: t('notifications.filterExtension', '改期') },
+  ];
 
   useEffect(() => {
     let cancelled = false;
     const token = localStorage.getItem('token');
     if (!token) {
-      setRawNotifications([]);
+      setApiNotifications([]);
+      setTrials([]);
       setEnrollments([]);
+      setStudentRequests([]);
       setLoading(false);
       return () => {
         cancelled = true;
       };
     }
     setLoading(true);
+    const demoEnrollments =
+      profile?.id && shouldUseDemoUpcomingClasses(profile.id)
+        ? getFallbackUpcomingClasses(profile.id, profile.full_name)
+        : [];
+
     Promise.all([
-      api.get<{ data?: ApiNotification[] }>('/student/notifications'),
-      api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes'),
+      api.get<unknown[]>('/student/notifications').catch(() => ({ success: false, data: [] })),
+      api
+        .get<{ data?: TrialApplicationItem[] }>('/student/trial-applications')
+        .catch(() => ({ success: false, data: [] })),
+      api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes').catch(() => ({ success: false, data: [] })),
+      api.get<StudentRequestRow[]>('/student/application-requests').catch(() => ({ success: false, data: [] })),
     ])
-      .then(([notifRes, classesRes]) => {
+      .then(([notifRes, trialRes, classesRes, requestsRes]) => {
         if (cancelled) return;
-        const data = notifRes.data ?? [];
-        setRawNotifications(data);
-        let list = Array.isArray(classesRes.data) ? classesRes.data : [];
-        if (profile?.id && list.length > 0) {
-          list = list.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
+
+        const rawNotifs = Array.isArray(notifRes.data) ? notifRes.data : [];
+        setApiNotifications(
+          rawNotifs
+            .map((row) => normalizeApiNotification(row as Record<string, unknown>))
+            .filter((n): n is NonNullable<typeof n> => n !== null),
+        );
+
+        const trialData = (trialRes as { data?: TrialApplicationItem[] }).data;
+        let trialList = Array.isArray(trialData) ? trialData : [];
+        if (profile?.id) {
+          const scoped = trialList.filter((item) => !item.profile_id || item.profile_id === profile.id);
+          if (scoped.length > 0) trialList = scoped;
         }
-        setEnrollments(list);
+        setTrials(trialList);
+
+        let classList = Array.isArray(classesRes.data) ? classesRes.data : [];
+        if (classList.length === 0 && demoEnrollments.length > 0) {
+          classList = demoEnrollments;
+        }
+        if (profile?.id && classList.length > 0) {
+          const scoped = classList.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
+          if (scoped.length > 0) classList = scoped;
+        }
+        setEnrollments(classList);
+
+        const reqData = Array.isArray(requestsRes.data) ? requestsRes.data : [];
+        setStudentRequests(reqData);
       })
       .catch(() => {
         if (!cancelled) {
-          setRawNotifications([]);
-          setEnrollments([]);
+          setApiNotifications([]);
+          setTrials([]);
+          setEnrollments(demoEnrollments);
+          setStudentRequests([]);
         }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [profile?.id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, profile?.full_name]);
 
   return (
     <Layout>
@@ -76,36 +170,75 @@ export default function NotificationsPage() {
           <Bell className="h-7 w-7 text-primary" />
           {t('notifications.title', '訊息中心')}
         </h1>
-        <p className="text-gray-600 text-sm">{t('notifications.subtitleStudent', '全班消息、個人課堂、代幣、請假／改期通知。')}</p>
+        <p className="text-gray-600 text-sm">
+          {t(
+            'notifications.subtitleStudent',
+            '試堂申請狀態、課堂變動、請假與改期申請，以及 admin 批准結果。',
+          )}
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          {categoryFilters.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setCategoryFilter(key)}
+              className={`rounded-full px-3 py-1.5 text-sm font-medium border transition-colors ${
+                categoryFilter === key
+                  ? 'bg-primary text-white border-primary'
+                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
         <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
           {loading ? (
             <p className="text-gray-500 py-4">{t('common.loading', '載入中...')}</p>
           ) : (
             <ul className="space-y-3">
-              {notifications.length === 0 ? (
+              {filteredNotifications.length === 0 ? (
                 <li className="py-8 text-center text-gray-500">{t('notifications.noNotifications', '暫無通知')}</li>
               ) : (
-                notifications.map((n) => (
+                filteredNotifications.map((n) => (
                   <li key={n.id} className="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-100">
-                    {n.type === 'leave_pending' ? (
-                      <Clock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" aria-hidden />
-                    ) : (
-                      <CheckCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" aria-hidden />
-                    )}
+                    <NotificationIcon item={n} />
                     <div className="flex-1 min-w-0">
-                      {n.studentName && (
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <User className="h-3.5 w-3.5 text-primary" />
-                          <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          {t(`notifications.category.${n.category}`, {
+                            defaultValue:
+                              n.category === 'trial'
+                                ? '試堂'
+                                : n.category === 'leave'
+                                  ? '請假'
+                                  : n.category === 'extension'
+                                    ? '改期'
+                                    : n.category === 'class'
+                                      ? '課堂'
+                                      : '其他',
+                          })}
+                        </span>
+                        {n.studentName && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
+                            <User className="h-3 w-3" aria-hidden />
                             {t('notifications.forStudent', { studentName: n.studentName }, `有關：${n.studentName}`)}
                           </span>
-                        </div>
-                      )}
+                        )}
+                      </div>
                       <div className="font-medium text-gray-900">{n.title}</div>
                       <div className="text-sm text-gray-600 mt-1">{n.message}</div>
                       <div className="text-xs text-gray-500 mt-2">
-                        {new Date(n.date).toLocaleDateString(getLocale(), { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })}
+                        {new Date(n.date).toLocaleDateString(getLocale(), {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false,
+                        })}
                       </div>
                     </div>
                   </li>
@@ -116,7 +249,9 @@ export default function NotificationsPage() {
         </div>
 
         <p className="text-sm text-gray-500">
-          <Link to="/news" className="text-primary hover:underline">{t('notifications.latestNewsOnHome', '中心公告、優惠與活動請瀏覽首頁「最新消息」。')}</Link>
+          <Link to="/news" className="text-primary hover:underline">
+            {t('notifications.latestNewsOnHome', '中心公告、優惠與活動請瀏覽首頁「最新消息」。')}
+          </Link>
         </p>
       </div>
     </Layout>

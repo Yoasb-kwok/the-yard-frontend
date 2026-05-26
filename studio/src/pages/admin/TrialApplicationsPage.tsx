@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
+import { buildTrialConfirmedEmailPatch } from '../../lib/trialConfirmedEmailPayload';
 import { api } from '../../lib/api';
 import { isDemoMode } from '../../lib/mock';
 import { BookOpen, ChevronDown, ChevronRight, Filter, Pencil, Plus } from 'lucide-react';
@@ -489,6 +490,29 @@ export default function TrialApplicationsPage() {
 
     return '—';
   }
+
+  function resolveApplicationBranchKey(app: TrialApplication): string | null {
+    const direct = String(app.branch ?? '').trim();
+    if (direct) return direct;
+    const classId = app.assigned_class_id ?? app.class_id;
+    if (classId != null) {
+      const fromClass = classLocationById.get(String(classId));
+      if (fromClass) return fromClass;
+    }
+    const className = String(app.assigned_class_name ?? '').trim().toLowerCase();
+    if (className) {
+      const fromName = classLocationByName.get(className);
+      if (fromName) return fromName;
+    }
+    return null;
+  }
+
+  function getTrialClassDatetimeDisplay(app: TrialApplication): string {
+    const iso = app.preferred_datetime ?? app.trial_date;
+    if (!iso) return '—';
+    return formatDateTime(iso, getLocale());
+  }
+
   function getDistrictLabel(districtKey: string | null | undefined): string {
     const value = String(districtKey ?? '').trim();
     if (!value) return '—';
@@ -526,9 +550,20 @@ export default function TrialApplicationsPage() {
         changedRowIds.map(async (id) => {
           const app = applications.find((a) => a.id === id);
           if (!app) return { id, row: null as TrialApplication | null };
+          const previousStatus = toSelectableStatus(app.status);
           const status = toSelectableStatus(editStatus[id] ?? app.status);
           const notes = String(editNotes[id] ?? app.notes ?? '').trim();
-          const payload: { status: string; notes: string } = { status, notes };
+          const payload: Record<string, unknown> = { status, notes };
+          if (status === 'confirmed' && previousStatus !== 'confirmed') {
+            const emailExtras = buildTrialConfirmedEmailPatch(app, {
+              language: i18n.language || 'zh-TW',
+              branchKey: resolveApplicationBranchKey(app),
+              branchLabel: getDisplayBranch(app),
+              courseCode: getDisplayCourseCode(app),
+              classDatetimeFormatted: getTrialClassDatetimeDisplay(app),
+            });
+            if (emailExtras) Object.assign(payload, emailExtras);
+          }
           const res = await api.patch<Record<string, unknown>>(`/admin/trial-applications/${id}`, payload);
           if (!res.success) throw new Error(res.msg || 'Update failed');
           const serverRow = normalizeTrialApplicationRow(res.data);

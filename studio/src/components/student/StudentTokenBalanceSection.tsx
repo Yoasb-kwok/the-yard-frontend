@@ -1,23 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { AlertCircle, Coins, ShoppingBag, TrendingDown } from 'lucide-react';
+import { Activity, AlertCircle, Coins, RotateCcw, ShoppingBag } from 'lucide-react';
 import { api } from '../../lib/api';
 import { formatDate, isExpiringSoon } from '../../lib/utils';
-import { normalizeUserTokens, tokensFromPaidOrders, type UserToken } from '../../lib/studentTokens';
-import type { EnrolledClass } from '../../lib/studentEnrollments';
-
-interface TokenUsageItem {
-  id: string;
-  date: string;
-  class_name: string;
-  change: number;
-}
-
-const FALLBACK_TOKEN_USAGE: TokenUsageItem[] = [
-  { id: 'u1', date: new Date(Date.now() - 2 * 86400000).toISOString(), class_name: '兒童芭蕾 A', change: -1 },
-  { id: 'u2', date: new Date(Date.now() - 5 * 86400000).toISOString(), class_name: '兒童爵士 B', change: -1 },
-];
+import {
+  fetchTokenUsageHistory,
+  formatTokenUsageLabel,
+  getTotalRemainingTokens,
+  normalizeUserTokens,
+  tokensFromPaidOrders,
+  type TokenUsageItem,
+  type UserToken,
+} from '../../lib/studentTokens';
+import { getEnrolledLessonSlotCount, type EnrolledClass } from '../../lib/studentEnrollments';
 
 interface StudentTokenBalanceSectionProps {
   profileId?: string;
@@ -32,7 +28,9 @@ export default function StudentTokenBalanceSection({
 }: StudentTokenBalanceSectionProps) {
   const { t, i18n } = useTranslation();
   const [tokens, setTokens] = useState<UserToken[]>([]);
+  const [usage, setUsage] = useState<TokenUsageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [usageLoading, setUsageLoading] = useState(true);
 
   const getLocale = (): string => {
     const langMap: Record<string, string> = { en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
@@ -72,7 +70,38 @@ export default function StudentTokenBalanceSection({
     };
   }, [profileId]);
 
-  const totalTokens = tokens.reduce((sum, tok) => sum + tok.remaining_tokens, 0);
+  useEffect(() => {
+    let cancelled = false;
+    async function loadUsage() {
+      setUsageLoading(true);
+      const token = localStorage.getItem('token');
+      if (!token) {
+        if (!cancelled) {
+          setUsage([]);
+          setUsageLoading(false);
+        }
+        return;
+      }
+      try {
+        const list = await fetchTokenUsageHistory({
+          profileId,
+          purchaseLabel: t('dashboard.tokenUsagePurchase'),
+          refundLabel: t('dashboard.tokenUsageRefundDefault'),
+        });
+        if (!cancelled) setUsage(list);
+      } catch {
+        if (!cancelled) setUsage([]);
+      } finally {
+        if (!cancelled) setUsageLoading(false);
+      }
+    }
+    loadUsage();
+    return () => {
+      cancelled = true;
+    };
+  }, [profileId, t]);
+
+  const totalTokens = getTotalRemainingTokens(tokens);
   const expiringTokens = tokens.filter((tok) => isExpiringSoon(tok.expiry_date));
   const earliestExpiryDate =
     tokens.length > 0
@@ -152,27 +181,41 @@ export default function StudentTokenBalanceSection({
         )}
         <div className="mt-4 pt-4 border-t border-gray-100">
           <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-            <TrendingDown className="h-4 w-4" />
-            {t('dashboard.tokenUsageTitle')}
+            <Activity className="h-4 w-4" />
+            {t('dashboard.tokenActivityTitle')}
           </h3>
-          <ul className="space-y-2 max-h-32 overflow-y-auto">
-            {FALLBACK_TOKEN_USAGE.map((u) => (
-              <li key={u.id} className="flex justify-between items-center text-sm">
-                <span className="text-gray-600 truncate">
-                  {formatDate(u.date, getLocale())} · {u.class_name}
-                </span>
-                <span className="text-red-600 font-medium flex-shrink-0 ml-2">{u.change}</span>
-              </li>
-            ))}
-          </ul>
-          {profileClasses.some((e) => e.total_lessons != null && e.attended_lessons != null) && (
+          {usageLoading ? (
+            <p className="text-sm text-gray-500">{t('common.loading')}</p>
+          ) : usage.length === 0 ? (
+            <p className="text-sm text-gray-500">{t('dashboard.tokenUsageEmpty')}</p>
+          ) : (
+            <ul className="space-y-2 max-h-48 overflow-y-auto">
+              {usage.map((u) => (
+                <li key={u.id} className="flex justify-between items-start text-sm gap-2">
+                  <span className="text-gray-600 truncate min-w-0 flex items-center gap-1">
+                    {u.kind === 'refund' && (
+                      <RotateCcw className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" aria-hidden />
+                    )}
+                    {formatDate(u.date, getLocale())} · {formatTokenUsageLabel(u, t)}
+                  </span>
+                  <span
+                    className={`font-medium flex-shrink-0 ${
+                      u.kind === 'refund' || u.change > 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {u.change > 0 ? `+${u.change}` : u.change}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {profileClasses.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <h3 className="text-sm font-medium text-gray-700 mb-2">{t('dashboard.lessonsLeftTitle')}</h3>
               <ul className="space-y-1.5 text-sm">
-                {profileClasses
-                  .filter((e) => e.total_lessons != null && e.attended_lessons != null)
-                  .map((e) => {
-                    const left = (e.total_lessons ?? 0) - (e.attended_lessons ?? 0);
+                {profileClasses.map((e) => {
+                    const booked = getEnrolledLessonSlotCount(e);
+                    const left = booked - (e.attended_lessons ?? e.lessons_used ?? 0);
                     const studentName = e.user_name ?? profileName ?? t('dashboard.child');
                     return (
                       <li key={e.id} className="flex justify-between items-center gap-2">

@@ -4,10 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { useHolidays } from '../lib/useHolidays';
 import { api } from '../lib/api';
-import { getLessonDatesSkipHolidays, getLessonDates, formatDateTimeRange } from '../lib/utils';
+import { formatDateTimeRange } from '../lib/utils';
 import { getLocationInfo } from '../lib/locationInfo';
 import {
+  getEnrolledLessonSlotCount,
   getFallbackUpcomingClasses,
+  getLessonDatesForEnrollment,
   shouldUseDemoUpcomingClasses,
   type EnrolledClass,
 } from '../lib/studentEnrollments';
@@ -63,13 +65,7 @@ export default function StudentSidebarSchedule() {
 
   /** Lesson dates per enrollment (skip holidays). */
   const lessonDatesByEnrollment = useMemo(() => {
-    return enrollments.map((e) => {
-      const total = e.total_lessons ?? 8;
-      if (holidayDatesSet.size > 0) {
-        return getLessonDatesSkipHolidays(e.class.start_time, total, holidayDatesSet);
-      }
-      return getLessonDates(e.class.start_time, total);
-    });
+    return enrollments.map((e) => getLessonDatesForEnrollment(e, holidayDatesSet));
   }, [enrollments, holidayDatesSet]);
 
   /** 下一堂：soonest future lesson across all enrollments */
@@ -159,7 +155,7 @@ export default function StudentSidebarSchedule() {
         <ul className="space-y-3 px-3 pb-4">
           {upcomingPerEnrollment.map(({ enrollment: e, nextDate, endDate }) => {
             const loc = getLocationInfo(e.class.location);
-            const total = e.total_lessons ?? 8;
+            const total = getEnrolledLessonSlotCount(e);
             const attended = e.attended_lessons ?? 0;
             return (
               <li key={e.id}>

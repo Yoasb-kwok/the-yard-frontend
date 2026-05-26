@@ -275,6 +275,9 @@ export interface EnrolledClassForStudent {
   };
   attended_lessons?: number;
   total_lessons?: number;
+  leave_requests?: { lesson_index: number; leave_type: 'personal' | 'sick'; status: string }[];
+  extension_application?: { status: string; rejection_reason?: string };
+  sick_leave_application?: { status: string; rejection_reason?: string };
 }
 
 const STUDENT_DEMO_PROGRAM_INDEXES = [0, 3, 2]; // 兒童芭蕾, 爵士舞, 幼兒律動
@@ -314,6 +317,17 @@ export function getFallbackEnrolledClassesForStudent(profileId?: string, profile
       },
       attended_lessons: [2, 3, 1][i],
       total_lessons: p.total_lessons,
+      ...(i === 0
+        ? {
+            leave_requests: [{ lesson_index: 2, leave_type: 'sick' as const, status: 'pending' }],
+            sick_leave_application: { status: 'pending' },
+          }
+        : {}),
+      ...(i === 1
+        ? {
+            extension_application: { status: 'approved' },
+          }
+        : {}),
     };
   });
 }

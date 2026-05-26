@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { getOrderStatus, type PaymentOrderStatus } from '../../lib/paymentApi';
+import { confirmCheckoutSession, getOrderStatus, type PaymentOrderStatus } from '../../lib/paymentApi';
 import { api } from '../../lib/api';
 import { formatCurrency } from '../../lib/utils';
 import { CheckCircle, Loader2, AlertCircle } from 'lucide-react';
@@ -32,9 +32,36 @@ export default function PaymentSuccessPage() {
 
     async function poll() {
       setPhase('polling');
+      // Stripe card: finalize order immediately (no admin pending → paid step).
+      try {
+        const confirmed = await confirmCheckoutSession(sessionId);
+        if (cancelled) return;
+        if (confirmed) setOrder(confirmed);
+        if (confirmed?.payment_status === 'paid') {
+          setPhase('paid');
+          await refreshMe().catch(() => {});
+          await api.get('/student/tokens').catch(() => api.get('/user-tokens')).catch(() => {});
+          return;
+        }
+      } catch {
+        // Backend may not implement confirm-session yet; keep polling order-status.
+      }
+
       for (let attempt = 0; attempt < POLL_ATTEMPTS; attempt++) {
         if (cancelled) return;
         try {
+          if (attempt > 0 && attempt % 4 === 0) {
+            const confirmed = await confirmCheckoutSession(sessionId).catch(() => null);
+            if (cancelled) return;
+            if (confirmed) setOrder(confirmed);
+            if (confirmed?.payment_status === 'paid') {
+              setPhase('paid');
+              await refreshMe().catch(() => {});
+              await api.get('/student/tokens').catch(() => api.get('/user-tokens')).catch(() => {});
+              return;
+            }
+          }
+
           const next = await getOrderStatus({ session_id: sessionId });
           if (cancelled) return;
           if (next) setOrder(next);

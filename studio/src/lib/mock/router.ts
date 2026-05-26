@@ -17,6 +17,7 @@ import {
   type DemoTrialApplication,
   type DemoOrder,
   type DemoUserToken,
+  type DemoProfile,
   type DemoNews,
   type DemoInstructor,
   type DemoEnrollment,
@@ -27,6 +28,9 @@ import {
   type DemoHoliday,
   type DemoClassNotice,
   type DemoSimpleContent,
+  type DemoNotification,
+  type DemoExtensionRequest,
+  type DemoSickLeaveRequest,
 } from './db';
 import { normalizeClassHealthPayload } from '../adminReportData';
 
@@ -63,8 +67,8 @@ function ok(data: unknown = undefined, extra: Partial<MockResponse> = {}): MockR
   return { success: true, ...(data !== undefined ? { data } : {}), ...extra };
 }
 
-function err(msg: string): MockResponse {
-  return { success: false, msg };
+function err(msg: string, code?: string): MockResponse {
+  return code ? { success: false, msg, code } : { success: false, msg };
 }
 
 function parseUserFromToken(token: string | null): DemoUser | null {
@@ -85,6 +89,26 @@ function parseUserFromToken(token: string | null): DemoUser | null {
   return null;
 }
 
+function profileFromDemoProfile(p: DemoProfile) {
+  return {
+    id: p.id,
+    full_name: p.full_name,
+    role: 'student' as const,
+    mobile: p.mobile ?? p.contact_number ?? null,
+    id_first_four: p.id_first_four ?? null,
+    student_id: p.student_id ?? null,
+    nick_name: p.nick_name ?? null,
+    date_of_birth: p.date_of_birth ?? null,
+    sex: p.sex ?? null,
+    parents_name: p.parents_name ?? null,
+    contact_number: p.contact_number ?? null,
+    residential_district: p.residential_district ?? null,
+    has_joined_courses: null,
+    level: p.level ?? null,
+    profile_kind: p.profile_kind,
+  };
+}
+
 function profileFromUser(u: DemoUser) {
   return {
     id: u.id,
@@ -101,6 +125,27 @@ function profileFromUser(u: DemoUser) {
     residential_district: u.residential_district ?? null,
     has_joined_courses: u.has_joined_courses ?? null,
     level: u.level ?? null,
+    profile_kind: 'student' as const,
+  };
+}
+
+function demoProfileToApiRow(p: DemoProfile) {
+  return {
+    id: p.id,
+    user_id: p.user_id,
+    profile_kind: p.profile_kind,
+    full_name: p.full_name,
+    student_id: p.student_id ?? null,
+    nick_name: p.nick_name ?? null,
+    date_of_birth: p.date_of_birth ?? null,
+    sex: p.sex ?? null,
+    parents_name: p.parents_name ?? null,
+    contact_number: p.contact_number ?? null,
+    residential_district: p.residential_district ?? null,
+    level: p.level ?? null,
+    mobile: p.mobile ?? null,
+    id_first_four: p.id_first_four ?? null,
+    id_last_four: p.id_last_four ?? null,
   };
 }
 
@@ -254,17 +299,25 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       role: actor.role,
       mobile: actor.mobile,
     };
-    const prof = profileFromUser(actor);
+    const db = getDb();
+    const accountProfiles = db.profiles.filter((p) => p.user_id === actor.id);
+    const profs =
+      accountProfiles.length > 0
+        ? accountProfiles
+            .filter((p) => p.profile_kind === 'student')
+            .map(profileFromDemoProfile)
+        : [profileFromUser(actor)];
+    const primary = profs[0] ?? profileFromUser(actor);
     return {
       success: true,
       data: {
         user: userPayload,
-        profiles: [prof],
+        profiles: profs.length > 0 ? profs : [primary],
         requirePasswordChange: false,
       },
       user: userPayload,
-      profiles: [prof],
-      profile: prof,
+      profiles: profs.length > 0 ? profs : [primary],
+      profile: primary,
       requirePasswordChange: false,
     } as MockResponse;
   }
@@ -469,7 +522,233 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && (path === '/student/tokens' || path === '/user-tokens')) {
     if (!actor) return ok([]);
     const db = getDb();
-    const list = db.userTokens.filter((t) => t.user_id === actor.id && t.is_active);
+    const list = db.userTokens
+      .filter((t) => t.user_id === actor.id && t.is_active)
+      .map((t) => ({
+        id: t.id,
+        remaining_tokens: t.balance,
+        total_tokens: t.tokens,
+        expiry_date: t.expires_at,
+        balance: t.balance,
+        tokens: t.tokens,
+        expires_at: t.expires_at,
+        package_name: t.package_name,
+      }));
+    return ok(list);
+  }
+  if (
+    method === 'GET' &&
+    (path === '/student/token-usage' ||
+      path === '/student/token-transactions' ||
+      path === '/user-token-transactions')
+  ) {
+    if (!actor) return ok([]);
+    const db = getDb();
+    const items: Array<{
+      id: string;
+      date: string;
+      class_name: string;
+      change: number;
+      created_at: string;
+    }> = [];
+
+    for (const o of db.orders.filter((x) => x.user_id === actor.id && x.payment_status === 'paid')) {
+      const pkg = db.tokenPackages.find((p) => p.id === o.package_id);
+      const count = (pkg?.token_count ?? 0) * (o.quantity || 1);
+      if (count <= 0) continue;
+      items.push({
+        id: `ord-${o.id}`,
+        date: o.paid_at || o.created_at,
+        created_at: o.paid_at || o.created_at,
+        class_name: o.package_name || pkg?.name || '代幣套票購買',
+        change: count,
+      });
+    }
+
+    for (const e of db.enrollments.filter((x) => x.user_id === actor.id)) {
+      const charged = Number(e.tokens_charged ?? 0);
+      if (charged <= 0) continue;
+      const c = db.classes.find((x) => x.id === e.class_id);
+      items.push({
+        id: `enr-${e.id}`,
+        date: e.created_at || c?.start_time || new Date().toISOString(),
+        created_at: e.created_at,
+        class_name: c?.name ?? '課程報名',
+        change: -charged,
+      });
+    }
+
+    for (const r of db.refundRecords.filter((x) => x.user_id === actor.id)) {
+      const refunded = Number(r.tokens ?? r.amount ?? 0);
+      if (refunded <= 0) continue;
+      items.push({
+        id: `ref-${r.id}`,
+        date: r.created_at,
+        created_at: r.created_at,
+        class_name: r.class_name ? `${r.class_name}（退代幣）` : '退代幣',
+        change: refunded,
+      });
+    }
+
+    items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return ok(items);
+  }
+  if (
+    method === 'GET' &&
+    (path === '/student/token-refunds' ||
+      path === '/student/refund-records' ||
+      path === '/refunds/me')
+  ) {
+    if (!actor) return ok([]);
+    const db = getDb();
+    const refunds = db.refundRecords
+      .filter((x) => x.user_id === actor.id)
+      .map((r) => {
+        const tokensRefunded = Number(r.tokens ?? 0);
+        return {
+          id: r.id,
+          refunded_at: r.created_at,
+          created_at: r.created_at,
+          class_name: r.class_name,
+          remarks: r.reason,
+          tokens_refunded: tokensRefunded > 0 ? tokensRefunded : undefined,
+          kind: 'refund',
+        };
+      })
+      .filter((r) => (r.tokens_refunded ?? 0) > 0);
+    return ok(refunds);
+  }
+  if (method === 'POST' && path === '/class-enrollments') {
+    if (!actor) return err('Unauthorized', 'UNAUTHORIZED');
+    const raw = (body ?? {}) as Record<string, unknown>;
+    const classId = String(raw.class_id ?? raw.classId ?? '').trim();
+    const lessonCount = Math.max(1, Math.floor(Number(raw.lesson_count ?? 1) || 1));
+    if (!classId) return err('Missing class_id');
+
+    const result = mutate((d) => {
+      const cls = d.classes.find((c) => String(c.id) === classId);
+      if (!cls) return { error: 'CLASS_NOT_FOUND' as const };
+      if (cls.is_cancelled) return { error: 'CLASS_CANCELLED' as const };
+      if (new Date(cls.start_time) < new Date()) return { error: 'CLASS_PAST' as const };
+      if ((cls.enrolled_count ?? 0) >= (cls.capacity ?? 0)) return { error: 'CLASS_FULL' as const };
+
+      const duplicate = d.enrollments.find(
+        (e) => e.user_id === actor.id && e.class_id === cls.id && e.status === 'enrolled',
+      );
+      if (duplicate) return { error: 'ALREADY_ENROLLED' as const };
+
+      const perLesson = Math.max(1, Number(cls.token_cost) || 1);
+      const tokensRequired = lessonCount * perLesson;
+
+      const packs = d.userTokens
+        .filter(
+          (t) =>
+            t.user_id === actor.id &&
+            t.is_active &&
+            t.balance > 0 &&
+            new Date(t.expires_at).getTime() > Date.now(),
+        )
+        .sort((a, b) => new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime());
+
+      const totalBalance = packs.reduce((s, p) => s + p.balance, 0);
+      if (totalBalance < tokensRequired) {
+        return { error: 'INSUFFICIENT_TOKENS' as const, required: tokensRequired, balance: totalBalance };
+      }
+
+      let remaining = tokensRequired;
+      let primaryTokenId: string | null = null;
+      for (const pack of packs) {
+        if (remaining <= 0) break;
+        const take = Math.min(pack.balance, remaining);
+        pack.balance -= take;
+        remaining -= take;
+        if (!primaryTokenId) primaryTokenId = pack.id;
+      }
+
+      const enrollment: DemoEnrollment = {
+        id: nextId('enr'),
+        class_id: cls.id,
+        user_id: actor.id,
+        user_token_id: primaryTokenId,
+        tokens_charged: tokensRequired,
+        student_name: actor.name,
+        status: 'enrolled',
+        lessons_used: 0,
+        lessons_remaining: lessonCount,
+        created_at: new Date().toISOString(),
+      };
+      d.enrollments.push(enrollment);
+      cls.enrolled_count = (cls.enrolled_count ?? 0) + 1;
+      return { enrollment, tokens_charged: tokensRequired, remaining_balance: totalBalance - tokensRequired };
+    });
+
+    if (!result) return err('Enrollment failed');
+    if ('error' in result) {
+      if (result.error === 'INSUFFICIENT_TOKENS') {
+        return err(
+          `Insufficient tokens. Required: ${result.required}, available: ${result.balance}.`,
+          'INSUFFICIENT_TOKENS',
+        );
+      }
+      if (result.error === 'CLASS_NOT_FOUND') return err('Class not found');
+      if (result.error === 'CLASS_FULL') return err('Class is full');
+      if (result.error === 'CLASS_PAST') return err('Cannot enroll in a past class');
+      if (result.error === 'CLASS_CANCELLED') return err('Class is cancelled');
+      if (result.error === 'ALREADY_ENROLLED') return err('Already enrolled in this class');
+      return err('Enrollment failed');
+    }
+    return ok({
+      ...result.enrollment,
+      tokens_charged: result.tokens_charged,
+      remaining_tokens: result.remaining_balance,
+    });
+  }
+  function enrolledLessonSlotsForRow(e: DemoEnrollment, c: DemoClass): number {
+    const used = Number(e.lessons_used ?? 0);
+    const remaining = Number(e.lessons_remaining);
+    if (Number.isFinite(remaining) && remaining >= 0) {
+      const booked = remaining + used;
+      if (booked > 0) return Math.floor(booked);
+    }
+    const charged = Number(e.tokens_charged ?? 0);
+    const per = Math.max(1, Number(c.token_cost) || 1);
+    if (charged > 0) return Math.max(1, Math.round(charged / per));
+    return Math.max(1, Number(c.total_lessons) || 1);
+  }
+
+  if (method === 'GET' && path === '/class-enrollments/me') {
+    if (!actor) return ok([]);
+    const db = getDb();
+    const list = db.enrollments
+      .filter((e) => e.user_id === actor.id)
+      .map((e) => {
+        const c = db.classes.find((x) => x.id === e.class_id);
+        if (!c) return null;
+        const enrolledSlots = enrolledLessonSlotsForRow(e, c);
+        return {
+          id: e.id,
+          status: e.status,
+          user_id: e.user_id,
+          user_token_id: e.user_token_id ?? null,
+          tokens_charged: e.tokens_charged ?? null,
+          lessons_remaining: e.lessons_remaining ?? null,
+          lessons_used: e.lessons_used ?? 0,
+          created_at: e.created_at,
+          class: {
+            name: c.name,
+            instructor: c.instructor,
+            start_time: c.start_time,
+            end_time: c.end_time,
+            program_code: c.program_code,
+            location: c.location,
+            token_cost: c.token_cost ?? 1,
+          },
+          attended_lessons: e.lessons_used ?? 0,
+          course_total_lessons: c.total_lessons,
+          total_lessons: enrolledSlots,
+        };
+      })
+      .filter(Boolean);
     return ok(list);
   }
   if (method === 'GET' && path === '/orders/me') {
@@ -493,7 +772,122 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && path === '/student/notifications') {
     if (!actor) return ok([]);
     const db = getDb();
-    return ok(db.notifications.filter((n) => n.user_id === actor.id));
+    return ok(
+      db.notifications
+        .filter((n) => n.user_id === actor.id)
+        .map((n) => {
+          const row = n as DemoNotification & {
+            type?: string;
+            titleKey?: string;
+            messageKey?: string;
+            className?: string;
+            dateTimeStr?: string;
+            studentName?: string;
+          };
+          if (row.type && row.titleKey) {
+            return {
+              id: row.id,
+              type: row.type,
+              titleKey: row.titleKey,
+              messageKey: row.messageKey,
+              className: row.className,
+              dateTimeStr: row.dateTimeStr,
+              studentName: row.studentName ?? actor.name,
+              date: row.created_at,
+            };
+          }
+          return {
+            id: row.id,
+            type: 'other',
+            title: row.title,
+            message: row.body,
+            date: row.created_at,
+          };
+        }),
+    );
+  }
+  if (method === 'GET' && path === '/student/upcoming-classes') {
+    if (!actor) return ok([]);
+    const db = getDb();
+    const list = db.enrollments
+      .filter((e) => e.user_id === actor.id)
+      .map((e) => {
+        const c = db.classes.find((x) => x.id === e.class_id);
+        if (!c) return null;
+        const sick = db.sickLeaveRequests.find(
+          (r) => r.enrollment_id === e.id && r.user_id === actor.id,
+        );
+        const ext = db.extensionRequests.find(
+          (r) => r.enrollment_id === e.id && r.user_id === actor.id,
+        );
+        const enrolledSlots = enrolledLessonSlotsForRow(e, c);
+        return {
+          id: e.id,
+          status: e.status,
+          user_id: e.user_id,
+          user_name: e.student_name ?? actor.name,
+          tokens_charged: e.tokens_charged ?? null,
+          lessons_remaining: e.lessons_remaining ?? null,
+          lessons_used: e.lessons_used ?? 0,
+          class: {
+            name: c.name,
+            instructor: c.instructor,
+            start_time: c.start_time,
+            end_time: c.end_time,
+            program_code: c.program_code,
+            location: c.location,
+            token_cost: c.token_cost ?? 1,
+          },
+          attended_lessons: e.lessons_used ?? 0,
+          course_total_lessons: c.total_lessons,
+          total_lessons: enrolledSlots,
+          leave_requests: sick
+            ? [
+                {
+                  lesson_index: 0,
+                  leave_type: 'sick' as const,
+                  status: sick.status,
+                },
+              ]
+            : [],
+          extension_application: ext
+            ? { status: ext.status, rejection_reason: ext.rejection_reason ?? undefined }
+            : undefined,
+          sick_leave_application: sick
+            ? { status: sick.status, rejection_reason: sick.rejection_reason ?? undefined }
+            : undefined,
+        };
+      })
+      .filter(Boolean);
+    return ok(list);
+  }
+  if (method === 'GET' && path === '/student/application-requests') {
+    if (!actor) return ok([]);
+    const db = getDb();
+    const rows = [
+      ...db.extensionRequests
+        .filter((r) => r.user_id === actor.id)
+        .map((r) => ({
+          id: r.id,
+          kind: 'extension' as const,
+          status: r.status,
+          class_name: r.class_name,
+          created_at: r.created_at,
+          user_name: r.user_name ?? actor.name,
+        })),
+      ...db.sickLeaveRequests
+        .filter((r) => r.user_id === actor.id)
+        .map((r) => ({
+          id: r.id,
+          kind: 'sick_leave' as const,
+          status: r.status,
+          class_name: r.class_name,
+          class_date: r.class_date,
+          created_at: r.created_at,
+          user_name: r.user_name ?? actor.name,
+        })),
+    ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return ok(rows);
   }
   if (method === 'GET' && path === '/student/trial-applications') {
     if (!actor) return ok([]);
@@ -506,11 +900,20 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
         const cls = t.assigned_class_id
           ? db.classes.find((c) => String(c.id) === String(t.assigned_class_id))
           : null;
+        const displayStatus =
+          t.status === 'assigned' ||
+          t.status === 'contacted' ||
+          t.status === 'attended' ||
+          t.status === 'converted'
+            ? t.status === 'converted'
+              ? 'converted'
+              : 'confirmed'
+            : t.status;
         return {
           id: t.id,
           class_name:
             t.assigned_class_name || cls?.name || t.requested_trial_class_name || t.preferred_program || '試堂申請',
-          status: t.status,
+          status: displayStatus,
           applied_date: t.created_at,
           assigned_class_name: t.assigned_class_name ?? cls?.name ?? null,
         };
@@ -553,17 +956,66 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   // =================================================================
   //                         PAYMENT (mock)
   // =================================================================
+  function demoOrderToPaymentRow(db: ReturnType<typeof getDb>, order: DemoOrder) {
+    const pkg = db.tokenPackages.find((p) => p.id === order.package_id);
+    const tokenCount = (pkg?.token_count ?? 0) * (order.quantity || 1);
+    return {
+      id: Number(String(order.id).replace(/\D/g, '')) || 0,
+      order_id: order.id,
+      package_id: Number(order.package_id) || 0,
+      total: order.total,
+      payment_status: order.payment_status,
+      payment_method: order.payment_method,
+      token_count: tokenCount,
+      stripe_checkout_session_id: order.stripe_session_id ?? undefined,
+      stripe_checkout_payment_status:
+        order.payment_status === 'paid' ? 'paid' : order.stripe_session_id ? 'paid' : null,
+      created_at: order.created_at,
+    };
+  }
+
+  function creditTokensForPaidOrder(
+    d: ReturnType<typeof getDb>,
+    order: DemoOrder,
+    actorUser: DemoUser,
+  ) {
+    if (order.payment_status !== 'paid') return;
+    if (d.userTokens.some((t) => t.order_id === order.id)) return;
+    const pkg = d.tokenPackages.find((p) => p.id === order.package_id);
+    if (!pkg) return;
+    const purchased = order.paid_at || new Date().toISOString();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + pkg.validity_days);
+    const qty = order.quantity || 1;
+    d.userTokens.push({
+      id: nextId('ut'),
+      user_id: actorUser.id,
+      package_id: pkg.id,
+      package_name: pkg.name,
+      tokens: pkg.token_count * qty,
+      balance: pkg.token_count * qty,
+      expires_at: expiresAt.toISOString(),
+      purchased_at: purchased,
+      order_id: order.id,
+      is_active: true,
+    });
+  }
+
   if (method === 'POST' && path === '/payment/checkout-session') {
-    const b = body as { package_id?: string };
+    const b = body as {
+      package_id?: string | number;
+      return_origin?: string;
+      success_url?: string;
+      cancel_url?: string;
+    };
     const db = getDb();
-    const pkg = db.tokenPackages.find((p) => p.id === b.package_id);
+    const pkgId = String(b.package_id ?? '');
+    const pkg = db.tokenPackages.find((p) => p.id === pkgId || String(p.id) === pkgId);
     if (!pkg) return err('Package not found');
     if (!actor) return err('Unauthorized');
     const orderId = nextId('ord');
     const sessionId = nextId('sess');
-    const purchased = new Date().toISOString();
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + pkg.validity_days);
+    const createdAt = new Date().toISOString();
     mutate((d) => {
       d.orders.unshift({
         id: orderId,
@@ -577,38 +1029,69 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
         discount: 0,
         total: pkg.price,
         payment_method: 'card',
-        payment_status: 'paid',
+        payment_status: 'pending',
         stripe_session_id: sessionId,
-        created_at: purchased,
-        paid_at: purchased,
-      });
-      d.userTokens.push({
-        id: nextId('ut'),
-        user_id: actor.id,
-        package_id: pkg.id,
-        package_name: pkg.name,
-        tokens: pkg.token_count,
-        balance: pkg.token_count,
-        expires_at: expiresAt.toISOString(),
-        purchased_at: purchased,
-        order_id: orderId,
-        is_active: true,
+        created_at: createdAt,
+        paid_at: null,
       });
     });
-    // Return a fake URL that points at our own success page so browser just navigates
+    const origin =
+      (b.return_origin || '').replace(/\/$/, '') ||
+      (typeof window !== 'undefined' ? window.location.origin.replace(/\/$/, '') : '');
+    const successTemplate =
+      b.success_url ||
+      `${origin}/payment/success?session_id={CHECKOUT_SESSION_ID}`;
+    const demoSuccessUrl = successTemplate.replace(/\{CHECKOUT_SESSION_ID\}/gi, sessionId);
+    // Simulates Stripe redirect; tokens credited on confirm-session (like production card flow).
     return ok({
-      url: `${typeof window !== 'undefined' ? window.location.origin : ''}/payment/success?session_id=${sessionId}&order_id=${orderId}`,
+      url: demoSuccessUrl,
       session_id: sessionId,
       order_id: orderId,
+      success_url: demoSuccessUrl,
+      cancel_url: b.cancel_url || `${origin}/payment/cancel`,
     });
   }
+
+  if (method === 'POST' && path === '/payment/confirm-session') {
+    const b = body as { session_id?: string };
+    if (!actor) return err('Unauthorized');
+    const sid = (b.session_id || '').trim();
+    if (!sid) return err('session_id required');
+    const db = getDb();
+    const order = db.orders.find((o) => o.stripe_session_id === sid && o.user_id === actor.id);
+    if (!order) return err('Order not found');
+    if (order.payment_method !== 'card' && order.payment_status === 'pending') {
+      return err('Only card checkout can be confirmed here; FPS/cash await admin.');
+    }
+    const paidAt = new Date().toISOString();
+    mutate((d) => {
+      const o = d.orders.find((x) => x.id === order.id);
+      if (!o) return;
+      o.payment_status = 'paid';
+      o.paid_at = o.paid_at || paidAt;
+      creditTokensForPaidOrder(d, o, actor);
+    });
+    const updated = getDb().orders.find((o) => o.id === order.id)!;
+    return ok({
+      status: 'paid',
+      order: demoOrderToPaymentRow(getDb(), updated),
+    });
+  }
+
   if (method === 'GET' && path === '/payment/order-status') {
     const db = getDb();
     const sid = query.session_id;
-    const oid = query.order_id;
-    const order = db.orders.find((o) => o.stripe_session_id === sid || o.id === oid);
+    const oid = query.internal_id || query.order_id;
+    const order = db.orders.find(
+      (o) =>
+        (sid && o.stripe_session_id === sid) ||
+        (oid && (o.id === oid || String(o.id) === oid)),
+    );
     if (!order) return ok({ status: 'unknown' });
-    return ok({ status: order.payment_status, order });
+    return ok({
+      status: order.payment_status,
+      order: demoOrderToPaymentRow(db, order),
+    });
   }
 
   // =================================================================
@@ -671,6 +1154,9 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
             if (uName && tName && uName === tName) return true;
             return false;
           });
+          const accountProfiles = db.profiles
+            .filter((p) => p.user_id === u.id)
+            .map(demoProfileToApiRow);
           return {
             id: u.id,
             email,
@@ -683,11 +1169,17 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
             id_last_four: u.id_last_four,
             country_code: u.country_code,
             date_of_birth: u.date_of_birth,
+            sex: u.sex ?? null,
             level: u.level,
+            parents_name: u.parents_name,
+            contact_number: u.contact_number,
+            residential_district: u.residential_district,
             has_joined_courses: u.has_joined_courses,
             has_trial_application,
             created_at: u.created_at,
             user_tokens: tokens,
+            profiles: accountProfiles,
+            student_profile_count: accountProfiles.filter((p) => p.profile_kind === 'student').length,
           };
         }),
     );
@@ -741,9 +1233,9 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       if (!u) return null;
       if (patch.full_name != null) u.name = String(patch.full_name).trim();
       if (patch.name != null) u.name = String(patch.name).trim();
-      if (patch.mobile != null) u.mobile = String(patch.mobile).trim();
+      if (patch.mobile != null) u.mobile = String(patch.mobile).trim() || undefined;
       if (patch.id_card_last4 != null || patch.id_last_four != null) {
-        u.id_last_four = String(patch.id_card_last4 ?? patch.id_last_four ?? '').trim();
+        u.id_last_four = String(patch.id_card_last4 ?? patch.id_last_four ?? '').trim() || undefined;
       }
       if (patch.email != null) u.email = String(patch.email).trim().toLowerCase();
       if (patch.username != null || patch.nick_name != null) {
@@ -751,10 +1243,103 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
         u.nick_name = un || null;
       }
       if (patch.student_id != null) u.student_id = patch.student_id ? String(patch.student_id) : undefined;
+      if (patch.parents_name != null) {
+        u.parents_name = String(patch.parents_name).trim() || null;
+      }
+      if (patch.contact_number != null) {
+        u.contact_number = String(patch.contact_number).trim() || null;
+      }
+      if (patch.residential_district !== undefined) {
+        const rd = patch.residential_district;
+        u.residential_district =
+          rd == null || String(rd).trim() === '' ? null : String(rd).trim();
+      }
+
+      const accountProfiles = d.profiles.filter((p) => p.user_id === u.id);
+      const parentProfile = accountProfiles.find((p) => p.profile_kind === 'parent');
+      if (parentProfile) {
+        if (patch.parents_name != null) {
+          parentProfile.full_name = String(patch.parents_name).trim() || parentProfile.full_name;
+          parentProfile.parents_name = String(patch.parents_name).trim() || null;
+        }
+        if (patch.contact_number != null) {
+          parentProfile.contact_number = String(patch.contact_number).trim() || null;
+        }
+        if (patch.residential_district !== undefined) {
+          const rd = patch.residential_district;
+          parentProfile.residential_district =
+            rd == null || String(rd).trim() === '' ? null : String(rd).trim();
+        }
+        if (patch.mobile != null) {
+          parentProfile.mobile = String(patch.mobile).trim() || null;
+        }
+      }
+
+      const studentRows = patch.student_profiles ?? patch.profiles;
+      if (Array.isArray(studentRows)) {
+        for (const row of studentRows) {
+          const r = row as Record<string, unknown>;
+          const profileId = r.id != null ? String(r.id) : '';
+          if (!profileId) continue;
+          const p = d.profiles.find((x) => x.id === profileId && x.user_id === u.id);
+          if (!p || p.profile_kind === 'parent') continue;
+          if (r.full_name != null) p.full_name = String(r.full_name).trim();
+          if (r.date_of_birth !== undefined) {
+            const dob = r.date_of_birth;
+            p.date_of_birth =
+              dob == null || String(dob).trim() === '' ? null : String(dob).slice(0, 10);
+          }
+          if (r.sex !== undefined) {
+            if (r.sex === null || r.sex === '') p.sex = null;
+            else if (typeof r.sex === 'boolean') p.sex = r.sex;
+            else if (typeof r.sex === 'number') p.sex = r.sex !== 0;
+            else {
+              const s = String(r.sex).trim().toLowerCase();
+              if (['1', 'true', 'yes', 'male', 'm'].includes(s)) p.sex = true;
+              else if (['0', 'false', 'no', 'female', 'f'].includes(s)) p.sex = false;
+              else p.sex = null;
+            }
+          }
+          if (r.id_card_last4 != null || r.id_last_four != null) {
+            const last4 = String(r.id_card_last4 ?? r.id_last_four ?? '').trim();
+            p.id_last_four = last4 || null;
+          }
+          if (patch.parents_name != null) {
+            p.parents_name = String(patch.parents_name).trim() || null;
+          }
+          if (patch.residential_district !== undefined) {
+            const rd = patch.residential_district;
+            p.residential_district =
+              rd == null || String(rd).trim() === '' ? null : String(rd).trim();
+          }
+        }
+      }
+
+      if (patch.parents_name != null && accountProfiles.length > 0) {
+        const parentName = String(patch.parents_name).trim();
+        accountProfiles
+          .filter((p) => p.profile_kind === 'student')
+          .forEach((p) => {
+            p.parents_name = parentName || null;
+          });
+      }
+
       return u;
     });
     if (!updated) return err('User not found');
-    return ok({ success: true, data: updated });
+    const dbAfter = getDb();
+    const accountProfiles = dbAfter.profiles
+      .filter((p) => p.user_id === updated.id)
+      .map(demoProfileToApiRow);
+    return ok({
+      success: true,
+      data: {
+        ...updated,
+        full_name: updated.name,
+        profiles: accountProfiles,
+        student_profile_count: accountProfiles.filter((p) => p.profile_kind === 'student').length,
+      },
+    });
   }
   if (method === 'DELETE' && adminUserId) {
     const removed = mutate((d) => {
@@ -957,7 +1542,13 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       preferred_datetime: t.preferred_date,
       preferred_date: t.preferred_date,
       trial_date: cls?.start_time || t.preferred_date,
-      status: t.status,
+      status:
+        t.status === 'assigned' ||
+        t.status === 'contacted' ||
+        t.status === 'attended' ||
+        t.status === 'converted'
+          ? 'confirmed'
+          : t.status,
       assigned_class_id: t.assigned_class_id ?? null,
       assigned_class_name: t.assigned_class_name ?? cls?.name ?? null,
       assigned_lessons: t.assigned_lessons ?? null,
@@ -1028,7 +1619,26 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   const adminTrialId = matches('/admin/trial-applications/:id', path);
   if (method === 'PATCH' && adminTrialId) {
-    const patch = body as Partial<DemoTrialApplication> & { assigned_class_id?: unknown };
+    const rawPatch = (body ?? {}) as Record<string, unknown>;
+    const patch = { ...rawPatch } as Partial<DemoTrialApplication> & {
+      assigned_class_id?: unknown;
+      status?: string;
+    };
+    const previous = getDb().trialApplications.find(
+      (x) => String(x.id) === String(adminTrialId.id),
+    );
+    const previousSelectable =
+      previous?.status === 'cancelled'
+        ? 'cancelled'
+        : previous?.status === 'assigned' ||
+            ['contacted', 'attended', 'converted'].includes(String(previous?.status))
+          ? 'confirmed'
+          : 'pending';
+    const nextStatus = String(patch.status ?? previous?.status ?? 'pending').toLowerCase();
+    const becameConfirmed =
+      nextStatus === 'confirmed' && previousSelectable !== 'confirmed';
+    const sendConfirmationEmail = rawPatch.sendConfirmationEmail === true;
+
     const updated = mutate((d) => {
       const t = d.trialApplications.find(
         (x) => String(x.id) === String(adminTrialId.id),
@@ -1045,11 +1655,26 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
       } else if (patch.assigned_class_id === null) {
         patch.assigned_class_name = null;
       }
-      Object.assign(t, patch);
+      if (nextStatus === 'confirmed') {
+        t.status = 'assigned';
+      } else if (nextStatus === 'cancelled') {
+        t.status = 'cancelled';
+      } else if (nextStatus === 'pending') {
+        t.status = 'pending';
+      }
+      if (typeof rawPatch.notes === 'string') t.notes = rawPatch.notes;
+      if (rawPatch.branch && typeof rawPatch.branch === 'string') {
+        t.preferred_location = rawPatch.branch;
+      }
       return t;
     });
     if (!updated) return err('Trial application not found');
-    return ok(toAdminTrialRow(updated));
+    const row = toAdminTrialRow(updated);
+    const confirmationEmailSent =
+      becameConfirmed && sendConfirmationEmail && Boolean(String(rawPatch.applicant_email ?? row.applicant_email ?? '').trim());
+    return ok(
+      confirmationEmailSent ? { ...row, confirmationEmailSent: true } : row,
+    );
   }
 
   // ---- Instructors
@@ -1653,24 +2278,64 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     return ok(o);
   }
 
+  function creditRefundedTokens(
+    d: ReturnType<typeof getDb>,
+    userId: string,
+    enrollmentId: string,
+    tokensRefunded: number,
+  ) {
+    const enr = d.enrollments.find((e) => String(e.id) === String(enrollmentId));
+    const uid = String(userId || enr?.user_id || '');
+    let pack =
+      enr?.user_token_id != null
+        ? d.userTokens.find((t) => t.id === enr.user_token_id)
+        : undefined;
+    if (!pack && uid) {
+      pack = d.userTokens
+        .filter((t) => t.user_id === uid && t.is_active)
+        .sort((a, b) => new Date(a.expires_at).getTime() - new Date(b.expires_at).getTime())[0];
+    }
+    if (pack) pack.balance += tokensRefunded;
+  }
+
   // ---- Refund records
   if (
     method === 'POST' &&
     (path === '/admin/refund-records' || path === 'admin/refund-records')
   ) {
-    const patch = body as Partial<DemoOrder>;
+    const patch = body as Record<string, unknown>;
+    const enrollmentId = String(patch.enrollment_id ?? '');
+    const tokensRefunded = Number(patch.tokens_refunded ?? 1);
     const created = {
       id: nextId('ref'),
-      user_id: (patch as any).user_id || 'user_001',
-      amount: (patch as any).amount || 0,
-      reason: (patch as any).reason || '',
-      status: 'pending' as const,
+      user_id: String(patch.user_id ?? 'user_001'),
+      user_name: String(patch.user_name ?? ''),
+      enrollment_id: enrollmentId || undefined,
+      class_id: patch.class_id != null ? String(patch.class_id) : undefined,
+      class_name: String(patch.class_name ?? ''),
+      amount: Number(patch.amount ?? 0),
+      tokens: tokensRefunded,
+      reason: String(patch.remarks ?? patch.reason ?? ''),
+      status: 'approved' as const,
       created_at: new Date().toISOString(),
-      ...(patch as object),
+      refunded_by: String(patch.refunded_by ?? 'Admin'),
+      refunded_at: new Date().toISOString(),
+      tokens_refunded: tokensRefunded,
+      remarks: String(patch.remarks ?? patch.reason ?? ''),
     };
     mutate((d) => {
-      d.refundRecords.unshift(created as any);
+      d.refundRecords.unshift(created as (typeof d.refundRecords)[0]);
+      if (enrollmentId && tokensRefunded > 0) {
+        creditRefundedTokens(d, String(patch.user_id ?? ''), enrollmentId, tokensRefunded);
+      }
     });
+    appendAudit(
+      actor?.name ?? 'Admin',
+      'refund_tokens',
+      'enrollment',
+      enrollmentId,
+      String(created.remarks),
+    );
     return ok(created);
   }
   if (method === 'GET' && (path === '/admin/refund-records' || path === 'admin/refund-records')) {
@@ -1690,31 +2355,35 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   // ---- Pending applications (extension / sick leave)
   if (method === 'GET' && path === '/admin/pending-applications') {
     const db = getDb();
+    const mapPendingRow = (
+      r: DemoExtensionRequest | DemoSickLeaveRequest,
+      rawType: 'extension' | 'sick_leave',
+      type: 'reschedule' | 'sickLeave',
+    ) => {
+      const enr = db.enrollments.find((e) => String(e.id) === String(r.enrollment_id));
+      const cls = enr ? db.classes.find((c) => c.id === enr.class_id) : undefined;
+      return {
+        id: `${rawType}_${r.id}`,
+        raw_type: rawType,
+        raw_id: r.id,
+        enrollment_id: r.enrollment_id,
+        user_id: r.user_id,
+        class_id: enr?.class_id ?? cls?.id,
+        class_code: cls?.program_code ?? '',
+        student_name: r.user_name ?? enr?.student_name ?? '',
+        class_name: r.class_name ?? cls?.name ?? '',
+        type,
+        leave_type: rawType === 'sick_leave' ? 'sick' : undefined,
+        reason: r.reason,
+        document_url: null,
+      };
+    };
     const extensionRows = db.extensionRequests
       .filter((r) => r.status === 'pending')
-      .map((r) => ({
-        id: `extension_${r.id}`,
-        raw_type: 'extension',
-        raw_id: r.id,
-        student_name: r.user_name ?? '',
-        class_name: r.class_name ?? '',
-        type: 'reschedule',
-        reason: r.reason,
-        document_url: null,
-      }));
+      .map((r) => mapPendingRow(r, 'extension', 'reschedule'));
     const sickRows = db.sickLeaveRequests
       .filter((r) => r.status === 'pending')
-      .map((r) => ({
-        id: `sick_leave_${r.id}`,
-        raw_type: 'sick_leave',
-        raw_id: r.id,
-        student_name: r.user_name ?? '',
-        class_name: r.class_name ?? '',
-        type: 'sickLeave',
-        leave_type: 'sick',
-        reason: r.reason,
-        document_url: null,
-      }));
+      .map((r) => mapPendingRow(r, 'sick_leave', 'sickLeave'));
     return ok([...sickRows, ...extensionRows]);
   }
   if (method === 'GET' && path === '/admin/extension-requests') {

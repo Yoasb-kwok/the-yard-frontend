@@ -141,6 +141,13 @@ export function formatDateTimeRange(
   return `${dateStr} ${t0} - ${endDateStr} ${t1}`;
 }
 
+/** True when this class occurrence has already ended (cannot enroll). */
+export function isClassOccurrencePast(endTime: string | Date, now: Date = new Date()): boolean {
+  const end = endTime instanceof Date ? endTime : new Date(endTime);
+  if (Number.isNaN(end.getTime())) return false;
+  return end.getTime() < now.getTime();
+}
+
 /** Course usually has 4, 8 or 16 lessons. Returns dates for lesson 1 to N (weekly from first lesson). */
 export function getLessonDates(firstLessonStart: string | Date, totalLessons: number): Date[] {
   const start = new Date(firstLessonStart);
