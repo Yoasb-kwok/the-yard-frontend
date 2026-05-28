@@ -86,8 +86,9 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const STUDENT_ID_PREFIX = 'yayakid';
+const STUDENT_ID_PREFIX = 'std';
 const STUDENT_ID_COUNTER_KEY = 'studio_student_id_counter';
+const STUDENT_ID_BASE_WIDTH = 5;
 let hasWarnedMissingAuthProvider = false;
 
 const fallbackAuthContext: AuthContextType = {
@@ -379,7 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       contact_number: data.contact_number ?? null,
       residential_district: data.residential_district ?? null,
       has_joined_courses: data.has_joined_courses ?? null,
-      student_id: generateStudentId(),
+      student_id: generateStudentIdForFamily(profiles),
       role: 'student',
       mobile: contact,
       id_first_four: null,
@@ -592,28 +593,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     throw new Error('Invalid email or password');
   }
 
-  function parseStudentIdSequence(value: unknown): number | null {
+  function parseStudentIdParts(value: unknown): { base: number; suffix: string } | null {
     if (typeof value !== 'string') return null;
-    const m = value.trim().toLowerCase().match(/^yayakid(\d+)$/);
-    if (!m) return null;
-    const n = Number(m[1]);
-    return Number.isFinite(n) && n > 0 ? n : null;
+    const raw = value.trim();
+    const m = raw.match(/^std(\d{5})([A-Z])$/i);
+    if (m) {
+      const base = Number(m[1]);
+      if (Number.isFinite(base) && base > 0) {
+        return { base, suffix: m[2].toUpperCase() };
+      }
+    }
+    const legacy = raw.toLowerCase().match(/^yayakid(\d+)$/);
+    if (!legacy) return null;
+    const n = Number(legacy[1]);
+    return Number.isFinite(n) && n > 0 ? { base: n, suffix: 'A' } : null;
   }
 
-  // Generate unique Student ID (format: yayakid1, yayakid2, ...)
-  function generateStudentId(): string {
-    let maxSeq = 0;
+  function formatStudentId(base: number, suffix: string): string {
+    return `${STUDENT_ID_PREFIX}${String(base).padStart(STUDENT_ID_BASE_WIDTH, '0')}${suffix}`;
+  }
 
+  function nextSuffixLetter(used: Set<string>): string {
+    for (let i = 0; i < 26; i += 1) {
+      const letter = String.fromCharCode(65 + i);
+      if (!used.has(letter)) return letter;
+    }
+    return 'Z';
+  }
+
+  function getNextStudentBaseNumber(): number {
+    let maxBase = 0;
     const fromCounter = Number(localStorage.getItem(STUDENT_ID_COUNTER_KEY) || '0');
-    if (Number.isFinite(fromCounter) && fromCounter > maxSeq) {
-      maxSeq = fromCounter;
+    if (Number.isFinite(fromCounter) && fromCounter > maxBase) {
+      maxBase = fromCounter;
     }
 
     const fromProfiles = (profiles ?? [])
-      .map((p) => parseStudentIdSequence(p.student_id))
-      .filter((n): n is number => n != null);
+      .map((p) => parseStudentIdParts(p.student_id))
+      .filter((x): x is { base: number; suffix: string } => x != null)
+      .map((x) => x.base);
     if (fromProfiles.length > 0) {
-      maxSeq = Math.max(maxSeq, ...fromProfiles);
+      maxBase = Math.max(maxBase, ...fromProfiles);
     }
 
     try {
@@ -621,17 +641,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (stored) {
         const parsed = JSON.parse(stored) as { profiles?: Array<{ student_id?: string | null }> };
         const fromStored = (parsed.profiles ?? [])
-          .map((p) => parseStudentIdSequence(p.student_id))
-          .filter((n): n is number => n != null);
+          .map((p) => parseStudentIdParts(p.student_id))
+          .filter((x): x is { base: number; suffix: string } => x != null)
+          .map((x) => x.base);
         if (fromStored.length > 0) {
-          maxSeq = Math.max(maxSeq, ...fromStored);
+          maxBase = Math.max(maxBase, ...fromStored);
         }
       }
     } catch (_) {}
 
-    const next = maxSeq + 1;
+    const next = maxBase + 1;
     localStorage.setItem(STUDENT_ID_COUNTER_KEY, String(next));
-    return `${STUDENT_ID_PREFIX}${next}`;
+    return next;
+  }
+
+  // Student ID format: std00001A; same family shares base and increments suffix A/B/C.
+  function generateStudentIdForFamily(existingProfiles: Profile[] = []): string {
+    const parsed = existingProfiles
+      .map((p) => parseStudentIdParts(p.student_id))
+      .filter((x): x is { base: number; suffix: string } => x != null);
+    if (parsed.length === 0) {
+      const base = getNextStudentBaseNumber();
+      return formatStudentId(base, 'A');
+    }
+    const familyBase = parsed[0].base;
+    const usedSuffix = new Set(parsed.filter((x) => x.base === familyBase).map((x) => x.suffix));
+    const suffix = nextSuffixLetter(usedSuffix);
+    return formatStudentId(familyBase, suffix);
   }
 
   async function signUp(
@@ -702,7 +738,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           student_id:
             typeof backendStudentId === 'string' && backendStudentId.trim().length > 0
               ? backendStudentId
-              : generateStudentId(),
+              : generateStudentIdForFamily([]),
           nick_name: nickName,
           date_of_birth: dateOfBirth,
           sex: sex,
@@ -742,7 +778,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Email already exists.');
     }
     const userObj: User = { id: `user-${Date.now()}`, email: normalizedEmail };
-    const studentId = generateStudentId();
+    const studentId = generateStudentIdForFamily([]);
     const profileObj: Profile = {
       id: userObj.id,
       full_name: fullName,

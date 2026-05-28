@@ -15,6 +15,8 @@ export interface TrialApplicationItem {
   applied_date?: string;
   assigned_class_name?: string | null;
   profile_id?: string;
+  student_name?: string;
+  user_id?: string;
 }
 
 export const FALLBACK_TRIAL_APPLICATIONS: TrialApplicationItem[] = [

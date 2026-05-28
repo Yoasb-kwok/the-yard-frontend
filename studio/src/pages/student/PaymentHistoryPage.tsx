@@ -92,6 +92,7 @@ export default function PaymentHistoryPage() {
   }
 
   const handleReceiptDownload = (payment: Payment) => {
+    const quantity = payment.token_count && payment.token_count > 0 ? String(payment.token_count) : '1';
     const html = buildReceiptHtml({
       orderId: payment.order_id ?? payment.id,
       date: formatDateTime(payment.date, getLocale()),
@@ -99,6 +100,9 @@ export default function PaymentHistoryPage() {
       paymentMethod: getPaymentMethodLabel(payment.payment_method),
       amount: formatCurrency(payment.amount),
       status: getStatusLabel(payment.status),
+      billedTo: profile?.full_name || '',
+      quantity,
+      unitPrice: formatCurrency(payment.amount),
       receiptTitle: t('paymentHistory.receiptTitle'),
       labels: {
         orderId: t('paymentHistory.orderId'),
@@ -117,6 +121,7 @@ export default function PaymentHistoryPage() {
 
   /** Open receipt in new tab (view / print / save as PDF) */
   const handleViewReceipt = (payment: Payment) => {
+    const quantity = payment.token_count && payment.token_count > 0 ? String(payment.token_count) : '1';
     const html = buildReceiptHtml({
       orderId: payment.order_id ?? payment.id,
       date: formatDateTime(payment.date, getLocale()),
@@ -124,6 +129,9 @@ export default function PaymentHistoryPage() {
       paymentMethod: getPaymentMethodLabel(payment.payment_method),
       amount: formatCurrency(payment.amount),
       status: getStatusLabel(payment.status),
+      billedTo: profile?.full_name || '',
+      quantity,
+      unitPrice: formatCurrency(payment.amount),
       receiptTitle: t('paymentHistory.receiptTitle'),
       labels: {
         orderId: t('paymentHistory.orderId'),

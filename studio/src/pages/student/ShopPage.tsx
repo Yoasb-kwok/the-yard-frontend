@@ -4,13 +4,21 @@ import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatCurrency, calculateDiscount } from '../../lib/utils';
 import { ShoppingCart, Check } from 'lucide-react';
+import { api } from '../../lib/api';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
 import { createCheckoutSession } from '../../lib/paymentApi';
+import { getSitePageContentForLocale, loadSimpleSitePage } from '../../lib/sitePageContent';
 
 interface TokenPackage {
   id: number;
   name: string;
   description: string;
+  name_zh_tw?: string;
+  name_zh_cn?: string;
+  name_en?: string;
+  description_zh_tw?: string;
+  description_zh_cn?: string;
+  description_en?: string;
   token_count: number;
   price: number;
   validity_days: number;
@@ -20,6 +28,8 @@ interface CartItem {
   package: TokenPackage;
   quantity: number;
 }
+
+type TermsMode = 'html' | 'legacy';
 
 const MOCK_PACKAGES: TokenPackage[] = [
   {
@@ -48,12 +58,20 @@ const MOCK_PACKAGES: TokenPackage[] = [
   },
 ];
 
-const MOCK_COUPONS: { [key: string]: { id: string; discount_type: 'percentage' | 'fixed'; discount_value: number } } = {
-  WELCOME10: { id: '1', discount_type: 'percentage', discount_value: 10 },
-  SAVE50: { id: '2', discount_type: 'fixed', discount_value: 50 },
-};
-
 const REFERRAL_CODE_REGEX = /^yayakid\d+$/i;
+
+function pickLocalized(
+  lang: string,
+  zhTw?: string,
+  zhCn?: string,
+  en?: string,
+  fallback?: string,
+): string {
+  const normalized = lang.toLowerCase();
+  if (normalized.startsWith('zh-tw')) return zhTw || zhCn || en || fallback || '';
+  if (normalized.startsWith('zh-cn') || normalized.startsWith('zh-hans')) return zhCn || zhTw || en || fallback || '';
+  return en || zhTw || zhCn || fallback || '';
+}
 
 export default function ShopPage() {
   const { t, i18n } = useTranslation();
@@ -70,10 +88,54 @@ export default function ShopPage() {
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash'>('credit_card');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsState, setTermsState] = useState<{ title: string; html: string; legacy: string; mode: TermsMode }>({
+    title: '',
+    html: '',
+    legacy: '',
+    mode: 'legacy',
+  });
 
   useEffect(() => {
     loadPackages();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await loadSimpleSitePage('terms');
+        if (cancelled) return;
+        if (saved && (saved.title || saved.contentHtml)) {
+          const localizedHtml = getSitePageContentForLocale(saved.contentHtml || '', i18n.language);
+          setTermsState({
+            title: saved.title || t('terms.title'),
+            html: localizedHtml,
+            legacy: t('terms.content'),
+            mode: localizedHtml && localizedHtml.trim() !== '' ? 'html' : 'legacy',
+          });
+        } else {
+          setTermsState({
+            title: t('terms.title'),
+            html: '',
+            legacy: t('terms.content'),
+            mode: 'legacy',
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        setTermsState({
+          title: t('terms.title'),
+          html: '',
+          legacy: t('terms.content'),
+          mode: 'legacy',
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language, t]);
 
   async function loadPackages() {
     setLoading(true);
@@ -84,6 +146,12 @@ export default function ShopPage() {
           id: r.id,
           name: r.name,
           description: r.description,
+          name_zh_tw: r.name_zh_tw,
+          name_zh_cn: r.name_zh_cn,
+          name_en: r.name_en,
+          description_zh_tw: r.description_zh_tw,
+          description_zh_cn: r.description_zh_cn,
+          description_en: r.description_en,
           token_count: r.token_count,
           price: r.price,
           validity_days: r.validity_days,
@@ -100,10 +168,18 @@ export default function ShopPage() {
     return packagesSource.map((pkg) => {
       const nameKey = `tokenPackage.packages.${pkg.id}.name`;
       const descKey = `tokenPackage.packages.${pkg.id}.description`;
+      const localizedName = pickLocalized(i18n.language, pkg.name_zh_tw, pkg.name_zh_cn, pkg.name_en, pkg.name);
+      const localizedDescription = pickLocalized(
+        i18n.language,
+        pkg.description_zh_tw,
+        pkg.description_zh_cn,
+        pkg.description_en,
+        pkg.description,
+      );
       return {
         ...pkg,
-        name: t(nameKey, { defaultValue: pkg.name }),
-        description: t(descKey, { defaultValue: pkg.description }),
+        name: t(nameKey, { defaultValue: localizedName }),
+        description: t(descKey, { defaultValue: localizedDescription }),
       };
     });
   }, [packagesSource, t, i18n.language]);
@@ -132,16 +208,53 @@ export default function ShopPage() {
   }
 
   async function applyCoupon() {
-    await new Promise((resolve) => setTimeout(resolve, 300));
-
-    const coupon = MOCK_COUPONS[couponCode.toUpperCase()];
-    if (!coupon) {
+    const code = couponCode.trim();
+    if (!code) {
       alert(t('shop.invalidCoupon'));
       return;
     }
-
-    setAppliedCoupon(coupon);
-    alert(t('shop.couponAppliedSuccess'));
+    const subtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
+    try {
+      const couponEndpoints = ['/coupons/validate', '/coupon/validate', '/admin/coupons/validate'];
+      let res:
+        | {
+            success: boolean;
+            data?: {
+              id: string;
+              code: string;
+              discount_type: 'percentage' | 'fixed';
+              discount_value: number;
+            };
+          }
+        | null = null;
+      let lastError: unknown = null;
+      for (const endpoint of couponEndpoints) {
+        try {
+          res = await api.post<{
+            id: string;
+            code: string;
+            discount_type: 'percentage' | 'fixed';
+            discount_value: number;
+          }>(endpoint, { code, subtotal });
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!res) throw lastError instanceof Error ? lastError : new Error(t('shop.invalidCoupon'));
+      if (!res.success || !res.data) {
+        alert(t('shop.invalidCoupon'));
+        return;
+      }
+      setAppliedCoupon({
+        id: String(res.data.id),
+        discount_type: res.data.discount_type,
+        discount_value: Number(res.data.discount_value),
+      });
+      alert(t('shop.couponAppliedSuccess'));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : t('shop.invalidCoupon'));
+    }
   }
 
   async function handleCheckout() {
@@ -364,6 +477,16 @@ export default function ShopPage() {
                     </div>
                   )}
 
+                  <div className="mb-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowTermsModal(true)}
+                      className="text-xs text-gray-500 hover:text-primary underline underline-offset-2"
+                    >
+                      {t('terms.title', '條款及細則')}
+                    </button>
+                  </div>
+
                   <button
                     type="button"
                     onClick={handleCheckout}
@@ -378,6 +501,29 @@ export default function ShopPage() {
           </div>
         </div>
       </div>
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-lg shadow-xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <h3 className="text-base font-semibold text-gray-900">{termsState.title || t('terms.title', '條款及細則')}</h3>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                {t('common.close', '關閉')}
+              </button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto text-sm text-gray-700">
+              {termsState.mode === 'html' ? (
+                <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: termsState.html }} />
+              ) : (
+                <div className="whitespace-pre-line">{termsState.legacy || t('terms.content', '')}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

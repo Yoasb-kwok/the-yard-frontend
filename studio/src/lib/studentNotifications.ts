@@ -40,6 +40,7 @@ export interface NotificationItem {
   message: string;
   date: string;
   studentName?: string;
+  className?: string;
 }
 
 type TFn = (key: string, opts?: Record<string, string | number>) => string;
@@ -150,6 +151,7 @@ export function buildNotification(n: ApiNotification, t: TFn): NotificationItem 
     message,
     date: n.date,
     studentName: n.studentName || undefined,
+    className: n.className || undefined,
   };
 }
 
@@ -199,13 +201,14 @@ export function buildTrialApplicationNotifications(
   t: TFn,
   studentName?: string,
 ): NotificationItem[] {
-  const name = studentName?.trim() || '';
+  const fallbackName = studentName?.trim() || '';
   return trials
     .map((trial) => {
       const className = trial.assigned_class_name || trial.class_name || '';
-      const mapped = trialStatusToNotification(trial.status, className, name, t);
+      const trialStudentName = String(trial.student_name ?? fallbackName).trim();
+      const mapped = trialStatusToNotification(trial.status, className, trialStudentName, t);
       if (!mapped) return null;
-      const vars = { studentName: name, className };
+      const vars = { studentName: trialStudentName, className };
       return {
         id: `trial-${trial.id}-${trial.status}`,
         type: mapped.type,
@@ -213,7 +216,8 @@ export function buildTrialApplicationNotifications(
         title: t(`notifications.${mapped.titleKey}`, vars),
         message: t(`notifications.${mapped.messageKey}`, vars),
         date: trial.applied_date || new Date().toISOString(),
-        studentName: name || undefined,
+        studentName: trialStudentName || undefined,
+        className: className || undefined,
       };
     })
     .filter((n): n is NotificationItem => n !== null);
@@ -471,6 +475,29 @@ function isFocusedNotification(item: NotificationItem): boolean {
   return FOCUS_TYPES.has(item.type);
 }
 
+function toDayBucket(date: string): string {
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return String(date || '').slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function dedupeTrialNotifications(items: NotificationItem[]): NotificationItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (item.category !== 'trial') return true;
+    const semanticKey = [
+      item.category,
+      item.type,
+      (item.studentName || '').trim().toLowerCase(),
+      (item.className || '').trim().toLowerCase(),
+      toDayBucket(item.date),
+    ].join('|');
+    if (seen.has(semanticKey)) return false;
+    seen.add(semanticKey);
+    return true;
+  });
+}
+
 /** 合併各來源、去重、依時間排序。API 通知優先於同 id 的 client 合成項。 */
 export function collectStudentNotifications(input: {
   apiNotifications: ApiNotification[];
@@ -498,7 +525,8 @@ export function collectStudentNotifications(input: {
   synthesized.forEach((n) => byId.set(n.id, n));
   fromApi.forEach((n) => byId.set(n.id, n));
 
-  return [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sorted = [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return dedupeTrialNotifications(sorted);
 }
 
 /** @deprecated Use buildLeaveNotificationsFromEnrollments */

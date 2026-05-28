@@ -79,15 +79,19 @@ export default function NotificationsPage() {
     [apiNotifications, trials, enrollments, studentRequests, studentDisplayName, t, i18n.language],
   );
 
+  const visibleNotifications = useMemo(() => {
+    if (isMasterView) return notifications;
+    return notifications.filter((n) => n.category === 'trial' || n.category === 'leave' || n.category === 'extension');
+  }, [isMasterView, notifications]);
+
   const filteredNotifications = useMemo(() => {
-    if (categoryFilter === 'all') return notifications;
-    return notifications.filter((n) => n.category === categoryFilter);
-  }, [notifications, categoryFilter]);
+    if (categoryFilter === 'all') return visibleNotifications;
+    return visibleNotifications.filter((n) => n.category === categoryFilter);
+  }, [visibleNotifications, categoryFilter]);
 
   const categoryFilters: { key: CategoryFilter; label: string }[] = [
     { key: 'all', label: t('notifications.filterAll', '全部') },
     { key: 'trial', label: t('notifications.filterTrial', '試堂') },
-    { key: 'class', label: t('notifications.filterClass', '課堂') },
     { key: 'leave', label: t('notifications.filterLeave', '請假') },
     { key: 'extension', label: t('notifications.filterExtension', '改期') },
   ];
@@ -133,9 +137,17 @@ export default function NotificationsPage() {
 
         const trialData = (trialRes as { data?: TrialApplicationItem[] }).data;
         let trialList = Array.isArray(trialData) ? trialData : [];
-        if (profile?.id) {
-          const scoped = trialList.filter((item) => !item.profile_id || item.profile_id === profile.id);
-          if (scoped.length > 0) trialList = scoped;
+        if (!isMasterView && profile?.id) {
+          const profileName = String(profile.full_name ?? '').trim().toLowerCase();
+          trialList = trialList.filter((item) => {
+            const targetId = item.profile_id || item.user_id || '';
+            if (targetId) return targetId === profile.id;
+            const trialStudentName = String(item.student_name ?? '').trim().toLowerCase();
+            if (trialStudentName && profileName) return trialStudentName === profileName;
+            // If the row has no profile/user/name hint, hide it in sub-account view
+            // to avoid showing sibling applications.
+            return false;
+          });
         }
         setTrials(trialList);
 

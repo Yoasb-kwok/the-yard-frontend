@@ -139,6 +139,12 @@ export interface DemoTokenPackage {
   id: string;
   name: string;
   description: string;
+  name_zh_tw?: string;
+  name_zh_cn?: string;
+  name_en?: string;
+  description_zh_tw?: string;
+  description_zh_cn?: string;
+  description_en?: string;
   token_count: number;
   price: number;
   validity_days: number;

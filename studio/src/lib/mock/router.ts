@@ -151,9 +151,15 @@ function demoProfileToApiRow(p: DemoProfile) {
 
 function parseStudentIdSequence(value: unknown): number | null {
   if (typeof value !== 'string') return null;
-  const m = value.trim().toLowerCase().match(/^yayakid(\d+)$/);
-  if (!m) return null;
-  const n = Number(m[1]);
+  const raw = value.trim();
+  const std = raw.match(/^std(\d{5})([A-Z])$/i);
+  if (std) {
+    const n = Number(std[1]);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  const legacy = raw.toLowerCase().match(/^yayakid(\d+)$/);
+  if (!legacy) return null;
+  const n = Number(legacy[1]);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
@@ -162,7 +168,7 @@ function getNextStudentId(users: DemoUser[]): string {
     const seq = parseStudentIdSequence(u.student_id);
     return seq != null && seq > max ? seq : max;
   }, 0);
-  return `yayakid${maxSeq + 1}`;
+  return `std${String(maxSeq + 1).padStart(5, '0')}A`;
 }
 
 function classWithStats(c: DemoClass) {
@@ -205,9 +211,10 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     const id = (b?.loginIdentifier || b?.email || '').trim().toLowerCase();
     const pw = b?.password || '';
     const db = getDb();
-    const u = db.users.find(
-      (x) => x.email.toLowerCase() === id || x.mobile === id || x.student_id === id,
-    );
+    const u = db.users.find((x) => {
+      const sid = String(x.student_id ?? '').trim().toLowerCase();
+      return x.email.toLowerCase() === id || x.mobile === id || (sid !== '' && sid === id);
+    });
     if (!u || u.password !== pw) return err('Invalid Email or Password.');
     const token = `demo_${u.id}_${Date.now()}`;
     return ok(undefined, {
@@ -925,6 +932,12 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && path === '/student/trial-applications') {
     if (!actor) return ok([]);
     const db = getDb();
+    const actorStudentProfiles = db.profiles.filter(
+      (p) => p.user_id === actor.id && p.profile_kind === 'student',
+    );
+    const profileIdByName = new Map(
+      actorStudentProfiles.map((p) => [String(p.full_name || '').trim().toLowerCase(), p.id]),
+    );
     const mine = db.trialApplications.filter(
       (t) => t.user_id === actor.id || t.email.toLowerCase() === actor.email.toLowerCase(),
     );
@@ -949,6 +962,10 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
           status: displayStatus,
           applied_date: t.created_at,
           assigned_class_name: t.assigned_class_name ?? cls?.name ?? null,
+          student_name: t.student_name,
+          user_id: t.user_id ?? undefined,
+          profile_id:
+            profileIdByName.get(String(t.student_name || '').trim().toLowerCase()) ?? undefined,
         };
       }),
     );
@@ -1420,11 +1437,17 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   if (method === 'POST' && path === '/admin/classes') {
     const patch = body as Partial<DemoClass>;
+    const nameZhTw = (patch as any).name_zh_tw ?? (patch as any).class_name_zh_tw;
+    const nameZhCn = (patch as any).name_zh_cn ?? (patch as any).class_name_zh_cn;
+    const nameEn = (patch as any).name_en ?? (patch as any).class_name_en;
     const id = String(nextNumId());
     const now = new Date();
     const created: DemoClass = {
       id,
       name: patch.name || 'New class',
+      name_zh_tw: typeof nameZhTw === 'string' ? nameZhTw : undefined,
+      name_zh_cn: typeof nameZhCn === 'string' ? nameZhCn : undefined,
+      name_en: typeof nameEn === 'string' ? nameEn : undefined,
       instructor: patch.instructor || '',
       start_time: patch.start_time || now.toISOString(),
       end_time: patch.end_time || now.toISOString(),
@@ -1470,9 +1493,9 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
         const c: DemoClass = {
           id,
           name: b.name || 'New class',
-          name_zh_tw: b.name_zh_tw,
-          name_zh_cn: b.name_zh_cn,
-          name_en: b.name_en,
+          name_zh_tw: b.name_zh_tw || b.class_name_zh_tw,
+          name_zh_cn: b.name_zh_cn || b.class_name_zh_cn,
+          name_en: b.name_en || b.class_name_en,
           instructor: b.instructor || '',
           start_time: s.toISOString(),
           end_time: e.toISOString(),
@@ -1757,10 +1780,22 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   }
   if (method === 'POST' && path === '/admin/token-packages') {
     const patch = body as Partial<DemoTokenPackage>;
+    const nameZhTw = patch.name_zh_tw?.trim() || patch.name?.trim() || 'New package';
+    const nameZhCn = patch.name_zh_cn?.trim() || undefined;
+    const nameEn = patch.name_en?.trim() || undefined;
+    const descriptionZhTw = patch.description_zh_tw?.trim() || patch.description?.trim() || '';
+    const descriptionZhCn = patch.description_zh_cn?.trim() || undefined;
+    const descriptionEn = patch.description_en?.trim() || undefined;
     const created: DemoTokenPackage = {
       id: nextId('pkg'),
-      name: patch.name || 'New package',
-      description: patch.description || '',
+      name: nameZhTw || nameZhCn || nameEn || 'New package',
+      description: descriptionZhTw || descriptionZhCn || descriptionEn || '',
+      name_zh_tw: nameZhTw || undefined,
+      name_zh_cn: nameZhCn,
+      name_en: nameEn,
+      description_zh_tw: descriptionZhTw || undefined,
+      description_zh_cn: descriptionZhCn,
+      description_en: descriptionEn,
       token_count: patch.token_count || 1,
       price: patch.price || 0,
       validity_days: patch.validity_days || 90,

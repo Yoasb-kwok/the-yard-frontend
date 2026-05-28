@@ -42,12 +42,14 @@ export default function Layout({ children }: LayoutProps) {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Reset main scroll position on route change (main is its own scroll container).
+  // Reset main scroll position on route change for student/public flows.
+  // Admin pages should preserve scroll position when switching via left sidebar.
   useEffect(() => {
+    if (isAdmin) return;
     if (mainRef.current) {
       mainRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }
-  }, [location.pathname]);
+  }, [isAdmin, location.pathname]);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -68,8 +70,7 @@ export default function Layout({ children }: LayoutProps) {
   // Student: 主帳戶區（儀表板、訊息中心）；子女帳戶區（課程表、我的資料、購買記錄）+ 最新通知
   const primaryProfileId = profiles[0]?.id ?? null;
   const isMasterAccountView = !!primaryProfileId && activeProfileId === primaryProfileId;
-  const isOnDashboardSection =
-    location.pathname === '/dashboard' || location.pathname === '/notifications';
+  const isOnDashboardSection = location.pathname === '/dashboard';
 
   const resetToMasterProfile = () => {
     if (!isAdmin && primaryProfileId) switchProfile(primaryProfileId);
@@ -79,6 +80,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
   ];
   const studentNavItemsScheduleProfile = [
+    { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
     { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },
     { path: '/payment-history', icon: Receipt, label: t('nav.purchaseHistory') },

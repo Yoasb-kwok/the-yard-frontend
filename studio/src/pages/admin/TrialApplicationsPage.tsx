@@ -232,6 +232,7 @@ export default function TrialApplicationsPage() {
     Array<{ id: string; code: string; name: string; location: string }>
   >([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!openStatusMenuId) return;
@@ -545,11 +546,12 @@ export default function TrialApplicationsPage() {
   async function saveAllStatuses() {
     if (changedRowIds.length === 0 || savingStatuses) return;
     setSavingStatuses(true);
+    setSaveSuccessMessage(null);
     try {
       const updates = await Promise.all(
         changedRowIds.map(async (id) => {
           const app = applications.find((a) => a.id === id);
-          if (!app) return { id, row: null as TrialApplication | null };
+          if (!app) return { id, row: null as TrialApplication | null, statusChanged: false };
           const previousStatus = toSelectableStatus(app.status);
           const status = toSelectableStatus(editStatus[id] ?? app.status);
           const notes = String(editNotes[id] ?? app.notes ?? '').trim();
@@ -575,7 +577,7 @@ export default function TrialApplicationsPage() {
               notes,
               updated_at: new Date().toISOString(),
             } as TrialApplication);
-          return { id, row };
+          return { id, row, statusChanged: previousStatus !== status };
         })
       );
 
@@ -597,6 +599,17 @@ export default function TrialApplicationsPage() {
       });
       setOpenStatusMenuId(null);
       setOpenNoteEditorId(null);
+      const statusChangedCount = updates.filter((u) => u.statusChanged).length;
+      setSaveSuccessMessage(
+        t(
+          'common.statusesUpdated',
+          {
+            count: statusChangedCount,
+            defaultValue: `${statusChangedCount} 個狀態已修改`,
+          },
+        ),
+      );
+      window.setTimeout(() => setSaveSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Failed to save trial application statuses', err);
       const msg = err instanceof Error ? err.message : t('common.error', 'Something went wrong.');
@@ -666,6 +679,11 @@ export default function TrialApplicationsPage() {
         {loadError && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {loadError}
+          </div>
+        )}
+        {saveSuccessMessage && (
+          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            {saveSuccessMessage}
           </div>
         )}
 
