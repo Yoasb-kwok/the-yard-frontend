@@ -98,3 +98,6 @@ Auth: Bearer（僅能確認自己的訂單）
 - [ ] Webhook 入帳冪等
 - [ ] `confirm-session` 已部署（與 webhook 共用同一套「標記 paid + 加幣」函數）
 - [ ] `order-status` 回傳 `token_count`、`order_id`、`payment_status`
+- [ ] `checkout.sessions.create` **勿**傳 `payment_method_types`（含 `['card']`）— 由 Dashboard 動態付款方式決定顯示哪些方式；與 `STRIPE_PAYMENT_METHOD_MATRIX.md` 測試一致
+- [ ] Session 帶 `metadata.order_id` 或 `client_reference_id` 對應內部訂單，供 webhook / `confirm-session` 查找
+- [ ] Webhook 驗證 `Stripe-Signature`（`stripe listen` 本機轉發時使用 CLI 提供的 signing secret）

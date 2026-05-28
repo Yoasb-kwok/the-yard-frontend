@@ -25,6 +25,11 @@ export type ApiNotification = {
   /** Legacy mock / DB fields */
   body?: string;
   created_at?: string;
+  profile_id?: string;
+  student_profile_id?: string;
+  user_id?: string;
+  scope?: string;
+  target?: string;
 };
 
 export interface NotificationItem {
@@ -93,7 +98,33 @@ export function normalizeApiNotification(raw: Record<string, unknown>): ApiNotif
     leaveType: raw.leaveType != null ? String(raw.leaveType) : undefined,
     daysLeft: raw.daysLeft != null ? String(raw.daysLeft) : undefined,
     remainingTokens: raw.remainingTokens != null ? String(raw.remainingTokens) : undefined,
+    profile_id: raw.profile_id != null ? String(raw.profile_id) : undefined,
+    student_profile_id: raw.student_profile_id != null ? String(raw.student_profile_id) : undefined,
+    user_id: raw.user_id != null ? String(raw.user_id) : undefined,
+    scope: raw.scope != null ? String(raw.scope) : undefined,
+    target: raw.target != null ? String(raw.target) : undefined,
   };
+}
+
+export function isGlobalMassMessage(n: ApiNotification): boolean {
+  const type = (n.type || '').toLowerCase();
+  const scope = (n.scope || '').toLowerCase();
+  const target = (n.target || '').toLowerCase();
+  return (
+    scope === 'global' ||
+    target === 'all_students' ||
+    type === 'class_announcement_global' ||
+    type === 'mass_message_global' ||
+    type === 'global_announcement'
+  );
+}
+
+export function matchesActiveProfile(n: ApiNotification, activeProfileId?: string): boolean {
+  if (!activeProfileId) return true;
+  if (isGlobalMassMessage(n)) return true;
+  const targets = [n.profile_id, n.student_profile_id, n.user_id].filter(Boolean) as string[];
+  if (targets.length === 0) return true;
+  return targets.includes(activeProfileId);
 }
 
 export function buildNotification(n: ApiNotification, t: TFn): NotificationItem {
@@ -342,6 +373,9 @@ export type StudentRequestRow = {
   class_date?: string;
   created_at: string;
   user_name?: string;
+  profile_id?: string;
+  student_profile_id?: string;
+  user_id?: string;
 };
 
 /** 由後端請假／改期申請列表補充通知（mock 或正式 API）。 */

@@ -193,7 +193,7 @@
   "notifications": {
     "title": "訊息中心",
     "subtitle": "全班消息、個人課堂、代幣、請假／改期通知。",
-    "subtitleStudent": "試堂申請狀態、課堂變動、請假與改期申請，以及 admin 批准結果。",
+    "subtitleStudent": "顯示此子女已報讀課堂相關通知，以及中心發送的全體公告。",
     "latestNews": "最新消息",
     "latestNewsDesc": "查看中心最新公告、優惠與活動。",
     "latestNewsOnHome": "中心公告、優惠與活動請瀏覽首頁「最新消息」。",

@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
 import {
   collectStudentNotifications,
+  matchesActiveProfile,
   normalizeApiNotification,
   type NotificationItem,
   type StudentNotificationCategory,
@@ -60,6 +61,8 @@ export default function NotificationsPage() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
+  const primaryProfileId = profiles?.[0]?.id;
+  const isMasterView = !!primaryProfileId && profile?.id === primaryProfileId;
 
   const studentDisplayName = profile?.full_name || profiles?.[0]?.full_name || '';
 
@@ -120,11 +123,13 @@ export default function NotificationsPage() {
         if (cancelled) return;
 
         const rawNotifs = Array.isArray(notifRes.data) ? notifRes.data : [];
-        setApiNotifications(
-          rawNotifs
-            .map((row) => normalizeApiNotification(row as Record<string, unknown>))
-            .filter((n): n is NonNullable<typeof n> => n !== null),
-        );
+        const normalized = rawNotifs
+          .map((row) => normalizeApiNotification(row as Record<string, unknown>))
+          .filter((n): n is NonNullable<typeof n> => n !== null);
+        const scopedNotifs = isMasterView
+          ? normalized
+          : normalized.filter((n) => matchesActiveProfile(n, profile?.id));
+        setApiNotifications(scopedNotifs);
 
         const trialData = (trialRes as { data?: TrialApplicationItem[] }).data;
         let trialList = Array.isArray(trialData) ? trialData : [];
@@ -144,7 +149,13 @@ export default function NotificationsPage() {
         }
         setEnrollments(classList);
 
-        const reqData = Array.isArray(requestsRes.data) ? requestsRes.data : [];
+        let reqData = Array.isArray(requestsRes.data) ? requestsRes.data : [];
+        if (!isMasterView && profile?.id && reqData.length > 0) {
+          reqData = reqData.filter((r) => {
+            const targetId = r.profile_id || r.student_profile_id || r.user_id || '';
+            return !targetId || targetId === profile.id;
+          });
+        }
         setStudentRequests(reqData);
       })
       .catch(() => {
@@ -161,7 +172,7 @@ export default function NotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [profile?.id, profile?.full_name]);
+  }, [isMasterView, profile?.id, profile?.full_name]);
 
   return (
     <Layout>

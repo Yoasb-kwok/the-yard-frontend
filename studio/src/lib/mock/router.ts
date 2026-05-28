@@ -772,10 +772,12 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
   if (method === 'GET' && path === '/student/notifications') {
     if (!actor) return ok([]);
     const db = getDb();
-    return ok(
-      db.notifications
-        .filter((n) => n.user_id === actor.id)
-        .map((n) => {
+    const actorProfiles = db.profiles.filter((p) => p.user_id === actor.id);
+    const actorStudentProfiles = actorProfiles.filter((p) => p.profile_kind === 'student');
+    const profileIdByName = new Map(actorStudentProfiles.map((p) => [p.full_name, p.id]));
+    const rows = db.notifications
+      .filter((n) => n.user_id === actor.id)
+      .map((n) => {
           const row = n as DemoNotification & {
             type?: string;
             titleKey?: string;
@@ -783,7 +785,15 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
             className?: string;
             dateTimeStr?: string;
             studentName?: string;
+            profile_id?: string;
+            student_profile_id?: string;
+            scope?: string;
+            target?: string;
           };
+          const inferredProfileId =
+            row.profile_id ??
+            row.student_profile_id ??
+            (row.studentName ? profileIdByName.get(row.studentName) : undefined);
           if (row.type && row.titleKey) {
             return {
               id: row.id,
@@ -793,6 +803,9 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
               className: row.className,
               dateTimeStr: row.dateTimeStr,
               studentName: row.studentName ?? actor.name,
+              profile_id: inferredProfileId,
+              scope: row.scope,
+              target: row.target,
               date: row.created_at,
             };
           }
@@ -801,10 +814,22 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
             type: 'other',
             title: row.title,
             message: row.body,
+            profile_id: inferredProfileId,
+            scope: row.scope,
+            target: row.target,
             date: row.created_at,
           };
-        }),
-    );
+        });
+    const globalMassMessage = {
+      id: `global-msg-${actor.id}`,
+      type: 'class_announcement_global',
+      title: '中心公告',
+      message: '本中心最新安排與通知會在此顯示（全體學員）。',
+      scope: 'global',
+      target: 'all_students',
+      date: new Date().toISOString(),
+    };
+    return ok([globalMassMessage, ...rows]);
   }
   if (method === 'GET' && path === '/student/upcoming-classes') {
     if (!actor) return ok([]);
@@ -867,25 +892,33 @@ export async function dispatch(req: MockRequest): Promise<MockResponse> {
     const rows = [
       ...db.extensionRequests
         .filter((r) => r.user_id === actor.id)
-        .map((r) => ({
-          id: r.id,
-          kind: 'extension' as const,
-          status: r.status,
-          class_name: r.class_name,
-          created_at: r.created_at,
-          user_name: r.user_name ?? actor.name,
-        })),
+        .map((r) => {
+          const enrollment = db.enrollments.find((e) => e.id === r.enrollment_id);
+          return {
+            id: r.id,
+            kind: 'extension' as const,
+            status: r.status,
+            class_name: r.class_name,
+            created_at: r.created_at,
+            user_name: r.user_name ?? actor.name,
+            user_id: enrollment?.user_id ?? r.user_id,
+          };
+        }),
       ...db.sickLeaveRequests
         .filter((r) => r.user_id === actor.id)
-        .map((r) => ({
-          id: r.id,
-          kind: 'sick_leave' as const,
-          status: r.status,
-          class_name: r.class_name,
-          class_date: r.class_date,
-          created_at: r.created_at,
-          user_name: r.user_name ?? actor.name,
-        })),
+        .map((r) => {
+          const enrollment = db.enrollments.find((e) => e.id === r.enrollment_id);
+          return {
+            id: r.id,
+            kind: 'sick_leave' as const,
+            status: r.status,
+            class_name: r.class_name,
+            class_date: r.class_date,
+            created_at: r.created_at,
+            user_name: r.user_name ?? actor.name,
+            user_id: enrollment?.user_id ?? r.user_id,
+          };
+        }),
     ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return ok(rows);
   }

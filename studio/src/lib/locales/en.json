@@ -193,7 +193,7 @@
   "notifications": {
     "title": "Notifications",
     "subtitle": "Class notices, your classes, tokens, leave/reschedule updates.",
-    "subtitleStudent": "Trial applications, class changes, leave and reschedule requests, and admin approval results.",
+    "subtitleStudent": "Shows this child profile's class-related updates and center-wide announcements.",
     "latestNews": "Latest news",
     "latestNewsDesc": "Centre announcements, offers and events.",
     "latestNewsOnHome": "For centre announcements and offers, see Latest News on the home page.",

@@ -74,12 +74,10 @@ export default function Layout({ children }: LayoutProps) {
   const resetToMasterProfile = () => {
     if (!isAdmin && primaryProfileId) switchProfile(primaryProfileId);
   };
-  const studentNavItemsDashboard = isMasterAccountView
-    ? [
-        { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
-        { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
-      ]
-    : [{ path: '/dashboard', icon: Home, label: t('nav.dashboard') }];
+  const studentNavItemsDashboard = [
+    { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
+    { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
+  ];
   const studentNavItemsScheduleProfile = [
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
     { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },

@@ -365,6 +365,10 @@ export interface DemoNotification {
   className?: string;
   dateTimeStr?: string;
   studentName?: string;
+  profile_id?: string;
+  student_profile_id?: string;
+  scope?: string;
+  target?: string;
 }
 
 export interface DemoSimpleContent {
