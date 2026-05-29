@@ -30,24 +30,6 @@ interface Class {
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 }
 
-/** Fallback: 10 example teachers with 老師簡介 (see instructorProfiles). */
-const FALLBACK_INSTRUCTORS: Instructor[] = EXAMPLE_INSTRUCTOR_PROFILES.map((p, i) => ({
-  id: `inst_${i + 1}`,
-  name: p.name,
-  profile_image_url: null,
-  created_at: new Date().toISOString(),
-  upcoming_classes_count: 2 + (i % 3),
-}));
-const FALLBACK_CLASSES: Class[] = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(14, 0, 0, 0);
-  return [
-    { id: 'cls_demo_1', name: 'Kids Ballet A', instructor: 'Amy Lee', start_time: d.toISOString(), end_time: new Date(d.getTime() + 3600000).toISOString(), capacity: 12, enrolled_count: 8, is_internal: false, is_cancelled: false, location: 'sanpokong' },
-    { id: 'cls_demo_2', name: 'Teen Hip Hop', instructor: 'Bob Chen', start_time: new Date(d.getTime() + 86400000).toISOString(), end_time: new Date(d.getTime() + 86400000 + 3600000).toISOString(), capacity: 15, enrolled_count: 10, is_internal: false, is_cancelled: false, location: 'causewaybay' },
-  ];
-})();
-
 type CompressImageOptions = {
   maxWidth: number;
   maxHeight: number;
@@ -150,15 +132,15 @@ export default function InstructorsPage() {
   async function loadInstructors() {
     try {
       setLoading(true);
-      const response = await api.get<Instructor[]>('/admin/instructors?demo=1').catch(() => ({ success: true, data: FALLBACK_INSTRUCTORS }));
-      if (response.success && response.data) {
+      const response = await api.get<Instructor[]>('/admin/instructors');
+      if (response.success && Array.isArray(response.data)) {
         setInstructors(response.data);
       } else {
-        setInstructors(FALLBACK_INSTRUCTORS);
+        setInstructors([]);
       }
     } catch (error) {
       console.error('Error loading instructors:', error);
-      setInstructors(FALLBACK_INSTRUCTORS);
+      setInstructors([]);
     } finally {
       setLoading(false);
     }
@@ -166,8 +148,8 @@ export default function InstructorsPage() {
 
   async function loadClasses() {
     try {
-      const response = await api.get('/admin/classes?demo=1').catch(() => ({ success: true, data: FALLBACK_CLASSES }));
-      if (response.success && response.data) {
+      const response = await api.get('/admin/classes');
+      if (response.success && Array.isArray(response.data)) {
         const transformedClasses: Class[] = response.data.map((cls: any) => ({
           id: cls.id?.toString() ?? cls.id,
           name: cls.name,
@@ -182,11 +164,11 @@ export default function InstructorsPage() {
         }));
         setClasses(transformedClasses);
       } else {
-        setClasses(FALLBACK_CLASSES);
+        setClasses([]);
       }
     } catch (error) {
       console.error('Error loading classes:', error);
-      setClasses(FALLBACK_CLASSES);
+      setClasses([]);
     }
   }
 

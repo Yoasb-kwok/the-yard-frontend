@@ -36,15 +36,30 @@ interface User {
   expiry_date: string;
 }
 
-// Mock data
-const MOCK_USER: User = {
-  id: 'user-001',
-  full_name: '張三',
-  mobile: '91234567',
-  total_tokens: 18,
-  assigned_tokens: 1,
-  expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Latest expiry date
-};
+function mapAdminUserRow(raw: Record<string, unknown>): User {
+  const tokens = Array.isArray(raw.user_tokens) ? raw.user_tokens : [];
+  let total_tokens = 0;
+  let earliestExpiry = '';
+  for (const t of tokens) {
+    const row = t as Record<string, unknown>;
+    total_tokens += Number(row.remaining_tokens ?? row.balance ?? 0);
+    const exp = typeof row.expiry_date === 'string'
+      ? row.expiry_date.slice(0, 10)
+      : typeof row.expires_at === 'string'
+        ? row.expires_at.slice(0, 10)
+        : '';
+    if (exp && (!earliestExpiry || exp < earliestExpiry)) earliestExpiry = exp;
+  }
+  const assigned_tokens = Number(raw.assigned_tokens ?? raw.assigned_token_count ?? 0);
+  return {
+    id: String(raw.id ?? ''),
+    full_name: String(raw.full_name ?? raw.name ?? ''),
+    mobile: raw.mobile != null ? String(raw.mobile) : null,
+    total_tokens,
+    assigned_tokens: Number.isFinite(assigned_tokens) ? assigned_tokens : 0,
+    expiry_date: earliestExpiry,
+  };
+}
 
 export default function TokenAssignmentPage() {
   const { t, i18n } = useTranslation();
@@ -69,11 +84,17 @@ export default function TokenAssignmentPage() {
   async function loadData() {
     setLoading(true);
     try {
-      // User: keep mock for now until user-detail API is wired
-      await new Promise(resolve => setTimeout(resolve, 300));
-      setUser(MOCK_USER);
+      const usersRes = await api.get<any[]>('/admin/users');
+      const users = usersRes.success && Array.isArray(usersRes.data) ? usersRes.data : [];
+      const raw = users.find((u) => String(u.id) === String(userId));
+      if (!raw) {
+        setUser(null);
+        setClasses([]);
+        setEnrollments([]);
+        return;
+      }
+      setUser(mapAdminUserRow(raw as Record<string, unknown>));
 
-      // Classes from database
       const classesRes = await api.get<any[]>('/admin/classes');
       if (classesRes.success && Array.isArray(classesRes.data)) {
         const mapped: Class[] = classesRes.data.map((cls: any) => ({
@@ -98,6 +119,7 @@ export default function TokenAssignmentPage() {
       setEnrollments([]);
     } catch (err) {
       console.error('TokenAssignment loadData:', err);
+      setUser(null);
       setClasses([]);
       setEnrollments([]);
     } finally {

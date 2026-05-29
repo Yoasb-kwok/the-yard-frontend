@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../contexts/AuthContext';
 import PublicLayout from '../../components/PublicLayout';
 import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-import { isDemoMode } from '../../lib/mock';
 import { containsWhitespace } from '../../lib/utils';
 
 export default function LoginPage() {
@@ -104,11 +103,7 @@ export default function LoginPage() {
                     autoComplete="username email"
                     required
                     className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                    placeholder={
-                      isDemoMode()
-                        ? 'admin@demo.com（或 student@demo.com）'
-                        : t('login.emailOrUsernamePlaceholder')
-                    }
+                    placeholder={t('login.emailOrUsernamePlaceholder')}
                     value={loginIdentifier}
                     onChange={(e) => setLoginIdentifier(e.target.value)}
                   />
@@ -129,7 +124,7 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     required
                     className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-                    placeholder={isDemoMode() ? 'demo1234' : t('register.password')}
+                    placeholder={t('register.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                   />
@@ -177,40 +172,6 @@ export default function LoginPage() {
                   {t('login.register')}
                 </Link>
               </p>
-              {isDemoMode() && (
-                <div className="mt-4 pt-4 border-t border-gray-200 text-left">
-                  <p className="text-xs font-semibold text-gray-500 mb-2">
-                    Demo 測試帳號（點擊自動填入）：
-                  </p>
-                  <div className="grid grid-cols-1 gap-1.5 text-xs text-gray-500">
-                    {[
-                      { label: '管理員', email: 'admin@demo.com' },
-                      { label: '學員', email: 'student@demo.com' },
-                      { label: '家長學員', email: 'parent@demo.com' },
-                    ].map((a) => (
-                      <button
-                        key={a.email}
-                        type="button"
-                        onClick={() => {
-                          setLoginIdentifier(a.email);
-                          setPassword('demo1234');
-                        }}
-                        className="flex items-center justify-between rounded border border-gray-200 bg-gray-50 px-2 py-1 hover:bg-gray-100 hover:border-gray-300 transition text-left"
-                      >
-                        <span>
-                          <span className="font-medium text-gray-700">{a.label}</span>
-                          <span className="mx-1.5 text-gray-400">·</span>
-                          <code className="text-[11px] text-gray-600">{a.email}</code>
-                        </span>
-                        <code className="text-[11px] text-gray-400">demo1234</code>
-                      </button>
-                    ))}
-                  </div>
-                  <p className="text-[11px] text-gray-400 mt-2">
-                    忘記密碼 OTP 固定為 <code>123456</code>
-                  </p>
-                </div>
-              )}
             </div>
           </form>
         </div>

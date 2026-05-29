@@ -5,7 +5,6 @@ import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
 import { buildTrialConfirmedEmailPatch } from '../../lib/trialConfirmedEmailPayload';
 import { api } from '../../lib/api';
-import { isDemoMode } from '../../lib/mock';
 import { BookOpen, ChevronDown, ChevronRight, Filter, Pencil, Plus } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
@@ -41,68 +40,6 @@ export interface TrialApplication {
   updated_at?: string;
   trial_date?: string;
 }
-
-const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
-  {
-    id: 'trial_1',
-    applicant_name: '陳小明',
-    applicant_email: 'ming@example.com',
-    applicant_phone: '91234567',
-    trial_class: '兒童芭蕾試堂',
-    course_code: 'KB-A',
-    branch: 'sanpokong',
-    preferred_datetime: new Date(Date.now() + 3 * 86400000).toISOString(),
-    status: 'pending',
-    assigned_class_id: null,
-    assigned_class_name: null,
-    notes: '',
-    applied_at: new Date(Date.now() - 2 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'trial_2',
-    applicant_name: '李小花',
-    applicant_email: 'flower@example.com',
-    applicant_phone: '92345678',
-    trial_class: '兒童爵士試堂',
-    course_code: 'JAZZ',
-    branch: 'fotan',
-    preferred_datetime: new Date(Date.now() + 5 * 86400000).toISOString(),
-    status: 'confirmed',
-    assigned_class_id: 'cls_1',
-    assigned_class_name: '兒童爵士 A（週五 18:00）',
-    notes: '已致電確認時間',
-    applied_at: new Date(Date.now() - 5 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'trial_3',
-    applicant_name: '王大明',
-    applicant_email: 'daming@example.com',
-    applicant_phone: '93456789',
-    trial_class: '幼兒律動試堂',
-    course_code: 'KIDS',
-    branch: 'sanpokong',
-    preferred_datetime: new Date(Date.now() + 7 * 86400000).toISOString(),
-    status: 'confirmed',
-    assigned_class_id: 'cls_2',
-    assigned_class_name: '幼兒律動（週六 10:00）',
-    applied_at: new Date(Date.now() - 1 * 86400000).toISOString(),
-  },
-  {
-    id: 'trial_4',
-    applicant_name: '張小美',
-    applicant_email: 'mei@example.com',
-    applicant_phone: '94567890',
-    trial_class: '兒童芭蕾試堂',
-    course_code: 'KB-A',
-    branch: 'causewaybay',
-    status: 'cancelled',
-    notes: '家長取消',
-    applied_at: new Date(Date.now() - 3 * 86400000).toISOString(),
-    trial_date: new Date(Date.now() + 2 * 86400000).toISOString(),
-  },
-];
 
 /** 用戶可選的三個狀態 */
 const SELECTABLE_STATUSES: TrialApplication['status'][] = ['pending', 'confirmed', 'cancelled'];
@@ -383,17 +320,8 @@ export default function TrialApplicationsPage() {
       setEditStatus(initialStatus);
       setEditNotes(initialNotes);
     } catch {
-      const fallbackList = isDemoMode() ? FALLBACK_TRIAL_APPLICATIONS : [];
-      setApplications(fallbackList);
-      setLoadError(
-        isDemoMode()
-          ? null
-          : t('admin.trialApplications.loadError', '未能載入試堂申請，請檢查後端服務或稍後重試。')
-      );
-      fallbackList.forEach((a) => {
-        setEditStatus((prev) => ({ ...prev, [a.id]: toSelectableStatus(a.status) }));
-        setEditNotes((prev) => ({ ...prev, [a.id]: String(a.notes ?? '') }));
-      });
+      setApplications([]);
+      setLoadError(t('admin.trialApplications.loadError', '未能載入試堂申請，請檢查後端服務或稍後重試。'));
     } finally {
       setLoading(false);
     }
@@ -401,7 +329,7 @@ export default function TrialApplicationsPage() {
 
   async function loadClassCodeCandidates() {
     try {
-      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
+      const endpoints = ['/admin/classes', '/classes'];
       let rows: any[] = [];
       for (const endpoint of endpoints) {
         try {

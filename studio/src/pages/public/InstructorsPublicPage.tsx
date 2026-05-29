@@ -12,12 +12,6 @@ interface InstructorRow {
   profile_image_url: string | null;
 }
 
-const FALLBACK_INSTRUCTORS: InstructorRow[] = EXAMPLE_INSTRUCTOR_PROFILES.map((profile, index) => ({
-  id: `fallback-${index + 1}`,
-  name: profile.name,
-  profile_image_url: profile.avatar_url ?? null,
-}));
-
 function buildFallbackProfile(name: string): InstructorProfile {
   return {
     name,
@@ -39,14 +33,14 @@ export default function InstructorsPublicPage() {
     (async () => {
       setLoading(true);
       try {
-        const response = await api.get<InstructorRow[]>('/admin/instructors?demo=1');
-        if (!cancelled && response.success && Array.isArray(response.data) && response.data.length > 0) {
+        const response = await api.get<InstructorRow[]>('/admin/instructors');
+        if (!cancelled && response.success && Array.isArray(response.data)) {
           setInstructors(response.data);
         } else if (!cancelled) {
-          setInstructors(FALLBACK_INSTRUCTORS);
+          setInstructors([]);
         }
       } catch {
-        if (!cancelled) setInstructors(FALLBACK_INSTRUCTORS);
+        if (!cancelled) setInstructors([]);
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -31,33 +31,6 @@ interface CartItem {
 
 type TermsMode = 'html' | 'legacy';
 
-const MOCK_PACKAGES: TokenPackage[] = [
-  {
-    id: 1,
-    name: 'Starter Pack',
-    description: 'Perfect for beginners',
-    token_count: 5,
-    price: 500,
-    validity_days: 30,
-  },
-  {
-    id: 2,
-    name: 'Regular Pack',
-    description: 'Great value for regular students',
-    token_count: 10,
-    price: 900,
-    validity_days: 60,
-  },
-  {
-    id: 3,
-    name: 'Premium Pack',
-    description: 'Best value for frequent visitors',
-    token_count: 20,
-    price: 1600,
-    validity_days: 90,
-  },
-];
-
 const REFERRAL_CODE_REGEX = /^yayakid\d+$/i;
 
 function pickLocalized(
@@ -158,7 +131,7 @@ export default function ShopPage() {
         })),
       );
     } catch {
-      setPackagesSource(MOCK_PACKAGES);
+      setPackagesSource([]);
     } finally {
       setLoading(false);
     }

@@ -10,9 +10,7 @@ import { formatDateTime } from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
 import { api, ApiError } from '../../lib/api';
 import {
-  getFallbackUpcomingClasses,
   getLessonDatesForEnrollment,
-  shouldUseDemoUpcomingClasses,
   type EnrolledClass,
 } from '../../lib/studentEnrollments';
 import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
@@ -367,13 +365,9 @@ export default function SchedulePage() {
   async function loadEnrolledClasses() {
     setLoading(true);
     setError(null);
-    const fallbackUpcomingClasses =
-      shouldUseDemoUpcomingClasses(profile?.id)
-        ? getFallbackUpcomingClasses(profile?.id, profile?.full_name)
-        : [];
     const token = localStorage.getItem('token');
     if (!token) {
-      setEnrollments(fallbackUpcomingClasses);
+      setEnrollments([]);
       setLessonLeaveRequests({});
       setLoading(false);
       return;
@@ -381,13 +375,10 @@ export default function SchedulePage() {
     try {
       const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes');
       const data = (response as any).data;
-      let list: EnrolledClass[] = Array.isArray(data) ? data : fallbackUpcomingClasses;
-      if (profile?.id && Array.isArray(data)) {
-        const filtered = data.filter((e: EnrolledClass) => (e.profile_id || e.user_id || '') === profile.id);
+      let list: EnrolledClass[] = Array.isArray(data) ? data : [];
+      if (profile?.id && list.length > 0) {
+        const filtered = list.filter((e: EnrolledClass) => (e.profile_id || e.user_id || '') === profile.id);
         if (filtered.length > 0) list = filtered;
-        else list = fallbackUpcomingClasses;
-      } else if (!Array.isArray(data) || data.length === 0) {
-        list = fallbackUpcomingClasses;
       }
       setEnrollments(list);
       setLessonLeaveRequests((prev) => {
@@ -411,7 +402,7 @@ export default function SchedulePage() {
       if (!isTokenOrAuthError) {
         setError(err instanceof Error ? err.message : t('schedule.loadError'));
       }
-      setEnrollments(fallbackUpcomingClasses);
+      setEnrollments([]);
     } finally {
       setLoading(false);
     }

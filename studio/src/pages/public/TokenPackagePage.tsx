@@ -60,34 +60,6 @@ function pickLocalized(
   return en || zhTw || zhCn || fallback || '';
 }
 
-// Mock data - same as ShopPage
-const MOCK_PACKAGES: TokenPackage[] = [
-  {
-    id: 1,
-    name: 'Starter Pack',
-    description: 'Perfect for beginners',
-    token_count: 5,
-    price: 500,
-    validity_days: 30,
-  },
-  {
-    id: 2,
-    name: 'Regular Pack',
-    description: 'Great value for regular students',
-    token_count: 10,
-    price: 900,
-    validity_days: 60,
-  },
-  {
-    id: 3,
-    name: 'Premium Pack',
-    description: 'Best value for frequent visitors',
-    token_count: 20,
-    price: 1600,
-    validity_days: 90,
-  },
-];
-
 export default function TokenPackagePage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
@@ -107,10 +79,6 @@ export default function TokenPackagePage() {
   const [submitting, setSubmitting] = useState(false);
   const [fpsIdOrPhone, setFpsIdOrPhone] = useState('');
   const [packagesSource, setPackagesSource] = useState<TokenPackage[]>([]);
-  const [customItemType, setCustomItemType] = useState<'token' | 'product'>('token');
-  const [customTokenCount, setCustomTokenCount] = useState('');
-  const [customProductName, setCustomProductName] = useState('');
-  const [customProductPrice, setCustomProductPrice] = useState('');
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsState, setTermsState] = useState<{ title: string; html: string; legacy: string; mode: TermsMode }>({
     title: '',
@@ -144,7 +112,7 @@ export default function TokenPackagePage() {
           );
         }
       } catch {
-        if (!cancelled) setPackagesSource(MOCK_PACKAGES);
+        if (!cancelled) setPackagesSource([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -242,51 +210,6 @@ export default function TokenPackagePage() {
     );
   }
 
-  function addCustomProductToCart() {
-    const parsedPrice = Number(customProductPrice);
-    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-      alert(t('tokenPackage.customProductPriceInvalid', '請輸入有效價格'));
-      return;
-    }
-
-    let customName = t('tokenPackage.customProductTitle', '自訂套裝');
-    let customDescription = t('tokenPackage.customProductDescription', '自訂代幣套裝');
-    let tokenCount = 0;
-
-    if (customItemType === 'token') {
-      const parsedTokenCount = Number(customTokenCount);
-      if (!Number.isInteger(parsedTokenCount) || parsedTokenCount <= 0) {
-        alert(t('tokenPackage.customTokenCountInvalid', '請輸入有效代幣數量'));
-        return;
-      }
-      tokenCount = parsedTokenCount;
-      customName = t('tokenPackage.customTokenTitle', '自訂代幣套裝');
-      customDescription = `${tokenCount} ${t('tokenPackage.tokens')}`;
-    } else {
-      const trimmedName = customProductName.trim();
-      if (!trimmedName) {
-        alert(t('tokenPackage.customProductNameRequired', '請輸入自訂產品'));
-        return;
-      }
-      customName = trimmedName;
-      customDescription = t('tokenPackage.customNamedProductDescription', '自訂產品');
-    }
-
-    const customPackage: TokenPackage = {
-      id: -Date.now(),
-      name: customName,
-      description: customDescription,
-      token_count: tokenCount,
-      price: Math.round(parsedPrice),
-      validity_days: 0,
-    };
-
-    setCart((prev) => [...prev, { package: customPackage, quantity: 1 }]);
-    setCustomTokenCount('');
-    setCustomProductName('');
-    setCustomProductPrice('');
-  }
-
   async function applyCoupon() {
     const code = couponCode.trim();
     if (!code) {
@@ -342,11 +265,6 @@ export default function TokenPackagePage() {
 
     if (paymentMethod === 'credit_card') {
       const selectedItem = cart[0];
-      const hasCustomProduct = cart.some((item) => item.package.id < 0);
-      if (hasCustomProduct) {
-        alert(t('tokenPackage.customProductNoCardPayment', '自訂套裝暫不支援信用卡付款，請改用 FPS、PayMe、Alipay、WeChat Pay 或現金。'));
-        return;
-      }
       if (cart.length !== 1 || selectedItem.quantity !== 1) {
         alert(t('shop.stripeSinglePackageOnly'));
         return;
@@ -517,94 +435,6 @@ export default function TokenPackagePage() {
                     </button>
                   </div>
                 ))}
-
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {t('tokenPackage.customProductTitle', '自訂套裝')}
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-4">
-                    {t('tokenPackage.customProductSubtitle', '可選擇自訂代幣或自訂產品，輸入價格後加入購物車。')}
-                  </p>
-
-                  <div className="space-y-3 mb-4">
-                    <div className="text-sm">
-                      <span className="text-gray-600">{t('common.type', '類型')}:</span>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setCustomItemType('token')}
-                          className={`py-2 px-3 rounded-md border transition-colors ${
-                            customItemType === 'token'
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-primary'
-                          }`}
-                        >
-                          {t('tokenPackage.customTokenOption', '自訂代幣')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCustomItemType('product')}
-                          className={`py-2 px-3 rounded-md border transition-colors ${
-                            customItemType === 'product'
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-primary'
-                          }`}
-                        >
-                          {t('tokenPackage.customProductOption', '自訂產品')}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">
-                        {customItemType === 'token'
-                          ? `${t('tokenPackage.tokens')}:`
-                          : `${t('tokenPackage.customProductNameLabel', '產品')}:`}
-                      </span>
-                      <div className="w-40">
-                        {customItemType === 'token' ? (
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={customTokenCount}
-                            onChange={(e) => setCustomTokenCount(e.target.value)}
-                            placeholder={t('tokenPackage.customTokenCountPlaceholder', '代幣數量')}
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-left text-sm"
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={customProductName}
-                            onChange={(e) => setCustomProductName(e.target.value)}
-                            placeholder={t('tokenPackage.customProductNamePlaceholder', '產品')}
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-left text-sm"
-                          />
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">{t('tokenPackage.price')}:</span>
-                      <div className="w-40">
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={customProductPrice}
-                          onChange={(e) => setCustomProductPrice(e.target.value)}
-                          placeholder={t('tokenPackage.customProductPricePlaceholder', '價格 (HKD)')}
-                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-left text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={addCustomProductToCart}
-                    className="w-full bg-primary text-white py-2 rounded-md hover:bg-primary-dark transition-colors"
-                  >
-                    {t('shop.addToCart')}
-                  </button>
-                </div>
               </div>
             </div>
 

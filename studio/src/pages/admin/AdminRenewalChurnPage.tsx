@@ -209,8 +209,8 @@ export default function AdminRenewalChurnPage() {
     const toStr = toDate.toISOString().slice(0, 10);
 
     Promise.all([
-      api.get<UserWithTokens[]>('/admin/users', { demo: '1' }).then((r: any) => (Array.isArray(r?.data) ? r.data : [])),
-      api.get<OrderForRenewal[]>('/admin/orders', { from: fromStr, to: toStr, demo: '1' }).then((r: any) => (Array.isArray(r?.data) ? r.data : [])),
+      api.get<UserWithTokens[]>('/admin/users').then((r: any) => (Array.isArray(r?.data) ? r.data : [])),
+      api.get<OrderForRenewal[]>('/admin/orders', { from: fromStr, to: toStr }).then((r: any) => (Array.isArray(r?.data) ? r.data : [])),
     ])
       .then(([users, orders]) => {
         setRenewalChurn(buildRenewalChurnFromData(users, orders, reportMonth));

@@ -370,7 +370,7 @@
     "existingUserApplicationSubmitted": "试课申请已提交。你可使用现有账户登录。",
     "demoModeNotice": "Demo 模式：提交后会显示示范用临时密码，并以你输入的邮箱作为登录账号，不会呼叫后端。",
     "demoAccountMessage": "请使用 {{email}} 作为登录账号，并以下方临时密码登录后更改。",
-    "serviceUnavailable": "试课申请服务暂时无法使用，请稍后再试；或使用 Demo 模式（网址加 ?demo=1）预览流程。",
+    "serviceUnavailable": "试课申请服务暂时无法使用，请稍后再试。",
     "emailAlreadyRegistered": "此邮箱已注册，请直接登录。"
   },
   "auth": {
@@ -449,6 +449,7 @@
     "mobileAlreadyExists": "该手机号已被注册，请使用其他手机号或直接登录。",
     "success": "注册成功！请登录。",
     "invalidIdCard": "请输入4位字母或数字",
+    "parentsNameRequired": "请输入家长姓名",
     "showPassword": "显示密码",
     "hidePassword": "隐藏密码"
   },
@@ -498,7 +499,7 @@
     "scheduleHint": "点选家庭成员「进入主页」可查看该小朋友的课程表、代币余额与试堂申请。",
     "masterAccountHint": "家长主账户",
     "parentBasicInfo": "家长基本资料",
-    "emailEditHint": "如需更改电邮，请至账户设定。",
+    "emailEditHint": "电邮及手机号码如需更改，请联系学院协助。",
     "trialStatusConverted": "已转正式",
     "trialStatusCancelled": "已取消",
     "trialStatusCouldNotAssign": "未能安排",
@@ -699,6 +700,8 @@
     "mobile": "手机号码",
     "idFirstFour": "身份证后4位字",
     "notProvided": "未提供",
+    "fullNameRequired": "请输入全名",
+    "profileUpdated": "资料已更新",
     "changePassword": "更改密码",
     "student": "学生",
     "admin": "管理员",
@@ -730,7 +733,7 @@
     "accountUpdated": "账户已更新。",
     "emailInUse": "该邮箱已被使用。",
     "wrongCurrentPassword": "当前密码不正确。",
-    "accountSecurityHint": "更改密码、邮箱或手机号码请使用下方「账户与安全」区块。",
+    "accountSecurityHint": "更改密码请使用下方「账户与安全」区块。",
     "verification": {
       "sendCode": "发送验证码",
       "emailSentTo": "我们已向 {{email}} 发送 6 位验证码，请在下方输入。",

@@ -1,13 +1,8 @@
 /**
  * API Client for Studio Management System
  * Handles all HTTP requests to the backend API.
- *
- * When `VITE_DEMO_MODE === 'true'` (or the runtime override is set), all
- * requests are short-circuited into the in-memory mock layer so the
- * frontend can be demoed without any backend.
  */
 
-import { handleDemoRequest, isDemoMode } from './mock';
 
 const DEFAULT_PROD_API_URL = 'https://theyardapis.01tech.work/api';
 const API_BASE_URL =
@@ -55,25 +50,6 @@ async function request<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  if (isDemoMode()) {
-    let body: unknown = undefined;
-    if (options.body && typeof options.body === 'string') {
-      try {
-        body = JSON.parse(options.body);
-      } catch {
-        body = options.body;
-      }
-    }
-    const result = (await handleDemoRequest(
-      options.method || 'GET',
-      endpoint,
-      body,
-    )) as ApiResponse<T>;
-    if (!result.success) {
-      throw new ApiError(400, result.msg || 'Demo request failed');
-    }
-    return result;
-  }
   const url = buildRequestUrl(endpoint);
   const token = getAuthToken();
 

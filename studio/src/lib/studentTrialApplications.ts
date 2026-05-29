@@ -19,22 +19,6 @@ export interface TrialApplicationItem {
   user_id?: string;
 }
 
-export const FALLBACK_TRIAL_APPLICATIONS: TrialApplicationItem[] = [
-  {
-    id: 't1',
-    class_name: '兒童芭蕾試堂',
-    status: 'assigned',
-    applied_date: new Date().toISOString(),
-    assigned_class_name: '兒童芭蕾 A',
-  },
-  {
-    id: 't2',
-    class_name: '兒童爵士試堂',
-    status: 'pending',
-    applied_date: new Date().toISOString(),
-  },
-];
-
 export function getTrialStatusLabel(status: TrialStatus, t: (k: string, d?: string) => string): string {
   switch (status) {
     case 'assigned':

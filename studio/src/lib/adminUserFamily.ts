@@ -1,8 +1,11 @@
 /**
  * Admin 用戶管理：家長主帳戶（登入）與學員子帳戶（profiles）資料結構。
  */
+import type { AgeTag, CourseLevel } from '../contexts/AuthContext';
 import {
+  normalizeAgeTag,
   normalizeDateOfBirth,
+  normalizeLevel,
   normalizeResidentialDistrict,
   normalizeSex,
   readProfilesArray,
@@ -31,7 +34,8 @@ export interface AdminStudentProfile {
   parents_name: string | null;
   contact_number: string | null;
   residential_district: string | null;
-  level: string | null;
+  level: CourseLevel | null;
+  age_tag: AgeTag | null;
   mobile: string | null;
   id_card_last4: string | null;
 }
@@ -94,7 +98,8 @@ function mapStudentProfile(
     parents_name: toOptStr(raw.parents_name ?? raw.parentsName),
     contact_number: toOptStr(raw.contact_number ?? raw.contactNumber),
     residential_district: district,
-    level: toOptStr(raw.level),
+    level: normalizeLevel(raw.level),
+    age_tag: normalizeAgeTag(raw.age_tag ?? raw.age_group ?? raw.ageTag),
     mobile: toOptStr(raw.mobile ?? raw.contact_number),
     id_card_last4: idLast,
   };
@@ -164,4 +169,33 @@ export function formatSexLabel(
 ): string {
   if (sex == null) return '—';
   return sex ? t('profile.male', { defaultValue: '男' }) : t('profile.female', { defaultValue: '女' });
+}
+
+export function formatStudentLevelLabel(
+  level: CourseLevel | null,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+): string {
+  if (!level) return '—';
+  const key = `calendar.level.${level}`;
+  const label = t(key);
+  return label !== key ? label : level;
+}
+
+export function formatStudentAgeLabel(
+  student: Pick<AdminStudentProfile, 'age_tag' | 'date_of_birth'>,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+  getAgeFromDob: (dob: string) => number | null,
+): string {
+  if (student.age_tag) {
+    const key = `calendar.ageTag.${student.age_tag}`;
+    const label = t(key);
+    if (label !== key) return label;
+  }
+  if (student.date_of_birth) {
+    const age = getAgeFromDob(student.date_of_birth);
+    if (age != null) {
+      return `${age}${t('calendar.ageTag.yearsOld', { defaultValue: '歲' })}`;
+    }
+  }
+  return '—';
 }

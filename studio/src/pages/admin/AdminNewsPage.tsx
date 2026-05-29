@@ -3,20 +3,11 @@ import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDate } from '../../lib/utils';
 import { ApiError, api } from '../../lib/api';
-import {
-  getStoredNewsPosts,
-  saveStoredNewsPosts,
-  createStoredNewsPost,
-  updateStoredNewsPost,
-  deleteStoredNewsPost,
-  getPostDisplayTitle,
-  type StoredNewsPost,
-} from '../../lib/newsStorage';
+import { getPostDisplayTitle, type StoredNewsPost } from '../../lib/newsStorage';
 import { Plus, Edit, Trash2, Newspaper, Image as ImageIcon } from 'lucide-react';
 import { useModalA11y } from '../../lib/useModalA11y';
-import { isDemoMode } from '../../lib/mock';
 import { resolveUploadUrl, uploadImage } from '../../lib/uploads';
-import { DEFAULT_UPLOAD_COMPRESSION, isLikelyImageFile, normalizeImageFileForUpload } from '../../lib/imagePrepare';
+import { isLikelyImageFile } from '../../lib/imagePrepare';
 
 type ApiPost = {
   id: string | number;
@@ -54,15 +45,6 @@ function toPostItem(p: ApiPost): StoredNewsPost {
     created_at: p.created_at || p.published_at || new Date().toISOString(),
     show_as_popup: p.show_as_popup ?? false,
   };
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 export default function AdminNewsPage() {
@@ -123,9 +105,9 @@ export default function AdminNewsPage() {
         return;
       }
     } catch {
-      // API unavailable: use localStorage demo
+      // API unavailable
     }
-    setPosts(getStoredNewsPosts());
+    setPosts([]);
     setPublicVisibleIds(new Set());
     setLoading(false);
   }
@@ -175,25 +157,13 @@ export default function AdminNewsPage() {
     }
     setImageFile(file);
     try {
-      if (!isDemoMode()) {
-        try {
-          const url = await uploadImage(file, 'news');
-          setForm((f) => ({ ...f, image_url: url }));
-          return;
-        } catch (uploadErr) {
-          console.warn('News cover upload failed', uploadErr);
-          alert(t('admin.news.imageUploadError', '圖片上傳失敗，請稍後再試或改用其他圖片。'));
-          setImageFile(null);
-          input.value = '';
-          return;
-        }
-      }
-      const forInline = await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION);
-      const dataUrl = await readFileAsDataUrl(forInline);
-      setForm((f) => ({ ...f, image_url: dataUrl }));
-    } catch (err) {
-      console.error('Failed to read image', err);
+      const url = await uploadImage(file, 'news');
+      setForm((f) => ({ ...f, image_url: url }));
+    } catch (uploadErr) {
+      console.warn('News cover upload failed', uploadErr);
+      alert(t('admin.news.imageUploadError', '圖片上傳失敗，請稍後再試或改用其他圖片。'));
       setImageFile(null);
+      input.value = '';
     }
   }
 
@@ -220,9 +190,8 @@ export default function AdminNewsPage() {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     };
     const published_at = toMySqlDateTime(form.published_at);
-    const safeImageUrl = typeof form.image_url === 'string' && form.image_url.startsWith('data:') && !isDemoMode()
-      ? null
-      : form.image_url;
+    const safeImageUrl =
+      typeof form.image_url === 'string' && form.image_url.startsWith('data:') ? null : form.image_url;
     const fallbackTitle = form.title_zh_tw.trim() || form.title_zh_cn.trim() || form.title_en.trim() || '';
     const fallbackContent = form.content_zh_tw.trim() || form.content_zh_cn.trim() || form.content_en.trim() || '';
     const modernBody = {
@@ -247,69 +216,46 @@ export default function AdminNewsPage() {
       ...legacyBody,
       ...modernBody,
     };
-    const localBody = {
-      ...combinedBody,
-    };
     try {
-      try {
-        // Try fully-compatible payload first (legacy + multilingual fields).
-        // If backend rejects unknown multilingual keys, fall back to legacy-only.
-        const bodies = [combinedBody, legacyBody];
-        if (editingPost) {
-          let lastError: unknown = null;
-          for (const body of bodies) {
-            try {
-              const res = await api.patch(`/admin/news/${editingPost.id}`, body);
-              if (res.success) {
-                await loadPosts();
-                closeModal();
-                return;
-              }
-              lastError = new Error('Update news failed');
-            } catch (candidateErr) {
-              // Compatibility fallback for different backend schemas.
-              lastError = candidateErr;
-              if (!(candidateErr instanceof ApiError)) break;
-            }
-          }
-          throw (lastError ?? new Error('Update news failed'));
-        } else {
-          let lastError: unknown = null;
-          for (const body of bodies) {
-            try {
-              const res = await api.post('/admin/news', body);
-              if (res.success) {
-                await loadPosts();
-                closeModal();
-                return;
-              }
-              lastError = new Error('Create news failed');
-            } catch (candidateErr) {
-              // Compatibility fallback for different backend schemas.
-              lastError = candidateErr;
-              if (!(candidateErr instanceof ApiError)) break;
-            }
-          }
-          throw (lastError ?? new Error('Create news failed'));
-        }
-      } catch (err) {
-        if (!isDemoMode()) {
-          const msg = err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗');
-          alert(msg);
-          return;
-        }
-        // Demo mode fallback to localStorage when API fails
-      }
+      const bodies = [combinedBody, legacyBody];
       if (editingPost) {
-        updateStoredNewsPost(editingPost.id, { ...localBody });
+        let lastError: unknown = null;
+        for (const body of bodies) {
+          try {
+            const res = await api.patch(`/admin/news/${editingPost.id}`, body);
+            if (res.success) {
+              await loadPosts();
+              closeModal();
+              return;
+            }
+            lastError = new Error('Update news failed');
+          } catch (candidateErr) {
+            lastError = candidateErr;
+            if (!(candidateErr instanceof ApiError)) break;
+          }
+        }
+        throw (lastError ?? new Error('Update news failed'));
       } else {
-        const created = createStoredNewsPost(localBody);
-        const next = [...getStoredNewsPosts()];
-        next.unshift(created);
-        saveStoredNewsPosts(next);
+        let lastError: unknown = null;
+        for (const body of bodies) {
+          try {
+            const res = await api.post('/admin/news', body);
+            if (res.success) {
+              await loadPosts();
+              closeModal();
+              return;
+            }
+            lastError = new Error('Create news failed');
+          } catch (candidateErr) {
+            lastError = candidateErr;
+            if (!(candidateErr instanceof ApiError)) break;
+          }
+        }
+        throw (lastError ?? new Error('Create news failed'));
       }
-      await loadPosts();
-      closeModal();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗');
+      alert(msg);
     } finally {
       submitLockRef.current = false;
       setSaving(false);
@@ -321,12 +267,10 @@ export default function AdminNewsPage() {
     try {
       await api.delete(`/admin/news/${post.id}`);
       await loadPosts();
-      return;
-    } catch {
-      // Fallback to localStorage
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('common.saveFailed', '刪除失敗');
+      alert(msg);
     }
-    deleteStoredNewsPost(post.id);
-    loadPosts();
   }
 
   const locale = i18n.language === 'zh-TW' || i18n.language === 'zh-CN' ? 'zh-TW' : 'en-US';

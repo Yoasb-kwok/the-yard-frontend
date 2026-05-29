@@ -23,7 +23,7 @@ export default function AdminAttendanceAnomalyPage() {
 
   useEffect(() => {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<AttendanceAnomalyData>(`/admin/attendance-anomaly?demo=1${monthParam}`)
+    api.get<AttendanceAnomalyData>(`/admin/attendance-anomaly${monthParam}`)
       .then((res: any) => {
         if (res?.success && res?.data != null) {
           setData(normalizeAttendanceAnomalyPayload(res.data));

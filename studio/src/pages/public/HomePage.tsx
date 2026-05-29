@@ -8,7 +8,6 @@ import greenBgImage from '../../assets/images/green_bg.jpg';
 import roomRentalImage from '../../assets/images/room_rental.jpg';
 import { api } from '../../lib/api';
 import { formatDate } from '../../lib/utils';
-import { getStoredNewsPosts, getDemoNewsPosts, getPopupNewsPosts } from '../../lib/newsStorage';
 import { resolveUploadUrl } from '../../lib/uploads';
 
 interface NewsPost {
@@ -72,18 +71,8 @@ export default function HomePage() {
     } catch {
       // API unavailable
     }
-    const stored = getPopupNewsPosts();
-    if (stored.length > 0) {
-      setPopupPosts(stored.map(({ created_at: _, show_as_popup: __, ...p }) => p));
-      if (!sessionStorage.getItem('news_popup_shown')) setPopupVisible(true);
-      return;
-    }
-    // Demo: 用現時最新消息的 demo data 顯示彈窗（首 2 則）
-    const demo = getDemoNewsPosts(i18n.language);
-    if (demo.length > 0 && !sessionStorage.getItem('news_popup_shown')) {
-      setPopupPosts(demo.slice(0, 2).map(({ created_at: _, show_as_popup: __, ...p }) => p));
-      setPopupVisible(true);
-    }
+    setPopupPosts([]);
+    setPopupVisible(false);
   }
 
   async function loadLatestNews() {
@@ -100,14 +89,7 @@ export default function HomePage() {
     } catch {
       // API unavailable
     }
-    const stored = getStoredNewsPosts();
-    if (stored.length > 0) {
-      const sorted = [...stored].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
-      setLatestNews(sorted.slice(0, 4).map(({ created_at: _, ...p }) => p));
-    } else {
-      const demo = getDemoNewsPosts(i18n.language);
-      setLatestNews(demo.slice(0, 4).map(({ created_at: _, ...p }) => p));
-    }
+    setLatestNews([]);
   }
 
   function closePopup() {

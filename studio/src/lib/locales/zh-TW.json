@@ -370,7 +370,7 @@
     "existingUserApplicationSubmitted": "試堂申請已提交。你可使用現有帳戶登入。",
     "demoModeNotice": "Demo 模式：提交後會顯示示範用臨時密碼，並以你輸入的電郵作為登入帳號，不會呼叫後端。",
     "demoAccountMessage": "請使用 {{email}} 作為登入帳號，並以下方臨時密碼登入後更改。",
-    "serviceUnavailable": "試堂申請服務暫時無法使用，請稍後再試；或使用 Demo 模式（網址加 ?demo=1）預覽流程。",
+    "serviceUnavailable": "試堂申請服務暫時無法使用，請稍後再試。",
     "emailAlreadyRegistered": "此電郵已註冊，請直接登入。"
   },
   "auth": {
@@ -449,6 +449,7 @@
     "mobileAlreadyExists": "此手機號碼已被註冊，請使用其他手機號碼或直接登入。",
     "success": "註冊成功！請登入。",
     "invalidIdCard": "請輸入4位字母或數字",
+    "parentsNameRequired": "請輸入家長姓名",
     "showPassword": "顯示密碼",
     "hidePassword": "隱藏密碼"
   },
@@ -498,7 +499,7 @@
     "scheduleHint": "點選家庭成員「進入主頁」可查看該小朋友的課程表、代幣餘額與試堂申請。",
     "masterAccountHint": "家長主帳戶",
     "parentBasicInfo": "家長基本資料",
-    "emailEditHint": "如需更改電郵，請至帳戶設定。",
+    "emailEditHint": "電郵及手機號碼如需更改，請聯絡學院協助。",
     "trialStatusConverted": "已轉正式",
     "trialStatusCancelled": "已取消",
     "trialStatusCouldNotAssign": "未能安排",
@@ -701,6 +702,8 @@
     "mobile": "手機號碼",
     "idFirstFour": "身份證後4位字",
     "notProvided": "未提供",
+    "fullNameRequired": "請輸入全名",
+    "profileUpdated": "資料已更新",
     "changePassword": "更改密碼",
     "student": "學生",
     "admin": "管理員",
@@ -732,7 +735,7 @@
     "accountUpdated": "帳戶已更新。",
     "emailInUse": "此電郵已被使用。",
     "wrongCurrentPassword": "當前密碼不正確。",
-    "accountSecurityHint": "更改密碼、電郵或手機號碼請使用下方「帳戶與安全」區塊。",
+    "accountSecurityHint": "更改密碼請使用下方「帳戶與安全」區塊。",
     "verification": {
       "sendCode": "發送驗證碼",
       "emailSentTo": "我們已向 {{email}} 發送 6 位驗證碼，請在下方輸入。",

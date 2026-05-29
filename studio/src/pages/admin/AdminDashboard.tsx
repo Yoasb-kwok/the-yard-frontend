@@ -26,24 +26,14 @@ interface Stats {
   lowTokenStudents: number;
 }
 
-const FALLBACK_STATS: Stats = { totalRevenue: 12500, totalUsers: 3, expiringStudents: 1, lowTokenStudents: 1 };
-const FALLBACK_UPCOMING: UpcomingClass[] = (() => {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 0, 0);
-  const tomorrowStart = new Date(todayStart);
-  tomorrowStart.setDate(tomorrowStart.getDate() + 1);
-  return [
-    { id: 'c1', name: '兒童芭蕾', program_code: 'KB-A', instructor: '李老師', start_time: todayStart.toISOString(), enrolled_count: 8, capacity: 12, location: 'sanpokong' },
-    { id: 'c2', name: '青少年街舞', program_code: 'THH', instructor: '陳老師', start_time: tomorrowStart.toISOString(), enrolled_count: 10, capacity: 15, location: 'causewaybay' },
-  ];
-})();
+const EMPTY_STATS: Stats = { totalRevenue: 0, totalUsers: 0, expiringStudents: 0, lowTokenStudents: 0 };
 
 export default function AdminDashboard() {
   const { t, i18n } = useTranslation();
   const { isAdmin } = useAuth();
   const pendingCounts = useAdminPendingCounts(!!isAdmin);
-  const [stats, setStats] = useState<Stats>(FALLBACK_STATS);
-  const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>(FALLBACK_UPCOMING);
+  const [stats, setStats] = useState<Stats>(EMPTY_STATS);
+  const [upcomingClasses, setUpcomingClasses] = useState<UpcomingClass[]>([]);
   const [todayClassCount, setTodayClassCount] = useState<number | null>(null);
   const [locationFilter, setLocationFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
@@ -67,22 +57,24 @@ export default function AdminDashboard() {
     (async () => {
       setLoading(true);
       try {
-        const res = await api.get<{ totalRevenue: number; totalUsers: number; expiringStudents: number; lowTokenStudents: number; upcomingClasses: UpcomingClass[]; todayClassCount?: number }>('/admin/dashboard-stats').catch(() => ({ success: true, data: null }));
+        const res = await api.get<{ totalRevenue: number; totalUsers: number; expiringStudents: number; lowTokenStudents: number; upcomingClasses: UpcomingClass[]; todayClassCount?: number }>('/admin/dashboard-stats');
         if (res?.success && res?.data) {
           const d = res.data;
           setStats({
-            totalRevenue: d.totalRevenue ?? FALLBACK_STATS.totalRevenue,
-            totalUsers: d.totalUsers ?? FALLBACK_STATS.totalUsers,
-            expiringStudents: d.expiringStudents ?? FALLBACK_STATS.expiringStudents,
-            lowTokenStudents: d.lowTokenStudents ?? FALLBACK_STATS.lowTokenStudents,
+            totalRevenue: d.totalRevenue ?? 0,
+            totalUsers: d.totalUsers ?? 0,
+            expiringStudents: d.expiringStudents ?? 0,
+            lowTokenStudents: d.lowTokenStudents ?? 0,
           });
-          const classes = Array.isArray(d.upcomingClasses) ? d.upcomingClasses : FALLBACK_UPCOMING;
-          setUpcomingClasses(classes);
+          setUpcomingClasses(Array.isArray(d.upcomingClasses) ? d.upcomingClasses : []);
           setTodayClassCount(typeof d.todayClassCount === 'number' ? d.todayClassCount : null);
+        } else {
+          setStats(EMPTY_STATS);
+          setUpcomingClasses([]);
         }
       } catch {
-        setStats(FALLBACK_STATS);
-        setUpcomingClasses(FALLBACK_UPCOMING);
+        setStats(EMPTY_STATS);
+        setUpcomingClasses([]);
       } finally {
         setLoading(false);
       }

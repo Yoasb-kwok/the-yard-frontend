@@ -62,6 +62,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (!parentsName.trim()) {
+      setError(t('register.parentsNameRequired'));
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -298,12 +303,13 @@ export default function RegisterPage() {
               </div>
               <div>
                 <label htmlFor="parentsName" className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('profile.parentsName')}
+                  {t('profile.parentsName')} <span className="text-red-600">*</span>
                 </label>
                 <input
                   id="parentsName"
                   name="parentsName"
                   type="text"
+                  required
                   className="appearance-none block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                   placeholder={t('profile.parentsName')}
                   value={parentsName}

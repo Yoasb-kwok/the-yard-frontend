@@ -8,9 +8,7 @@ import { formatDateTimeRange } from '../lib/utils';
 import { getLocationInfo } from '../lib/locationInfo';
 import {
   getEnrolledLessonSlotCount,
-  getFallbackUpcomingClasses,
   getLessonDatesForEnrollment,
-  shouldUseDemoUpcomingClasses,
   type EnrolledClass,
 } from '../lib/studentEnrollments';
 import { MapPin } from 'lucide-react';
@@ -29,16 +27,9 @@ export default function StudentSidebarSchedule() {
       setLoading(false);
       return;
     }
-    const fallbackUpcomingClasses =
-      shouldUseDemoUpcomingClasses(profile.id)
-        ? getFallbackUpcomingClasses(profile.id, profile.full_name ?? undefined)
-        : [];
     const token = localStorage.getItem('token');
     if (!token) {
-      const sorted = [...fallbackUpcomingClasses].sort(
-        (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
-      );
-      setEnrollments(sorted);
+      setEnrollments([]);
       setLoading(false);
       return;
     }
@@ -51,15 +42,12 @@ export default function StudentSidebarSchedule() {
         if (profile?.id && list.length > 0) {
           list = list.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
         }
-        if (list.length === 0) {
-          list = fallbackUpcomingClasses;
-        }
         const sorted = [...list].sort(
           (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
         );
         setEnrollments(sorted);
       })
-      .catch(() => setEnrollments(fallbackUpcomingClasses))
+      .catch(() => setEnrollments([]))
       .finally(() => setLoading(false));
   }, [profile?.id, profile?.full_name]);
 

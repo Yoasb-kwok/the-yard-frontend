@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
-import { getStoredNewsPosts, getDemoNewsPosts } from '../../lib/newsStorage';
 import { api } from '../../lib/api';
 import { resolveUploadUrl } from '../../lib/uploads';
 
@@ -61,15 +60,9 @@ export default function NewsPage() {
         return;
       }
     } catch {
-      // API unavailable: use stored or dummy
+      // API unavailable
     }
-    const stored = getStoredNewsPosts();
-    if (stored.length > 0) {
-      setPosts(stored.map(({ created_at: _, ...p }) => p));
-    } else {
-      const demo = getDemoNewsPosts(i18n.language);
-      setPosts(demo.map(({ created_at: _, ...p }) => p));
-    }
+    setPosts([]);
     setLoading(false);
   }
 

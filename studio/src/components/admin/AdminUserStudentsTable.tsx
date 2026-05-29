@@ -1,8 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import { BookOpen, Package, Clock, Calendar } from 'lucide-react';
-import { formatDateDdMmYy } from '../../lib/utils';
+import { formatDateDdMmYy, getAgeFromDateOfBirth } from '../../lib/utils';
 import type { AdminStudentProfile } from '../../lib/adminUserFamily';
-import { formatSexLabel } from '../../lib/adminUserFamily';
+import {
+  formatSexLabel,
+  formatStudentAgeLabel,
+  formatStudentLevelLabel,
+} from '../../lib/adminUserFamily';
 
 export interface AdminUserStudentsTableProps {
   students: AdminStudentProfile[];
@@ -90,7 +94,7 @@ export default function AdminUserStudentsTable({
   );
 
   const studentActionsCell = (rowSpan?: number) => (
-    <td className="px-3 py-2 align-middle" rowSpan={rowSpan}>
+    <td className="px-3 py-2 align-middle w-0" rowSpan={rowSpan}>
       {studentActionButtons}
     </td>
   );
@@ -116,8 +120,12 @@ export default function AdminUserStudentsTable({
             <th className="px-3 py-2 text-left font-medium">{t('admin.users.colTrialApplied')}</th>
             <th className="px-3 py-2 text-left font-medium">{t('admin.users.colRemainingTokens')}</th>
             <th className="px-3 py-2 text-left font-medium">{t('admin.users.colTokenExpiry')}</th>
+            <th className="px-3 py-2 text-left font-medium">{t('profile.studentAge')}</th>
+            <th className="px-3 py-2 text-left font-medium">{t('profile.level')}</th>
             {hasStudentActions && (
-              <th className="px-3 py-2 text-left font-medium">{t('admin.users.actions')}</th>
+              <th className="px-3 py-2 w-0" aria-label={t('admin.users.actions')}>
+                <span className="sr-only">{t('admin.users.actions')}</span>
+              </th>
             )}
           </tr>
         </thead>
@@ -134,6 +142,12 @@ export default function AdminUserStudentsTable({
               <td className="px-3 py-2 text-gray-700 text-center tabular-nums">{remainingTokens}</td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums">
                 {tokenExpiryDate ? formatDateDdMmYy(tokenExpiryDate) : '—'}
+              </td>
+              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                {formatStudentAgeLabel(s, t, getAgeFromDateOfBirth)}
+              </td>
+              <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                {formatStudentLevelLabel(s.level, t)}
               </td>
               {hasStudentActions && index === 0 && studentActionsCell(students.length)}
             </tr>

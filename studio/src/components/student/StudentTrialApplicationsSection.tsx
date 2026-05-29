@@ -4,7 +4,6 @@ import { BookOpen } from 'lucide-react';
 import { api } from '../../lib/api';
 import { formatDate } from '../../lib/utils';
 import {
-  FALLBACK_TRIAL_APPLICATIONS,
   getTrialBadgeClass,
   getTrialStatusLabel,
   type TrialApplicationItem,
@@ -82,11 +81,11 @@ export default function StudentTrialApplicationsSection({ profileId }: StudentTr
         <BookOpen className="h-5 w-5 text-primary" />
         {t('dashboard.myTrialApplications')}
       </h2>
-      {trialApplicationsLoaded && trialApplications.length === 0 ? (
+      {!trialApplicationsLoaded || trialApplications.length === 0 ? (
         <p className="text-sm text-gray-500 py-2">{t('dashboard.noTrialApplications', '暫無試堂申請')}</p>
       ) : (
         <ul className="space-y-2">
-          {(trialApplicationsLoaded ? trialApplications : FALLBACK_TRIAL_APPLICATIONS).map((trial) => (
+          {trialApplications.map((trial) => (
             <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-3">
               <div className="min-w-0">
                 <span className="font-medium text-gray-900">{trial.class_name}</span>

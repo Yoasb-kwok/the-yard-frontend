@@ -86,7 +86,7 @@ export default function AdminTrialApplicationCreatePage() {
     setLoadingClasses(true);
     setClassLoadError(null);
     try {
-      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
+      const endpoints = ['/admin/classes', '/classes'];
       let rows: any[] = [];
       for (const endpoint of endpoints) {
         try {

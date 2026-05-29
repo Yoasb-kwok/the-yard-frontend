@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
-import { ArrowLeft, Calendar, MapPin, User } from 'lucide-react';
+import { api } from '../../lib/api';
+import { ArrowLeft, Calendar, MapPin } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Enrollment {
@@ -28,75 +29,29 @@ interface User {
   mobile: string | null;
 }
 
-// Mock data - in real app, this would come from API
-const MOCK_ENROLLMENTS: Enrollment[] = [
-  {
-    id: '1',
-    status: 'enrolled',
+function mapEnrollmentRow(raw: Record<string, unknown>): Enrollment | null {
+  const cls = (raw.class ?? raw) as Record<string, unknown>;
+  const classId = String(cls.id ?? raw.class_id ?? '');
+  if (!classId) return null;
+  const start = String(cls.start_time ?? raw.start_time ?? '');
+  const end = String(cls.end_time ?? raw.end_time ?? start);
+  if (!start) return null;
+  return {
+    id: String(raw.id ?? `${classId}-${start}`),
+    status: (raw.status as Enrollment['status']) || 'enrolled',
     class: {
-      id: '1',
-      name: 'Yoga Basics',
-      class_code: 'YB001',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      location: 'sanpokong',
-      is_internal: false,
-      is_cancelled: false,
+      id: classId,
+      name: String(cls.name ?? cls.class_name ?? ''),
+      class_code: String(cls.class_code ?? cls.program_code ?? ''),
+      instructor: String(cls.instructor ?? ''),
+      start_time: start,
+      end_time: end,
+      location: cls.location as Enrollment['class']['location'],
+      is_internal: cls.is_internal === 1 || cls.is_internal === true,
+      is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
     },
-  },
-  {
-    id: '2',
-    status: 'enrolled',
-    class: {
-      id: '2',
-      name: 'Pilates Intermediate',
-      class_code: 'PI002',
-      instructor: 'John Doe',
-      start_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-      location: 'causewaybay',
-      is_internal: false,
-      is_cancelled: false,
-    },
-  },
-  {
-    id: '3',
-    status: 'enrolled',
-    class: {
-      id: '3',
-      name: '補課 - Yoga Basics',
-      class_code: 'YB-MK001',
-      instructor: 'Jane Smith',
-      start_time: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000).toISOString(),
-      location: 'fotan',
-      is_internal: true,
-      is_cancelled: false,
-    },
-  },
-  {
-    id: '4',
-    status: 'enrolled',
-    class: {
-      id: '4',
-      name: 'Dance Advanced',
-      class_code: 'DA003',
-      instructor: 'Sarah Lee',
-      start_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      end_time: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000 + 90 * 60 * 1000).toISOString(),
-      location: 'sheungshui',
-      is_internal: false,
-      is_cancelled: false,
-    },
-  },
-];
-
-const MOCK_USER: User = {
-  id: 'student-001',
-  full_name: 'Student User',
-  mobile: '87654321',
-};
+  };
+}
 
 export default function UserSchedulePage() {
   const { t, i18n } = useTranslation();
@@ -113,21 +68,38 @@ export default function UserSchedulePage() {
   }, [userId]);
 
   async function loadData() {
+    if (!userId) return;
     setLoading(true);
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    setUser(MOCK_USER);
-    
-    // Load enrollments for this user (only upcoming classes)
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const now = new Date();
-    const upcomingEnrollments = MOCK_ENROLLMENTS.filter(e => {
-      const classEndTime = new Date(e.class.end_time);
-      return classEndTime >= now;
-    });
-    setEnrollments(upcomingEnrollments);
-    
-    setLoading(false);
+    try {
+      const [usersRes, enrollRes] = await Promise.all([
+        api.get<Record<string, unknown>[]>('/admin/users'),
+        api.get<Record<string, unknown>[]>(`/admin/users/${userId}/class-enrollments`),
+      ]);
+      const users = usersRes.success && Array.isArray(usersRes.data) ? usersRes.data : [];
+      const raw = users.find((u) => String(u.id) === String(userId));
+      if (!raw) {
+        setUser(null);
+        setEnrollments([]);
+        return;
+      }
+      setUser({
+        id: String(raw.id ?? userId),
+        full_name: String(raw.full_name ?? raw.name ?? ''),
+        mobile: raw.mobile != null ? String(raw.mobile) : null,
+      });
+      const list = enrollRes.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
+      const now = new Date();
+      const mapped = list
+        .map((row) => mapEnrollmentRow(row))
+        .filter((e): e is Enrollment => e !== null)
+        .filter((e) => new Date(e.class.end_time) >= now);
+      setEnrollments(mapped);
+    } catch {
+      setUser(null);
+      setEnrollments([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const getLocale = (): string => {
@@ -161,9 +133,8 @@ export default function UserSchedulePage() {
     }
   };
 
-  // Sort enrollments by start time (ascending)
   const sortedEnrollments = useMemo(() => {
-    return [...enrollments].sort((a, b) => 
+    return [...enrollments].sort((a, b) =>
       new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
     );
   }, [enrollments]);
@@ -200,7 +171,6 @@ export default function UserSchedulePage() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="mb-6">
           <button
             onClick={() => navigate('/admin/users')}
@@ -218,7 +188,6 @@ export default function UserSchedulePage() {
           </div>
         </div>
 
-        {/* Classes List */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           {sortedEnrollments.length === 0 ? (
             <div className="text-center py-12 text-gray-600">
@@ -226,7 +195,6 @@ export default function UserSchedulePage() {
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {/* Desktop Table View */}
               <div className="hidden md:block">
                 <table className="w-full">
                   <thead className="bg-gray-50">
@@ -284,7 +252,6 @@ export default function UserSchedulePage() {
                 />
               </div>
 
-              {/* Mobile Card View */}
               <div className="md:hidden divide-y divide-gray-200">
                 {paginatedEnrollments.map((enrollment) => (
                   <div key={enrollment.id} className="p-4">
@@ -346,4 +313,3 @@ export default function UserSchedulePage() {
     </Layout>
   );
 }
-

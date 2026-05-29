@@ -1,7 +1,11 @@
 /**
  * Admin 用戶管理：後端欄位正規化（性別、出生日期、居住地區等）。
  */
+import type { AgeTag, CourseLevel } from '../contexts/AuthContext';
 import { HK_DISTRICT_KEYS, type HKDistrictKey } from './hkDistricts';
+
+const COURSE_LEVELS: CourseLevel[] = ['entry', 'intermediate', 'advanced'];
+const AGE_TAGS: AgeTag[] = ['5-8', '9-12', '13-16'];
 
 function toOptStr(v: unknown): string | null {
   if (v == null) return null;
@@ -75,6 +79,25 @@ const DISTRICT_ZH_TO_KEY: Record<string, HKDistrictKey> = {
   元朗: 'yuenLong',
   元朗區: 'yuenLong',
 };
+
+export function normalizeLevel(v: unknown): CourseLevel | null {
+  if (v == null || v === '') return null;
+  const s = String(v).trim().toLowerCase();
+  if (['entry', 'beginner', '初級', '初阶', '初级'].includes(s)) return 'entry';
+  if (['intermediate', '中級', '中级'].includes(s)) return 'intermediate';
+  if (['advanced', '高級', '高级'].includes(s)) return 'advanced';
+  return (COURSE_LEVELS as readonly string[]).includes(s) ? (s as CourseLevel) : null;
+}
+
+export function normalizeAgeTag(v: unknown): AgeTag | null {
+  if (v == null || v === '') return null;
+  const s = String(v).trim();
+  if ((AGE_TAGS as readonly string[]).includes(s)) return s as AgeTag;
+  if (s === '5_8') return '5-8';
+  if (s === '9_12') return '9-12';
+  if (s === '13_16') return '13-16';
+  return null;
+}
 
 export function normalizeResidentialDistrict(v: unknown): string | null {
   const s = toOptStr(v);

@@ -17,7 +17,6 @@ import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
-import { getFallbackCalendarLessons } from '../../lib/demoCourses';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 import ClassEnrollModal, { type ClassEnrollLesson } from '../../components/student/ClassEnrollModal';
@@ -260,7 +259,7 @@ export default function CalendarPage() {
       const response = await api.get<any[]>('/classes', { from: range.from, to: range.to });
       const rows = Array.isArray(response?.data) ? response.data : [];
       if (!response?.success) {
-        setLessons(getFallbackCalendarLessons(currentDate));
+        setLessons([]);
         return;
       }
       const programTotalLessons: Record<string, number> = {};
@@ -297,10 +296,10 @@ export default function CalendarPage() {
             course_type: normalizeCategoryCode(cls.tag_values?.category ?? cls.course_type),
           };
         });
-      setLessons(mapped.length > 0 ? mapped : getFallbackCalendarLessons(currentDate));
+      setLessons(mapped);
     } catch (error) {
       console.error('Error loading calendar classes:', error);
-      setLessons(getFallbackCalendarLessons(currentDate));
+      setLessons([]);
       const msg = error instanceof Error ? error.message : 'Failed to load classes';
       if (!msg.includes('Network') && !msg.includes('fetch')) {
         setLessonsError(msg);

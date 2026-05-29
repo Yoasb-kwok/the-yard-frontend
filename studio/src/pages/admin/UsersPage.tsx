@@ -5,12 +5,16 @@ import Layout from '../../components/Layout';
 import PageLoading from '../../components/PageLoading';
 import LoadErrorBanner from '../../components/LoadErrorBanner';
 import EmptyState from '../../components/EmptyState';
-import { formatDateDdMmYy, formatMobileForDisplay } from '../../lib/utils';
+import { formatDateDdMmYy, formatMobileForDisplay, getAgeFromDateOfBirth } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
 import { findEditUserDuplicateFields } from '../../lib/adminUserDuplicates';
-import { isDemoMode } from '../../lib/mock';
 import { Search, Edit, Trash2, Mail, Receipt, Download, Send, ChevronDown, ChevronRight } from 'lucide-react';
-import { buildAdminUserFamily, type AdminUserFamily } from '../../lib/adminUserFamily';
+import {
+  buildAdminUserFamily,
+  formatStudentAgeLabel,
+  formatStudentLevelLabel,
+  type AdminUserFamily,
+} from '../../lib/adminUserFamily';
 import { formatResidentialDistrictLabel } from '../../lib/adminUserFields';
 import AdminUserEditModal, {
   buildParentEditForm,
@@ -66,78 +70,6 @@ function normalizeUserTokens(raw: unknown): UserToken[] {
     };
   });
 }
-
-// Mock data
-const MOCK_USERS: User[] = [
-  {
-    id: 'student-001',
-    account_number: 'MOCK-STD-001',
-    full_name: 'Student User',
-    username: 'student001',
-    email: 'student.user@example.com',
-    role: 'student',
-    mobile: '87654321',
-    id_card_last4: '1001',
-    has_trial_application: true,
-    student_profile_count: 1,
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [
-      { id: 'ut-m1', remaining_tokens: 5, expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
-    ],
-    family: buildAdminUserFamily({
-      id: 'student-001',
-      full_name: 'Student User',
-      email: 'student.user@example.com',
-      mobile: '87654321',
-      parents_name: 'Parent User',
-      student_id: 'MOCK-STD-001',
-    }),
-  },
-  {
-    id: 'student-002',
-    account_number: 'MOCK-STD-002',
-    full_name: 'John Doe',
-    username: 'jdoe',
-    email: 'john.doe@example.com',
-    role: 'student',
-    mobile: '98765432',
-    id_card_last4: '2002',
-    has_trial_application: false,
-    student_profile_count: 1,
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [
-      { id: 'ut-m2', remaining_tokens: 2, expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
-    ],
-    family: buildAdminUserFamily({
-      id: 'student-002',
-      full_name: 'John Doe',
-      email: 'john.doe@example.com',
-      mobile: '98765432',
-    }),
-  },
-  {
-    id: 'student-003',
-    account_number: 'MOCK-STD-003',
-    full_name: 'Jane Smith',
-    username: 'jsmith',
-    email: 'jane.smith@example.com',
-    role: 'student',
-    mobile: '91234567',
-    id_card_last4: null,
-    has_trial_application: false,
-    student_profile_count: 1,
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [
-      { id: 'ut-m3', remaining_tokens: 8, expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
-    ],
-    family: buildAdminUserFamily({
-      id: 'student-003',
-      full_name: 'Jane Smith',
-      email: 'jane.smith@example.com',
-      mobile: '91234567',
-    }),
-  },
-];
 
 /** Sortable header cells: allow wrapped labels so long titles do not overlap adjacent columns. */
 const usersThClass =
@@ -296,8 +228,7 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error loading users:', error);
       setLoadError(error instanceof Error ? error.message : '無法載入用戶列表');
-      // Only use embedded mock when running in demo mode; otherwise show empty + error so stale mock is not mistaken for live DB.
-      setUsers(isDemoMode() ? enrichUsersWithTrials(MOCK_USERS, []) : []);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -382,6 +313,9 @@ export default function UsersPage() {
           sex: s.sex,
           id_card_last4: s.id_card_last4.trim() || null,
           id_last_four: s.id_card_last4.trim() || null,
+          level: s.level || null,
+          age_tag: s.age_tag || null,
+          age_group: s.age_tag || null,
         })),
       });
 
@@ -655,6 +589,8 @@ export default function UsersPage() {
       t('admin.users.colTrialApplied'),
       t('admin.users.colRemainingTokens'),
       t('admin.users.colTokenExpiry'),
+      t('profile.studentAge'),
+      t('profile.level'),
     ];
     const rows: string[] = [];
     sortedUsers.forEach((u) => {
@@ -681,6 +617,8 @@ export default function UsersPage() {
             trialLabel,
             String(tokens),
             tokenExpiryLabel,
+            formatStudentAgeLabel(s, t, getAgeFromDateOfBirth),
+            formatStudentLevelLabel(s.level, t),
           ]
             .map((c) => `"${String(c).replace(/"/g, '""')}"`)
             .join(','),

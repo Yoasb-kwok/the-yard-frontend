@@ -39,13 +39,6 @@ const EMPTY_FORM: FormState = {
   is_active: true,
 };
 
-/** Fallback demo data when admin API is unavailable, so the page still renders. */
-const FALLBACK_PACKAGES: TokenPackageRow[] = [
-  { id: 1, name: 'Starter Pack', description: 'Perfect for beginners', token_count: 5, price: 500, validity_days: 30, is_active: true },
-  { id: 2, name: 'Regular Pack', description: 'Great value for regular students', token_count: 10, price: 900, validity_days: 60, is_active: true },
-  { id: 3, name: 'Premium Pack', description: 'Best value for frequent visitors', token_count: 20, price: 1600, validity_days: 90, is_active: true },
-];
-
 export default function AdminTokenPackagesPage() {
   const { t } = useTranslation();
   const [packages, setPackages] = useState<TokenPackageRow[]>([]);
@@ -68,8 +61,8 @@ export default function AdminTokenPackagesPage() {
       const rows = await fetchAdminTokenPackages();
       setPackages(rows);
     } catch (err) {
-      console.warn('Admin token packages API unavailable, using fallback.', err);
-      setPackages(FALLBACK_PACKAGES);
+      console.warn('Admin token packages API unavailable.', err);
+      setPackages([]);
     } finally {
       setLoading(false);
     }

@@ -1,7 +1,13 @@
 import { useTranslation } from 'react-i18next';
 import DateSelect from '../DateSelect';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import { normalizeDateOfBirth, normalizeResidentialDistrict, normalizeSex } from '../../lib/adminUserFields';
+import type { AgeTag, CourseLevel } from '../../contexts/AuthContext';
+import {
+  normalizeDateOfBirth,
+  normalizeResidentialDistrict,
+  normalizeSex,
+} from '../../lib/adminUserFields';
+import { getAgeFromDateOfBirth } from '../../lib/utils';
 import type { AdminStudentProfile, AdminUserFamily } from '../../lib/adminUserFamily';
 
 export interface ParentEditFormState {
@@ -19,6 +25,8 @@ export interface StudentEditFormState {
   date_of_birth: string;
   sex: boolean | null;
   id_card_last4: string;
+  level: CourseLevel | '';
+  age_tag: AgeTag | '';
 }
 
 interface AdminUserEditModalProps {
@@ -55,6 +63,8 @@ export function buildStudentEditForms(students: AdminStudentProfile[]): StudentE
     date_of_birth: normalizeDateOfBirth(s.date_of_birth) || '',
     sex: normalizeSex(s.sex),
     id_card_last4: s.id_card_last4 || '',
+    level: s.level ?? '',
+    age_tag: s.age_tag ?? '',
   }));
 }
 
@@ -237,6 +247,14 @@ export default function AdminUserEditModal({
                     className="w-full"
                     ariaLabel={t('admin.users.colDateOfBirth')}
                   />
+                  {student.date_of_birth && getAgeFromDateOfBirth(student.date_of_birth) != null && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('admin.users.studentAgeHint', {
+                        age: getAgeFromDateOfBirth(student.date_of_birth),
+                        defaultValue: '約 {{age}} 歲',
+                      })}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -260,6 +278,48 @@ export default function AdminUserEditModal({
                     <option value="">{t('profile.notProvided')}</option>
                     <option value="male">{t('profile.male')}</option>
                     <option value="female">{t('profile.female')}</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('profile.level')}
+                  </label>
+                  <select
+                    value={student.level}
+                    onChange={(e) =>
+                      onStudentChange(index, {
+                        ...student,
+                        level: (e.target.value || '') as CourseLevel | '',
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">{t('profile.notProvided')}</option>
+                    <option value="entry">{t('calendar.level.entry')}</option>
+                    <option value="intermediate">{t('calendar.level.intermediate')}</option>
+                    <option value="advanced">{t('calendar.level.advanced')}</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('profile.ageTag')}
+                  </label>
+                  <select
+                    value={student.age_tag}
+                    onChange={(e) =>
+                      onStudentChange(index, {
+                        ...student,
+                        age_tag: (e.target.value || '') as AgeTag | '',
+                      })
+                    }
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">{t('profile.notProvided')}</option>
+                    <option value="5-8">{t('calendar.ageTag.5-8')}</option>
+                    <option value="9-12">{t('calendar.ageTag.9-12')}</option>
+                    <option value="13-16">{t('calendar.ageTag.13-16')}</option>
                   </select>
                 </div>
               </div>

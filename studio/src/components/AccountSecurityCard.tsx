@@ -10,6 +10,8 @@ export interface AccountSecurityCardProps {
   onAccountUpdated?: (email?: string, mobile?: string) => void;
   /** When true, open the change-password modal on mount (e.g. after trial signup). */
   initialOpenPasswordModal?: boolean;
+  /** When false, email and mobile are read-only (e.g. parent dashboard). Default true. */
+  allowEmailMobileUpdate?: boolean;
 }
 
 function getMobileParts(mobile: string | null): { countryCode: string; number: string } {
@@ -20,7 +22,13 @@ function getMobileParts(mobile: string | null): { countryCode: string; number: s
   return { countryCode: '+852', number: mobile };
 }
 
-export default function AccountSecurityCard({ email, mobile, onAccountUpdated, initialOpenPasswordModal }: AccountSecurityCardProps) {
+export default function AccountSecurityCard({
+  email,
+  mobile,
+  onAccountUpdated,
+  initialOpenPasswordModal,
+  allowEmailMobileUpdate = true,
+}: AccountSecurityCardProps) {
   const { t } = useTranslation();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -193,13 +201,15 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated, i
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-900">{email || t('profile.notProvided')}</span>
-            <button
-              type="button"
-              onClick={() => { setEmailModal(true); setNewEmail(email || ''); setError(''); setEmailStep(1); setEmailOtp(''); setEmailDevOtp(null); }}
-              className="text-sm font-medium text-primary hover:text-primary-dark"
-            >
-              {t('profile.updateEmail')}
-            </button>
+            {allowEmailMobileUpdate && (
+              <button
+                type="button"
+                onClick={() => { setEmailModal(true); setNewEmail(email || ''); setError(''); setEmailStep(1); setEmailOtp(''); setEmailDevOtp(null); }}
+                className="text-sm font-medium text-primary hover:text-primary-dark"
+              >
+                {t('profile.updateEmail')}
+              </button>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -213,13 +223,15 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated, i
                 ? formatMobileForDisplay(mobile)
                 : t('profile.notProvided')}
             </span>
-            <button
-              type="button"
-              onClick={() => { setMobileModal(true); setNewMobile(mobileDisplay.number); setCountryCode(mobileDisplay.countryCode.replace('+', '') || '852'); setError(''); setMobileStep(1); setMobileOtp(''); setMobileDevOtp(null); }}
-              className="text-sm font-medium text-primary hover:text-primary-dark"
-            >
-              {t('profile.updateMobile')}
-            </button>
+            {allowEmailMobileUpdate && (
+              <button
+                type="button"
+                onClick={() => { setMobileModal(true); setNewMobile(mobileDisplay.number); setCountryCode(mobileDisplay.countryCode.replace('+', '') || '852'); setError(''); setMobileStep(1); setMobileOtp(''); setMobileDevOtp(null); }}
+                className="text-sm font-medium text-primary hover:text-primary-dark"
+              >
+                {t('profile.updateMobile')}
+              </button>
+            )}
           </div>
         </div>
         <div className="pt-2 border-t border-gray-100">
@@ -285,7 +297,7 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated, i
         </div>
       )}
 
-      {emailModal && (
+      {allowEmailMobileUpdate && emailModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('profile.updateEmail')}</h3>
@@ -347,7 +359,7 @@ export default function AccountSecurityCard({ email, mobile, onAccountUpdated, i
         </div>
       )}
 
-      {mobileModal && (
+      {allowEmailMobileUpdate && mobileModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">{t('profile.updateMobile')}</h3>

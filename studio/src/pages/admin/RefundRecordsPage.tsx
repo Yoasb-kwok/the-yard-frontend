@@ -22,11 +22,6 @@ export interface RefundRecord {
   refunded_at: string;
 }
 
-/** Fallback demo data when API is unavailable */
-const FALLBACK_REFUND_RECORDS: RefundRecord[] = [
-  { id: 'refund_1', enrollment_id: 'enr_1', user_id: 'student-001', user_name: 'Student One', class_id: 'cls_1', class_name: 'Kids Ballet', class_code: 'KB-A', tokens_refunded: 1, remarks: 'Sick leave', refunded_by: 'admin', refunded_at: new Date().toISOString() },
-];
-
 export default function RefundRecordsPage() {
   const { t, i18n } = useTranslation();
   const [records, setRecords] = useState<RefundRecord[]>([]);
@@ -49,11 +44,11 @@ export default function RefundRecordsPage() {
   const loadRecords = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<RefundRecord[]>('admin/refund-records?demo=1').catch(() => ({ success: true, data: FALLBACK_REFUND_RECORDS }));
-      setRecords(res.data ?? FALLBACK_REFUND_RECORDS);
+      const res = await api.get<RefundRecord[]>('/admin/refund-records');
+      setRecords(res.success && Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error('Failed to load refund records:', err);
-      setRecords(FALLBACK_REFUND_RECORDS);
+      setRecords([]);
     } finally {
       setLoading(false);
     }

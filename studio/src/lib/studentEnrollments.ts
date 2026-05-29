@@ -1,14 +1,9 @@
 /**
  * Single source of truth for student enrollments (報名課程).
- * Used by SchedulePage, StudentSidebarSchedule, and DashboardPage so
- * 課程表、左側欄、日曆、Dashboard 報名課程 all show the same data per profile.
- * Demo 課程與主頁/日曆一致，來自 demoCourses。
+ * Used by SchedulePage, StudentSidebarSchedule, and DashboardPage.
  */
 
-import { getFallbackEnrolledClassesForStudent } from './demoCourses';
 import { getLessonDates, getLessonDatesSkipHolidays } from './utils';
-
-export const DEMO_PROFILE_IDS = ['student-001', 'student-001-sub-2', 'student-001-sub-3'];
 
 export interface EnrolledClass {
   id: string;
@@ -44,19 +39,6 @@ export interface EnrolledClass {
   leave_requests?: { lesson_index: number; leave_type: 'personal' | 'sick'; status: string }[];
   extension_application?: { status: string; rejection_reason?: string };
   sick_leave_application?: { status: string; rejection_reason?: string };
-}
-
-/** 與主頁展示的課程一致：兒童芭蕾、爵士舞、幼兒律動（來自 demoCourses） */
-export function getFallbackUpcomingClasses(profileId?: string, profileName?: string): EnrolledClass[] {
-  return getFallbackEnrolledClassesForStudent(profileId, profileName);
-}
-
-/**
- * Only inject demo enrollments for known demo profiles.
- * New real users should see empty upcoming classes when no data exists.
- */
-export function shouldUseDemoUpcomingClasses(profileId?: string): boolean {
-  return Boolean(profileId && DEMO_PROFILE_IDS.includes(profileId));
 }
 
 /**

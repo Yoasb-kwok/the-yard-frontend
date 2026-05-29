@@ -9,7 +9,6 @@
  * validate JSON only and return 400 for multipart-only requests.
  */
 
-import { isDemoMode } from './mock';
 import { DEFAULT_UPLOAD_COMPRESSION, normalizeImageFileForUpload } from './imagePrepare';
 
 const DEFAULT_PROD_API_URL = 'https://theyardapis.01tech.work/api';
@@ -92,13 +91,6 @@ export function resolveUploadUrl(url: string | null | undefined): string {
  * relative paths like `/uploads/...` are resolved to the API origin (Vite proxy in dev).
  */
 export async function uploadImage(file: File, purpose?: string): Promise<string> {
-  if (isDemoMode()) {
-    // Use a stable placeholder URL tied to the file name so the image persists
-    // across reloads and feels real.
-    const seed = encodeURIComponent(`${purpose || 'demo'}-${file.name}-${file.size}`);
-    await new Promise((r) => setTimeout(r, 300));
-    return `https://picsum.photos/seed/${seed}/1000/600`;
-  }
   const prepared = await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION);
   const token = localStorage.getItem('token');
   const authHeaders: Record<string, string> = {};

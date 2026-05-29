@@ -9,7 +9,6 @@ import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users, Trash2 } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, useAuth } from '../../contexts/AuthContext';
-import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
 import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 
 interface Class {
@@ -84,53 +83,6 @@ interface Instructor {
 }
 
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
-
-/** Fallback demo: 與主頁/日曆一致，用共用 demo 課程 */
-const FALLBACK_CLASSES: Class[] = getFallbackClassesForAdmin();
-const FALLBACK_INSTRUCTORS: Instructor[] = [
-  { id: 'inst_1', name: '李老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_2', name: '陳老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_3', name: '王老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_4', name: '張老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_5', name: '黃老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_6', name: '林老師', profile_image_url: null, created_at: new Date().toISOString() },
-];
-
-/** Demo enrollments for attendance list when API returns no data */
-function getFallbackEnrollments(classId: string, enrolledCount: number): Enrollment[] {
-  const now = new Date();
-  const created = now.toISOString().slice(0, 10);
-  const demoStudents: { name: string; mobile: string }[] = [
-    { name: '陳小明', mobile: '85291234567' },
-    { name: '李美儀', mobile: '85292345678' },
-    { name: '黃家豪', mobile: '85293456789' },
-    { name: '張心怡', mobile: '85294567890' },
-    { name: '王俊傑', mobile: '85295678901' },
-    { name: '林曉晴', mobile: '85296789012' },
-    { name: '劉子軒', mobile: '85297890123' },
-    { name: '何思敏', mobile: '85298901234' },
-  ];
-  const statuses: Enrollment['status'][] = ['attended', 'attended', 'enrolled', 'absent', 'sick_leave'];
-  const count = Math.min(Math.max(enrolledCount, 1), demoStudents.length);
-  return Array.from({ length: count }, (_, i) => {
-    const s = demoStudents[i];
-    const status = statuses[i % statuses.length];
-    const checkIn = status === 'attended' ? '14:00' : null;
-    const checkOut = status === 'attended' ? '15:00' : null;
-    return {
-      id: `enr_demo_${classId}_${i + 1}`,
-      class_id: classId,
-      user_id: `user_demo_${i + 1}`,
-      user_name: s.name,
-      user_mobile: s.mobile,
-      status,
-      check_in_time: checkIn,
-      check_out_time: checkOut,
-      sick_leave_document_url: null,
-      created_at: `${created}T00:00:00.000Z`,
-    };
-  });
-}
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
@@ -295,20 +247,8 @@ export default function ClassesPage() {
   async function loadClasses() {
     try {
       setLoading(true);
-      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
-      let rows: any[] = [];
-      for (const endpoint of endpoints) {
-        try {
-          const response = await api.get<any[]>(endpoint);
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            rows = response.data;
-            break;
-          }
-        } catch {
-          // Try next endpoint.
-        }
-      }
-      const sourceRows = rows.length > 0 ? rows : FALLBACK_CLASSES;
+      const response = await api.get<any[]>('/admin/classes');
+      const sourceRows = response.success && Array.isArray(response.data) ? response.data : [];
       const transformedClasses: Class[] = sourceRows.map((cls: any) => ({
         id: cls.id?.toString() ?? cls.id,
         name: cls.name ?? cls.class_name ?? '',
@@ -336,7 +276,7 @@ export default function ClassesPage() {
       setClasses(transformedClasses);
     } catch (error) {
       console.error('Error loading classes:', error);
-      setClasses(FALLBACK_CLASSES);
+      setClasses([]);
     } finally {
       setLoading(false);
     }
@@ -344,20 +284,8 @@ export default function ClassesPage() {
 
   async function loadInstructors() {
     try {
-      const endpoints = ['admin/instructors', 'admin/instructors?demo=1'];
-      let rows: any[] = [];
-      for (const endpoint of endpoints) {
-        try {
-          const response = await api.get<any[]>(endpoint);
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            rows = response.data;
-            break;
-          }
-        } catch {
-          // Try next endpoint.
-        }
-      }
-      const sourceRows = rows.length > 0 ? rows : FALLBACK_INSTRUCTORS;
+      const response = await api.get<any[]>('/admin/instructors');
+      const sourceRows = response.success && Array.isArray(response.data) ? response.data : [];
       setInstructors(
         sourceRows.map((inst: any) => ({
           id: String(inst.id),
@@ -368,7 +296,7 @@ export default function ClassesPage() {
       );
     } catch (error) {
       console.error('Error loading instructors:', error);
-      setInstructors(FALLBACK_INSTRUCTORS);
+      setInstructors([]);
     }
   }
 
@@ -381,23 +309,21 @@ export default function ClassesPage() {
     try {
       const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
       const list = res.success && Array.isArray(res.data) ? res.data : [];
-      const enrollments: Enrollment[] = list.length > 0
-        ? list.map((e: any) => ({
-            id: String(e.id),
-            class_id: classId,
-            user_id: e.user_id ?? '',
-            user_name: e.user_name ?? '',
-            user_mobile: e.user_mobile ?? null,
-            status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
-            check_in_time: e.check_in_time ?? null,
-            check_out_time: e.check_out_time ?? null,
-            sick_leave_document_url: e.sick_leave_document_url ?? null,
-            created_at: e.created_at ?? '',
-          }))
-        : getFallbackEnrollments(classId, c.enrolled_count);
+      const enrollments: Enrollment[] = list.map((e: any) => ({
+        id: String(e.id),
+        class_id: classId,
+        user_id: e.user_id ?? '',
+        user_name: e.user_name ?? '',
+        user_mobile: e.user_mobile ?? null,
+        status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+        check_in_time: e.check_in_time ?? null,
+        check_out_time: e.check_out_time ?? null,
+        sick_leave_document_url: e.sick_leave_document_url ?? null,
+        created_at: e.created_at ?? '',
+      }));
       return { class: classWithAttendance, enrollments };
     } catch {
-      return { class: classWithAttendance, enrollments: getFallbackEnrollments(classId, c.enrolled_count) };
+      return { class: classWithAttendance, enrollments: [] };
     }
   }
 

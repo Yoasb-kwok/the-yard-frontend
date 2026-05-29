@@ -14,7 +14,6 @@ import {
 } from '../../lib/studentNotifications';
 import type { TrialApplicationItem } from '../../lib/studentTrialApplications';
 import type { EnrolledClass } from '../../lib/studentEnrollments';
-import { getFallbackUpcomingClasses, shouldUseDemoUpcomingClasses } from '../../lib/studentEnrollments';
 import {
   Bell,
   BookOpen,
@@ -110,11 +109,6 @@ export default function NotificationsPage() {
       };
     }
     setLoading(true);
-    const demoEnrollments =
-      profile?.id && shouldUseDemoUpcomingClasses(profile.id)
-        ? getFallbackUpcomingClasses(profile.id, profile.full_name)
-        : [];
-
     Promise.all([
       api.get<unknown[]>('/student/notifications').catch(() => ({ success: false, data: [] })),
       api
@@ -152,9 +146,6 @@ export default function NotificationsPage() {
         setTrials(trialList);
 
         let classList = Array.isArray(classesRes.data) ? classesRes.data : [];
-        if (classList.length === 0 && demoEnrollments.length > 0) {
-          classList = demoEnrollments;
-        }
         if (profile?.id && classList.length > 0) {
           const scoped = classList.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
           if (scoped.length > 0) classList = scoped;
@@ -174,7 +165,7 @@ export default function NotificationsPage() {
         if (!cancelled) {
           setApiNotifications([]);
           setTrials([]);
-          setEnrollments(demoEnrollments);
+          setEnrollments([]);
           setStudentRequests([]);
         }
       })
