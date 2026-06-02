@@ -9,6 +9,7 @@ import {
 } from '../../lib/adminUserFields';
 import { getAgeFromDateOfBirth } from '../../lib/utils';
 import type { AdminStudentProfile, AdminUserFamily } from '../../lib/adminUserFamily';
+import { isNewStudentProfileId, newStudentProfileTempId } from '../../lib/studentProfilesApi';
 
 export interface ParentEditFormState {
   email: string;
@@ -36,6 +37,8 @@ interface AdminUserEditModalProps {
   studentForms: StudentEditFormState[];
   onParentChange: (next: ParentEditFormState) => void;
   onStudentChange: (index: number, next: StudentEditFormState) => void;
+  onAddStudent?: () => void;
+  onRemoveStudent?: (index: number) => void;
   emailError?: string;
   usernameError?: string;
   inputErrorClass: string;
@@ -68,6 +71,18 @@ export function buildStudentEditForms(students: AdminStudentProfile[]): StudentE
   }));
 }
 
+export function emptyStudentEditForm(): StudentEditFormState {
+  return {
+    id: newStudentProfileTempId(),
+    full_name: '',
+    date_of_birth: '',
+    sex: null,
+    id_card_last4: '',
+    level: '',
+    age_tag: '',
+  };
+}
+
 export default function AdminUserEditModal({
   accountNumber,
   family,
@@ -75,6 +90,8 @@ export default function AdminUserEditModal({
   studentForms,
   onParentChange,
   onStudentChange,
+  onAddStudent,
+  onRemoveStudent,
   emailError,
   usernameError,
   inputErrorClass,
@@ -201,9 +218,20 @@ export default function AdminUserEditModal({
       </section>
 
       <section className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-4 space-y-4">
-        <h3 className="text-sm font-semibold text-emerald-900">
-          {t('admin.users.studentProfilesSection')}
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-emerald-900">
+            {t('admin.users.studentProfilesSection')}
+          </h3>
+          {onAddStudent && (
+            <button
+              type="button"
+              onClick={onAddStudent}
+              className="text-sm font-medium text-primary hover:text-primary-dark"
+            >
+              + {t('admin.users.addStudentProfile')}
+            </button>
+          )}
+        </div>
         {studentForms.length === 0 ? (
           <p className="text-sm text-gray-500">{t('admin.users.noStudentProfiles')}</p>
         ) : (
@@ -212,12 +240,28 @@ export default function AdminUserEditModal({
               key={student.id}
               className="rounded-lg border border-gray-200 bg-white p-4 space-y-3"
             >
-              <p className="text-xs font-medium text-gray-500">
-                {t('admin.users.editStudentLabel', {
-                  index: index + 1,
-                  defaultValue: '學員 {{index}}',
-                })}
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-medium text-gray-500">
+                  {t('admin.users.editStudentLabel', {
+                    index: index + 1,
+                    defaultValue: '學員 {{index}}',
+                  })}
+                  {isNewStudentProfileId(student.id) && (
+                    <span className="ml-2 text-primary">
+                      ({t('admin.users.newStudentProfile')})
+                    </span>
+                  )}
+                </p>
+                {onRemoveStudent && isNewStudentProfileId(student.id) && (
+                  <button
+                    type="button"
+                    onClick={() => onRemoveStudent(index)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    {t('common.delete')}
+                  </button>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {t('admin.users.colStudentName')}

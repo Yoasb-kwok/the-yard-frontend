@@ -8,6 +8,7 @@ import {
   getLessonsForScope,
   type EnrollmentScope,
 } from '../../lib/classEnrollmentTokens';
+import { getAdminUserTokenBalance } from '../../lib/adminUserTokens';
 import { formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { ClipboardList, AlertCircle, Coins, Loader2, Mail, Package, Pencil, RefreshCw, X } from 'lucide-react';
 
@@ -47,18 +48,11 @@ function parseOptionalTokenCount(value: unknown): number | null {
 type UserTokenSnapshot = { total: number; assigned: number; unassigned: number };
 
 function getUserTokenSnapshot(raw: Record<string, unknown>): UserTokenSnapshot {
-  const tokens = Array.isArray(raw.user_tokens) ? raw.user_tokens : [];
-  let total = 0;
-  for (const t of tokens) {
-    const row = t as Record<string, unknown>;
-    total += Number(row.remaining_tokens ?? row.balance ?? 0);
-  }
-  const assignedRaw = Number(raw.assigned_tokens ?? raw.assigned_token_count ?? 0);
-  const assigned = Number.isFinite(assignedRaw) && assignedRaw > 0 ? assignedRaw : 0;
+  const balance = getAdminUserTokenBalance(raw);
   return {
-    total: Math.max(0, total),
-    assigned,
-    unassigned: Math.max(0, total - assigned),
+    total: balance.purchased,
+    assigned: balance.assigned,
+    unassigned: balance.remaining,
   };
 }
 

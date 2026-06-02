@@ -41,6 +41,7 @@ export default function DashboardPage() {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyAddForm());
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const [addMemberSaving, setAddMemberSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [parentForm, setParentForm] = useState({
@@ -347,7 +348,7 @@ export default function DashboardPage() {
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-4 shadow-xl sm:p-6">
             <h3 className="mb-4 text-lg font-semibold text-gray-900">{t('profile.addFamilyMember')}</h3>
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 setAddMemberError(null);
                 if (!addForm.full_name.trim()) return;
@@ -355,22 +356,30 @@ export default function DashboardPage() {
                   setAddMemberError(t('common.usernameNoSpaces'));
                   return;
                 }
-                addProfile({
-                  full_name: addForm.full_name.trim(),
-                  nick_name: addForm.nick_name || null,
-                  date_of_birth: addForm.date_of_birth || null,
-                  sex: addForm.sex,
-                  parents_name: addForm.parents_name || null,
-                  contact_number: addForm.contact_number || null,
-                  residential_district: addForm.residential_district || null,
-                  has_joined_courses: addForm.has_joined_courses,
-                  level: addForm.level,
-                });
-                setAddMemberOpen(false);
-                setAddForm(emptyAddForm());
-                setAddMemberError(null);
-                setSuccessMessage(t('profile.memberAdded'));
-                setTimeout(() => setSuccessMessage(null), 3000);
+                setAddMemberSaving(true);
+                try {
+                  await addProfile({
+                    full_name: addForm.full_name.trim(),
+                    nick_name: addForm.nick_name || null,
+                    date_of_birth: addForm.date_of_birth || null,
+                    sex: addForm.sex,
+                    parents_name: addForm.parents_name || null,
+                    contact_number: addForm.contact_number || null,
+                    residential_district: addForm.residential_district || null,
+                    has_joined_courses: addForm.has_joined_courses,
+                    level: addForm.level,
+                  });
+                  setAddMemberOpen(false);
+                  setAddForm(emptyAddForm());
+                  setSuccessMessage(t('profile.memberAdded'));
+                  setTimeout(() => setSuccessMessage(null), 3000);
+                } catch (err) {
+                  setAddMemberError(
+                    err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗'),
+                  );
+                } finally {
+                  setAddMemberSaving(false);
+                }
               }}
               className="space-y-4"
             >
@@ -494,8 +503,12 @@ export default function DashboardPage() {
                 >
                   {t('common.cancel')}
                 </button>
-                <button type="submit" className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark">
-                  {t('common.create')}
+                <button
+                  type="submit"
+                  disabled={addMemberSaving}
+                  className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark disabled:opacity-50"
+                >
+                  {addMemberSaving ? t('common.loading') : t('common.create')}
                 </button>
               </div>
             </form>

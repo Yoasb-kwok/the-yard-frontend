@@ -19,9 +19,11 @@ import { formatResidentialDistrictLabel } from '../../lib/adminUserFields';
 import AdminUserEditModal, {
   buildParentEditForm,
   buildStudentEditForms,
+  emptyStudentEditForm,
   type ParentEditFormState,
   type StudentEditFormState,
 } from '../../components/admin/AdminUserEditModal';
+import { buildAdminStudentProfilePatchRow } from '../../lib/studentProfilesApi';
 import AdminUserStudentsTable from '../../components/admin/AdminUserStudentsTable';
 import { readHasTrialFromApi, userHasTrialApplication } from '../../lib/adminUserTrials';
 import DateSelect from '../../components/DateSelect';
@@ -165,8 +167,9 @@ export default function UsersPage() {
             : raw.hkid_last4 != null
               ? String(raw.hkid_last4)
               : null;
+    const family = buildAdminUserFamily(raw, raw.profiles ?? raw.student_profiles ?? raw.studentProfiles);
     const studentCountRaw = raw.student_profile_count ?? raw.studentProfileCount;
-    const student_profile_count =
+    const studentProfileCountFromApi =
       typeof studentCountRaw === 'number'
         ? studentCountRaw
         : Array.isArray(raw.profiles)
@@ -175,7 +178,8 @@ export default function UsersPage() {
               const kind = String(row.profile_kind ?? row.profileKind ?? 'student').toLowerCase();
               return kind !== 'parent';
             }).length
-          : 1;
+          : 0;
+    const student_profile_count = Math.max(studentProfileCountFromApi, family.students.length, 1);
 
     return {
       id: String(raw.id),
@@ -189,8 +193,8 @@ export default function UsersPage() {
       created_at: (raw.created_at as string) ?? new Date().toISOString(),
       user_tokens: normalizeUserTokens(raw.user_tokens),
       has_trial_application: readHasTrialFromApi(raw),
-      student_profile_count: Math.max(student_profile_count, 1),
-      family: buildAdminUserFamily(raw, raw.profiles ?? raw.student_profiles ?? raw.studentProfiles),
+      student_profile_count,
+      family,
     };
   }
 
@@ -306,17 +310,20 @@ export default function UsersPage() {
         contact_number: parentEditForm.contact_number.trim() || null,
         residential_district: parentEditForm.residential_district.trim() || null,
         role: 'student',
-        student_profiles: studentEditForms.map((s) => ({
-          id: s.id,
-          full_name: s.full_name.trim(),
-          date_of_birth: s.date_of_birth.trim() || null,
-          sex: s.sex,
-          id_card_last4: s.id_card_last4.trim() || null,
-          id_last_four: s.id_card_last4.trim() || null,
-          level: s.level || null,
-          age_tag: s.age_tag || null,
-          age_group: s.age_tag || null,
-        })),
+        student_profiles: studentEditForms.map((s) =>
+          buildAdminStudentProfilePatchRow({
+            id: s.id,
+            full_name: s.full_name.trim(),
+            date_of_birth: s.date_of_birth.trim() || null,
+            sex: s.sex,
+            id_card_last4: s.id_card_last4.trim() || null,
+            level: s.level || null,
+            age_tag: s.age_tag || null,
+            parents_name: parentEditForm.parents_name.trim() || null,
+            contact_number: parentEditForm.contact_number.trim() || null,
+            residential_district: parentEditForm.residential_district.trim() || null,
+          }),
+        ),
       });
 
       if (response.success) {
@@ -920,6 +927,12 @@ export default function UsersPage() {
                   setStudentEditForms((prev) =>
                     prev.map((row, i) => (i === index ? next : row)),
                   )
+                }
+                onAddStudent={() =>
+                  setStudentEditForms((prev) => [...prev, emptyStudentEditForm()])
+                }
+                onRemoveStudent={(index) =>
+                  setStudentEditForms((prev) => prev.filter((_, i) => i !== index))
                 }
                 emailError={editDuplicateErrors.email}
                 usernameError={editDuplicateErrors.username}

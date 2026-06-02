@@ -937,6 +937,8 @@
       "actions": "操作",
       "editUser": "编辑用户",
       "editStudentLabel": "学员 {{index}}",
+      "addStudentProfile": "新增学员",
+      "newStudentProfile": "新增",
       "studentNameRequired": "请填写每位学员的姓名",
       "fullName": "全名",
       "saveChanges": "保存变更",

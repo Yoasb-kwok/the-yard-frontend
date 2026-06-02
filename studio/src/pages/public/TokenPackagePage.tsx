@@ -91,9 +91,8 @@ export default function TokenPackagePage() {
     discount_type: 'percentage' | 'fixed';
     discount_value: number;
   } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash' | 'alipay' | 'wechatpay' | 'payme'>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'cash'>('credit_card');
   const [submitting, setSubmitting] = useState(false);
-  const [fpsIdOrPhone, setFpsIdOrPhone] = useState('');
   const [packagesSource, setPackagesSource] = useState<TokenPackage[]>([]);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsState, setTermsState] = useState<{ title: string; html: string; legacy: string; mode: TermsMode }>({
@@ -298,10 +297,6 @@ export default function TokenPackagePage() {
       return;
     }
 
-    if (paymentMethod === 'fps' && !fpsIdOrPhone.trim()) {
-      alert(t('shop.fpsIdOrPhone') + ' ' + (t('common.error') || '請填寫'));
-      return;
-    }
     setSubmitting(true);
 
     // Simulate API call delay
@@ -312,7 +307,6 @@ export default function TokenPackagePage() {
     setAppliedCoupon(null);
     setCouponCode('');
     setReferralCode('');
-    setFpsIdOrPhone('');
     navigate('/dashboard');
     setSubmitting(false);
   }
@@ -567,10 +561,6 @@ export default function TokenPackagePage() {
                         className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                       >
                         <option value="credit_card">{t('shop.creditCard')}</option>
-                        <option value="fps">{t('shop.fps')}</option>
-                        <option value="alipay">{t('shop.alipay')}</option>
-                        <option value="wechatpay">{t('shop.wechatpay')}</option>
-                        <option value="payme">{t('shop.payme')}</option>
                         <option value="cash">{t('shop.cash')}</option>
                       </select>
                     </div>
@@ -580,36 +570,6 @@ export default function TokenPackagePage() {
                       <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                         <p className="text-sm text-gray-700">{t('shop.stripeHostedHint')}</p>
                         <p className="text-xs text-gray-500 mt-2">{t('shop.stripeSinglePackageOnly')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'fps' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">{t('shop.fpsIdOrPhone')}</label>
-                          <input
-                            type="text"
-                            placeholder={t('shop.fpsPlaceholder')}
-                            value={fpsIdOrPhone}
-                            onChange={(e) => setFpsIdOrPhone(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                        <p className="text-sm text-gray-600">{t('shop.fpsInstruction')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'alipay' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm text-gray-700">{t('shop.redirectToAlipay')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'wechatpay' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm text-gray-700">{t('shop.redirectToWechat')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'payme' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm text-gray-700">{t('shop.redirectToPayMe')}</p>
                       </div>
                     )}
                     {paymentMethod === 'cash' && (

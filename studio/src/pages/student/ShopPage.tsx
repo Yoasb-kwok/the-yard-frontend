@@ -74,7 +74,7 @@ export default function ShopPage() {
     discount_type: 'percentage' | 'fixed';
     discount_value: number;
   } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash'>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'cash'>('credit_card');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -456,7 +456,6 @@ export default function ShopPage() {
                       className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     >
                       <option value="credit_card">{t('shop.creditCard')}</option>
-                      <option value="fps">{t('shop.fps')}</option>
                       <option value="cash">{t('shop.cash')}</option>
                     </select>
                   </div>
@@ -465,6 +464,11 @@ export default function ShopPage() {
                     <div className="mb-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                       <p className="text-sm text-gray-700">{t('shop.stripeHostedHint')}</p>
                       <p className="text-xs text-gray-500 mt-2">{t('shop.stripeSinglePackageOnly')}</p>
+                    </div>
+                  )}
+                  {paymentMethod === 'cash' && (
+                    <div className="mb-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-sm text-amber-800">{t('shop.payAtVenue')}</p>
                     </div>
                   )}
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { api, ApiError } from '../lib/api';
+import { api, ApiError, type ApiResponse } from '../lib/api';
+import { createStudentProfile, extractProfileFromCreateResponse } from '../lib/studentProfilesApi';
 
 export type CourseLevel = 'entry' | 'intermediate' | 'advanced';
 
@@ -55,12 +56,12 @@ interface AuthContextType {
   activeProfileId: string | null;
   /** Switch active profile (e.g. to another family member). No-op if id not in profiles. */
   switchProfile: (profileId: string) => void;
-  /** Add a new family member (sub-account). Only for student accounts. */
-  addProfile: (data: AddProfileData) => void;
+  /** Add a new family member (sub-account). Persists via POST /profiles when logged in with API. */
+  addProfile: (data: AddProfileData) => Promise<void>;
   /** Update an existing family member (persists via PATCH /profiles/:id or /profiles/me). */
   updateProfile: (profileId: string, data: Partial<AddProfileData>) => Promise<void>;
-  /** Remove a family member. Cannot remove the first profile. */
-  deleteProfile: (profileId: string) => void;
+  /** Remove a family member. Cannot remove the first profile. Persists via DELETE /profiles/:id when logged in with API. */
+  deleteProfile: (profileId: string) => Promise<void>;
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ requirePasswordChange?: boolean } | void>;
@@ -97,9 +98,9 @@ const fallbackAuthContext: AuthContextType = {
   profiles: [],
   activeProfileId: null,
   switchProfile: () => {},
-  addProfile: () => {},
+  addProfile: async () => {},
   updateProfile: async () => {},
-  deleteProfile: () => {},
+  deleteProfile: async () => {},
   session: null,
   loading: false,
   signIn: async () => {},
@@ -261,13 +262,154 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function addProfile(data: AddProfileData) {
+  function mapApiProfile(raw: Record<string, unknown>): Profile {
+    const levelRaw = raw.level;
+    const level =
+      levelRaw === 'entry' || levelRaw === 'intermediate' || levelRaw === 'advanced'
+        ? levelRaw
+        : null;
+    const sexRaw = raw.sex ?? raw.gender;
+    const sex =
+      typeof sexRaw === 'boolean'
+        ? sexRaw
+        : sexRaw === 1 || sexRaw === '1' || sexRaw === 'true' || sexRaw === 'male'
+          ? true
+          : sexRaw === 0 || sexRaw === '0' || sexRaw === 'false' || sexRaw === 'female'
+            ? false
+            : null;
+    const contact =
+      raw.contact_number != null
+        ? String(raw.contact_number)
+        : raw.contactNumber != null
+          ? String(raw.contactNumber)
+          : raw.mobile != null
+            ? String(raw.mobile)
+            : null;
+    return {
+      id: String(raw.id ?? ''),
+      full_name: String(raw.full_name ?? raw.fullName ?? raw.name ?? '').trim(),
+      nick_name:
+        raw.nick_name != null
+          ? String(raw.nick_name)
+          : raw.nickName != null
+            ? String(raw.nickName)
+            : null,
+      date_of_birth:
+        raw.date_of_birth != null
+          ? String(raw.date_of_birth).slice(0, 10)
+          : raw.dateOfBirth != null
+            ? String(raw.dateOfBirth).slice(0, 10)
+            : null,
+      sex,
+      parents_name:
+        raw.parents_name != null
+          ? String(raw.parents_name)
+          : raw.parentsName != null
+            ? String(raw.parentsName)
+            : null,
+      contact_number: contact,
+      residential_district:
+        raw.residential_district != null
+          ? String(raw.residential_district)
+          : raw.residentialDistrict != null
+            ? String(raw.residentialDistrict)
+            : null,
+      has_joined_courses:
+        raw.has_joined_courses === true ||
+        raw.has_joined_courses === 1 ||
+        raw.hasJoinedCourses === true ||
+        raw.hasJoinedCourses === 1
+          ? true
+          : raw.has_joined_courses === false ||
+              raw.has_joined_courses === 0 ||
+              raw.hasJoinedCourses === false ||
+              raw.hasJoinedCourses === 0
+            ? false
+            : null,
+      student_id:
+        raw.student_id != null
+          ? String(raw.student_id)
+          : raw.studentId != null
+            ? String(raw.studentId)
+            : null,
+      role: raw.role === 'admin' ? 'admin' : 'student',
+      mobile: contact,
+      id_first_four:
+        raw.id_first_four != null
+          ? String(raw.id_first_four)
+          : raw.idFirstFour != null
+            ? String(raw.idFirstFour)
+            : null,
+      level,
+    };
+  }
+
+  function extractCreatedProfile(res: ApiResponse<unknown>): Profile | null {
+    const payload = extractProfileFromCreateResponse(res);
+    if (payload) {
+      const mapped = mapApiProfile(payload);
+      if (mapped.id && mapped.full_name) return mapped;
+    }
+    return null;
+  }
+
+  async function addProfile(data: AddProfileData) {
     if (!profiles?.length || !user || !session) return;
+    const name = data.full_name.trim();
+    if (!name) throw new Error('Full name is required');
+
     const main = profiles[0];
+    const token = localStorage.getItem('token');
+    const keepActive = activeProfileId ?? main.id;
+
+    if (token && !token.startsWith('sheet_')) {
+      const res = await createStudentProfile(
+        {
+          full_name: name,
+          nick_name: data.nick_name,
+          date_of_birth: data.date_of_birth,
+          sex: data.sex,
+          parents_name: data.parents_name,
+          contact_number: data.contact_number,
+          residential_district: data.residential_district,
+          has_joined_courses: data.has_joined_courses,
+          level: data.level,
+        },
+        user.id,
+        {
+          parents_name: main.parents_name,
+          contact_number: main.contact_number ?? main.mobile,
+          residential_district: main.residential_district,
+        },
+      );
+      if (res.success === false) {
+        throw new Error(res.msg || res.message || 'Failed to add family member');
+      }
+      try {
+        await refreshMePreservingActive(keepActive);
+        return;
+      } catch (_) {
+        const created = extractCreatedProfile(res);
+        if (created) {
+          const next = [...profiles, created];
+          setProfiles(next);
+          persistSession({
+            user,
+            profiles: next,
+            activeProfileId: keepActive,
+            session,
+          });
+          return;
+        }
+        throw new Error('Family member created but profile list could not be refreshed');
+      }
+    }
+
+    // Offline / sheet demo token: local-only fallback
     const contact = data.contact_number ?? main.contact_number ?? main.mobile;
     const newProfile: Profile = {
       id: `${main.id}-sub-${Date.now()}`,
-      full_name: data.full_name.trim(),
+      full_name: name,
       nick_name: data.nick_name ?? null,
       date_of_birth: data.date_of_birth ?? null,
       sex: data.sex ?? null,
@@ -286,7 +428,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     persistSession({
       user,
       profiles: next,
-      activeProfileId: activeProfileId ?? main.id,
+      activeProfileId: keepActive,
       session,
     });
   }
@@ -369,10 +511,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  function deleteProfile(profileId: string) {
+  async function deleteProfile(profileId: string) {
     if (!profiles?.length || !user || !session) return;
     const mainId = profiles[0]?.id;
     if (profileId === mainId) return; // cannot delete first profile
+
+    const token = localStorage.getItem('token');
+    const nextActiveGuess = activeProfileId === profileId ? (profiles[1]?.id ?? mainId) : activeProfileId;
+
+    if (token && !token.startsWith('sheet_')) {
+      const res = await api.delete(`profiles/${profileId}`);
+      if (res.success === false) {
+        throw new Error(res.msg || res.message || 'Failed to remove family member');
+      }
+      try {
+        await refreshMePreservingActive(nextActiveGuess);
+        return;
+      } catch (_) {
+        // fall through to local removal
+      }
+    }
+
     const next = profiles.filter((p) => p.id !== profileId);
     const nextActive = activeProfileId === profileId ? (next[0]?.id ?? mainId) : activeProfileId;
     setProfiles(next);

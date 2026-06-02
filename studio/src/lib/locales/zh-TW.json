@@ -946,6 +946,8 @@
       "actions": "操作",
       "editUser": "編輯用戶",
       "editStudentLabel": "學員 {{index}}",
+      "addStudentProfile": "新增學員",
+      "newStudentProfile": "新增",
       "studentNameRequired": "請填寫每位學員的姓名",
       "fullName": "全名",
       "saveChanges": "儲存變更",

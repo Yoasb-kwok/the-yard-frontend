@@ -125,5 +125,11 @@ export function readProfilesArray(user: Record<string, unknown>, rawProfiles?: u
   if (Array.isArray(user.profiles)) return user.profiles as unknown[];
   if (Array.isArray(user.student_profiles)) return user.student_profiles as unknown[];
   if (Array.isArray(user.studentProfiles)) return user.studentProfiles as unknown[];
+  if (Array.isArray(user.family_members)) return user.family_members as unknown[];
+  if (Array.isArray(user.familyMembers)) return user.familyMembers as unknown[];
+  if (Array.isArray(user.members)) return user.members as unknown[];
+  if (Array.isArray(user.children)) return user.children as unknown[];
+  if (Array.isArray(user.child_profiles)) return user.child_profiles as unknown[];
+  if (Array.isArray(user.childProfiles)) return user.childProfiles as unknown[];
   return [];
 }

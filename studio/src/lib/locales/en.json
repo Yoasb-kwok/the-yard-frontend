@@ -945,6 +945,8 @@
       "actions": "Actions",
       "editUser": "Edit User",
       "editStudentLabel": "Student {{index}}",
+      "addStudentProfile": "Add student",
+      "newStudentProfile": "New",
       "studentNameRequired": "Please enter a name for each student profile.",
       "fullName": "Full Name",
       "saveChanges": "Save Changes",

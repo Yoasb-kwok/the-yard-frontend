@@ -5,6 +5,7 @@ import Layout from '../../components/Layout';
 import { formatDate, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
 import { postAdminAssignTokensToClass } from '../../lib/adminTokenAssignment';
+import { getAdminUserTokenBalance } from '../../lib/adminUserTokens';
 import {
   buildEnrollmentConfirmedEmailExtras,
   buildEnrollmentLessonEmailRows,
@@ -54,33 +55,34 @@ interface User {
   full_name: string;
   email: string;
   mobile: string | null;
-  total_tokens: number;
+  remaining_tokens: number;
   assigned_tokens: number;
+  purchased_tokens: number;
   expiry_date: string;
 }
 
-function mapAdminUserRow(raw: Record<string, unknown>): User {
+function mapAdminUserRow(raw: Record<string, unknown>, enrollmentRows?: unknown): User {
+  const balance = getAdminUserTokenBalance(raw, enrollmentRows);
   const tokens = Array.isArray(raw.user_tokens) ? raw.user_tokens : [];
-  let total_tokens = 0;
   let earliestExpiry = '';
   for (const t of tokens) {
     const row = t as Record<string, unknown>;
-    total_tokens += Number(row.remaining_tokens ?? row.balance ?? 0);
-    const exp = typeof row.expiry_date === 'string'
-      ? row.expiry_date.slice(0, 10)
-      : typeof row.expires_at === 'string'
-        ? row.expires_at.slice(0, 10)
-        : '';
+    const exp =
+      typeof row.expiry_date === 'string'
+        ? row.expiry_date.slice(0, 10)
+        : typeof row.expires_at === 'string'
+          ? row.expires_at.slice(0, 10)
+          : '';
     if (exp && (!earliestExpiry || exp < earliestExpiry)) earliestExpiry = exp;
   }
-  const assigned_tokens = Number(raw.assigned_tokens ?? raw.assigned_token_count ?? 0);
   return {
     id: String(raw.id ?? ''),
     full_name: String(raw.full_name ?? raw.name ?? ''),
     email: String(raw.email ?? '').trim(),
     mobile: raw.mobile != null ? String(raw.mobile) : null,
-    total_tokens,
-    assigned_tokens: Number.isFinite(assigned_tokens) ? assigned_tokens : 0,
+    remaining_tokens: balance.remaining,
+    assigned_tokens: balance.assigned,
+    purchased_tokens: balance.purchased,
     expiry_date: earliestExpiry,
   };
 }
@@ -153,7 +155,14 @@ export default function TokenAssignmentPage() {
         setEnrollments([]);
         return;
       }
-      setUser(mapAdminUserRow(raw));
+      const enrollRows = enrollRes.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
+      const mappedEnrollments = enrollRows
+        .map((row) => mapEnrollmentRow(row as Record<string, unknown>))
+        .filter((e): e is Enrollment => e != null);
+      setEnrollments(mappedEnrollments);
+
+      const mappedUser = mapAdminUserRow(raw, enrollRows);
+      setUser(mappedUser);
 
       if (classesRes.success && Array.isArray(classesRes.data)) {
         const mapped: Class[] = classesRes.data.map((cls: any) => ({
@@ -174,12 +183,6 @@ export default function TokenAssignmentPage() {
         setClasses([]);
       }
 
-      const enrollRows = enrollRes.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
-      setEnrollments(
-        enrollRows
-          .map((row) => mapEnrollmentRow(row as Record<string, unknown>))
-          .filter((e): e is Enrollment => e != null),
-      );
     } catch (err) {
       console.error('TokenAssignment loadData:', err);
       setUser(null);
@@ -222,7 +225,7 @@ export default function TokenAssignmentPage() {
 
   const getUnassignedTokens = (): number => {
     if (!user) return 0;
-    return user.total_tokens - user.assigned_tokens;
+    return user.remaining_tokens;
   };
 
   const isClassAssigned = (classId: string): boolean => {
@@ -245,11 +248,12 @@ export default function TokenAssignmentPage() {
   async function assignTokenToClass(classId: string, count: number): Promise<boolean> {
     if (!user || !userId || count < 1) return false;
 
-    if (user.assigned_tokens + count > user.total_tokens) {
+    const available = getUnassignedTokens();
+    if (count > available) {
       alert(t('admin.tokenAssignment.assignExceedsTotal', {
         count,
         assigned: user.assigned_tokens,
-        total: user.total_tokens,
+        total: available,
       }));
       return false;
     }
@@ -642,7 +646,7 @@ export default function TokenAssignmentPage() {
                   <Package className="h-5 w-5 text-primary" />
                   <span className="font-medium text-gray-900">{t('admin.tokenAssignment.totalTokens')}</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{user.total_tokens}</div>
+                <div className="text-2xl font-bold text-gray-900">{user.purchased_tokens}</div>
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -663,7 +667,7 @@ export default function TokenAssignmentPage() {
                 <span className="text-2xl font-bold text-green-600">{unassignedTokens}</span>
               </div>
               <div className="mt-2 text-sm text-gray-600">
-                {t('admin.tokenAssignment.assignedTokens')}: {user.assigned_tokens} / {user.total_tokens}
+                {t('admin.tokenAssignment.assignedTokens')}: {user.assigned_tokens} / {user.purchased_tokens}
               </div>
             </div>
           </div>

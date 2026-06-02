@@ -75,8 +75,15 @@
 }
 ```
 
-- `student_profiles`：依 `id` 更新對應 profile；後端需驗證 profile 屬於該 `user_id`。
+- `student_profiles`：有 `id` 則更新該 profile；**無 `id` 但有 `full_name` 則新增學員子帳戶**（後端自動 INSERT）。
 - 更新家長 `residential_district` 時，建議同步寫入 `profile_kind=parent` 的 profile（若有）。
+
+### 新增學員子帳戶（另可選）
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| `POST` | `/api/admin/users/:id/student-profiles` | Admin 專用；`user_id` 在 URL，body 同 `student_profiles` 單筆欄位 |
+| `POST` | `/api/profiles` | 需帶 `user_id` + `full_name`（admin token）；家長前台新增家庭成員亦用此端點 |
 
 ### Response
 
