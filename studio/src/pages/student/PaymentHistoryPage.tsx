@@ -5,7 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { buildReceiptHtml, downloadReceiptHtml } from '../../lib/receiptHtml';
 import { api } from '../../lib/api';
-import { Receipt, CheckCircle, Clock, XCircle, Download, Mail } from 'lucide-react';
+import { getAppPublicOrigin } from '../../lib/appOrigin';
+import { Receipt, CheckCircle, Clock, XCircle, Download, Mail, Loader2 } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Payment {
@@ -15,6 +16,7 @@ interface Payment {
   status: 'completed' | 'pending' | 'failed';
   payment_method: string;
   description: string;
+  package_name?: string;
   order_id?: string;
   package_id?: string; // Package ID for translation
   token_count?: number; // Token count for display
@@ -41,6 +43,11 @@ function normalizePayments(payload: any): Payment[] {
         status: normalizeOrderStatus(String(o.payment_status ?? o.status ?? 'pending')),
         payment_method: String(o.payment_method ?? 'credit_card'),
         description: String(o.description ?? ''),
+        package_name: o.package_name
+          ? String(o.package_name)
+          : o.package?.name
+          ? String(o.package.name)
+          : undefined,
         order_id: o.order_id ? String(o.order_id) : undefined,
         package_id: o.package_id != null ? String(o.package_id) : undefined,
         token_count: o.token_count != null ? Number(o.token_count) : undefined,
@@ -66,6 +73,7 @@ export default function PaymentHistoryPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
+  const [sendingReceiptId, setSendingReceiptId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   async function loadOrdersFromApi(profileId?: string): Promise<Payment[]> {
@@ -150,9 +158,47 @@ export default function PaymentHistoryPage() {
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
-  const handleReceiptEmail = () => {
-    setReceiptMessage(t('paymentHistory.receiptSent'));
-    setTimeout(() => setReceiptMessage(null), 3000);
+  const handleReceiptEmail = async (payment: Payment) => {
+    if (sendingReceiptId) return;
+    const orderId = payment.id;
+    const appOrigin = getAppPublicOrigin();
+    const endpoints = [
+      `/orders/${encodeURIComponent(orderId)}/send-receipt-email`,
+      `/student/orders/${encodeURIComponent(orderId)}/send-receipt-email`,
+      `/orders/${encodeURIComponent(orderId)}/send-receipt`,
+    ];
+
+    setSendingReceiptId(payment.id);
+    setReceiptMessage(null);
+    try {
+      let lastError: unknown = null;
+      for (const endpoint of endpoints) {
+        try {
+          const res = await api.post(endpoint, {
+            order_id: payment.order_id ?? payment.id,
+            receipt_delivery: 'attachment',
+            receipt_format: 'pdf',
+            return_origin: appOrigin,
+            app_public_url: appOrigin,
+            receipt_portal_url: `${appOrigin}/payment-history`,
+          });
+          if (res.success) {
+            setReceiptMessage(t('paymentHistory.receiptSent'));
+            setTimeout(() => setReceiptMessage(null), 3000);
+            return;
+          }
+          lastError = new Error(res.msg || 'Request failed');
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      throw lastError ?? new Error(t('common.error'));
+    } catch {
+      setReceiptMessage(t('paymentHistory.receiptSendFailed'));
+      setTimeout(() => setReceiptMessage(null), 4000);
+    } finally {
+      setSendingReceiptId(null);
+    }
   };
 
   useEffect(() => {
@@ -229,13 +275,17 @@ export default function PaymentHistoryPage() {
   };
 
   const getPackageDescription = (payment: Payment) => {
+    const fallbackName =
+      payment.package_name?.trim() ||
+      payment.description.split(' - ')[0]?.trim() ||
+      payment.description.trim();
     if (payment.package_id && payment.token_count !== undefined) {
       const packageNameKey = `tokenPackage.packages.${payment.package_id}.name`;
-      const packageName = t(packageNameKey, { defaultValue: payment.description.split(' - ')[0] });
+      const packageName = t(packageNameKey, { defaultValue: fallbackName });
       const tokensLabel = t('tokenPackage.tokens', { defaultValue: 'tokens' });
       return `${packageName} - ${payment.token_count} ${tokensLabel}`;
     }
-    return payment.description;
+    return fallbackName;
   };
 
   if (loading) {
@@ -264,7 +314,13 @@ export default function PaymentHistoryPage() {
         </div>
 
         {receiptMessage && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+          <div
+            className={`px-4 py-3 rounded-md border ${
+              receiptMessage === t('paymentHistory.receiptSent')
+                ? 'bg-green-50 border-green-200 text-green-700'
+                : 'bg-red-50 border-red-200 text-red-700'
+            }`}
+          >
             {receiptMessage}
           </div>
         )}
@@ -341,10 +397,15 @@ export default function PaymentHistoryPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleReceiptEmail()}
+                        onClick={() => handleReceiptEmail(payment)}
+                        disabled={sendingReceiptId === payment.id}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
                       >
-                        <Mail className="h-4 w-4" />
+                        {sendingReceiptId === payment.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4" />
+                        )}
                         {t('paymentHistory.emailReceipt')}
                       </button>
                     </div>
@@ -437,10 +498,15 @@ export default function PaymentHistoryPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleReceiptEmail()}
+                              onClick={() => handleReceiptEmail(payment)}
+                              disabled={sendingReceiptId === payment.id}
                               className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
                             >
-                              <Mail className="h-4 w-4" />
+                              {sendingReceiptId === payment.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Mail className="h-4 w-4" />
+                              )}
                               {t('paymentHistory.emailReceipt')}
                             </button>
                           </div>

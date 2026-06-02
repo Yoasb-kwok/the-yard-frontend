@@ -4,9 +4,10 @@ import { api } from './api';
 export interface AdminPendingCounts {
   pendingApplications: number;
   pendingTrials: number;
+  pendingEnrollmentRequests: number;
 }
 
-const ZERO_COUNTS: AdminPendingCounts = { pendingApplications: 0, pendingTrials: 0 };
+const ZERO_COUNTS: AdminPendingCounts = { pendingApplications: 0, pendingTrials: 0, pendingEnrollmentRequests: 0 };
 let lastKnownCounts: AdminPendingCounts = ZERO_COUNTS;
 
 /**
@@ -25,9 +26,19 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
       .get<AdminPendingCounts>('admin/pending-counts')
       .then((res: unknown) => {
         const data = (res as { data?: AdminPendingCounts })?.data;
-        if (data && typeof data.pendingApplications === 'number' && typeof data.pendingTrials === 'number') {
-          lastKnownCounts = data;
-          setCounts(data);
+        if (
+          data &&
+          typeof data.pendingApplications === 'number' &&
+          typeof data.pendingTrials === 'number'
+        ) {
+          const next: AdminPendingCounts = {
+            pendingApplications: data.pendingApplications,
+            pendingTrials: data.pendingTrials,
+            pendingEnrollmentRequests:
+              typeof data.pendingEnrollmentRequests === 'number' ? data.pendingEnrollmentRequests : 0,
+          };
+          lastKnownCounts = next;
+          setCounts(next);
         }
       })
       .catch(() => {

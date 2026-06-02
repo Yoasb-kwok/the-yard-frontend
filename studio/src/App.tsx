@@ -39,6 +39,7 @@ import AdminClassHealthPage from './pages/admin/AdminClassHealthPage';
 import AdminInstructorPerformancePage from './pages/admin/AdminInstructorPerformancePage';
 import AdminAttendanceAnomalyPage from './pages/admin/AdminAttendanceAnomalyPage';
 import PendingApplicationsPage from './pages/admin/PendingApplicationsPage';
+import PendingEnrollmentRequestsPage from './pages/admin/PendingEnrollmentRequestsPage';
 import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
 import ClassAttendancePage from './pages/admin/ClassAttendancePage';
@@ -217,6 +218,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <PendingApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/enrollment-requests"
+            element={
+              <ProtectedRoute requireAdmin>
+                <PendingEnrollmentRequestsPage />
               </ProtectedRoute>
             }
           />

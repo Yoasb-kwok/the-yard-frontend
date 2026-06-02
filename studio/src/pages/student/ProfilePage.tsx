@@ -140,12 +140,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {isStudent && profiles.length === 1 && (
-          <div className="bg-primary/5 border border-primary/20 rounded-lg px-4 py-3 text-sm text-gray-700">
-            {t('profile.addMoreChildrenHint')}
-          </div>
-        )}
-
         {saveMessage && (
           <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
             {saveMessage}

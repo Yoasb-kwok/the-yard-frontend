@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, Package, X, Printer } from 'lucide-react';
+import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, X, Printer } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Purchase {
@@ -455,19 +455,11 @@ export default function UserPurchaseHistoryDetailPage() {
                               <>
                                 <button
                                   onClick={() => setSelectedPurchase(purchase)}
-                                  className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors flex items-center gap-2 text-sm font-medium"
+                                  className="p-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
                                   title={t('admin.purchaseHistory.receipt')}
+                                  aria-label={t('admin.purchaseHistory.receipt')}
                                 >
                                   <Receipt className="h-4 w-4" />
-                                  <span className="hidden lg:inline">{t('admin.purchaseHistory.receipt')}</span>
-                                </button>
-                                <button
-                                  onClick={() => navigate(`/admin/users/${userId}/assign-tokens`)}
-                                  className="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2 text-sm font-medium"
-                                  title={t('admin.purchaseHistory.assignTokens')}
-                                >
-                                  <Package className="h-4 w-4" />
-                                  <span className="hidden lg:inline">{t('admin.purchaseHistory.assignTokens')}</span>
                                 </button>
                               </>
                             )}
@@ -521,20 +513,14 @@ export default function UserPurchaseHistoryDetailPage() {
                         <span className="text-gray-900">{formatDateTime(purchase.created_at, getLocale())}</span>
                       </div>
                       {purchase.payment_status === 'paid' && (
-                        <div className="pt-2 border-t space-y-2">
+                        <div className="flex items-center gap-2 pt-2 border-t">
                           <button
                             onClick={() => setSelectedPurchase(purchase)}
-                            className="w-full px-4 py-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                            className="p-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                            title={t('admin.purchaseHistory.receipt')}
+                            aria-label={t('admin.purchaseHistory.receipt')}
                           >
                             <Receipt className="h-4 w-4" />
-                            {t('admin.purchaseHistory.receipt')}
-                          </button>
-                          <button
-                            onClick={() => navigate(`/admin/users/${userId}/assign-tokens`)}
-                            className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark flex items-center justify-center gap-2"
-                          >
-                            <Package className="h-4 w-4" />
-                            {t('admin.purchaseHistory.assignTokens')}
                           </button>
                         </div>
                       )}

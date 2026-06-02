@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Coins, Loader2, X } from 'lucide-react';
+import { Coins, AlertCircle, Loader2, X } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import {
   getEnrollmentCostLabel,
@@ -40,16 +40,15 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [scope, setScope] = useState<EnrollmentScope>('single_lesson');
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
 
-  const totalLessons = lesson?.total_lessons ?? 8;
-  const canEnrollFullCourse = totalLessons > 1;
+  const totalLessons = Math.max(1, Number(lesson?.total_lessons) || 8);
+  const enrollmentScope: EnrollmentScope = totalLessons > 1 ? 'full_course' : 'single_lesson';
 
   const lessonCount = useMemo(
-    () => getLessonsForScope(scope, totalLessons),
-    [scope, totalLessons],
+    () => getLessonsForScope(enrollmentScope, totalLessons),
+    [enrollmentScope, totalLessons],
   );
 
   const tokenCost = useMemo(
@@ -62,7 +61,9 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
   );
 
   const balance = useMemo(() => getTotalRemainingTokens(tokens), [tokens]);
-  const sufficient = hasEnoughTokens(tokens, tokenCost);
+  const hasPurchasedTokens = balance > 0;
+  const sufficientTokens = useMemo(() => hasEnoughTokens(tokens, tokenCost), [tokens, tokenCost]);
+  const tokenShortfall = Math.max(0, tokenCost - balance);
 
   const lessonSlots = useMemo(() => {
     if (!lesson) return [];
@@ -76,7 +77,6 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
 
   useEffect(() => {
     if (!isOpen) {
-      setScope('single_lesson');
       setError(null);
       return;
     }
@@ -106,22 +106,21 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
 
   async function handleConfirm() {
     if (!lesson || submitting || lessonEnded) return;
-    if (!sufficient) {
-      setError(t('enrollment.insufficientTokens', '代幣不足，無法報名。請先購買套票。'));
+    if (!hasPurchasedTokens) {
+      setError(t('enrollment.noTokensPurchased', '請先購買套票後再報名課程。'));
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const preferredToken = tokens.find((tok) => tok.remaining_tokens >= tokenCost) ?? tokens[0];
-      await api.post('/class-enrollments', {
+      await api.post('/class-enrollment-requests', {
         class_id: lesson.id,
         classId: lesson.id,
-        user_token_id: preferredToken?.id,
         lesson_count: lessonCount,
-        enrollment_scope: scope,
+        enrollment_scope: enrollmentScope,
+        tokens_required: tokenCost,
       });
-      window.alert(t('enrollment.success', '報名成功，已扣除代幣。'));
+      window.alert(t('enrollment.successPending', '報名申請已提交，管理員確認後將為您分配代幣。'));
       onEnrolled?.();
       onClose();
     } catch (err) {
@@ -188,51 +187,39 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
           </p>
         )}
 
-        {canEnrollFullCourse && !lessonEnded && (
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium text-gray-700">{t('enrollment.scopeLabel', '報名範圍')}</legend>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="radio"
-                name="enroll-scope"
-                checked={scope === 'single_lesson'}
-                onChange={() => setScope('single_lesson')}
-              />
-              {t('enrollment.scopeSingle', '只報名此堂（1 個代幣）')}
-            </label>
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="radio"
-                name="enroll-scope"
-                checked={scope === 'full_course'}
-                onChange={() => setScope('full_course')}
-              />
-              {t('enrollment.scopeFull', {
-                count: totalLessons,
-                defaultValue: '報名全期 {{count}} 堂',
-              })}
-            </label>
-          </fieldset>
+        {totalLessons > 1 && !lessonEnded && (
+          <p className="text-sm text-gray-700 bg-primary-lighter/30 border border-primary/20 rounded-lg px-3 py-2">
+            {t('enrollment.fullCourseOnly', {
+              count: totalLessons,
+              defaultValue: '報名將包含全期 {{count}} 堂',
+            })}
+          </p>
         )}
 
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex items-start gap-3">
           <Coins className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
           <div className="text-sm space-y-1">
-            <p>
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="text-gray-600">{t('enrollment.cost', '所需代幣')}：</span>
-              <span className="font-semibold text-gray-900 ml-1">
+              <span className="font-semibold text-gray-900">
                 {getEnrollmentCostLabel(lessonCount, lesson.token_cost, t)}
               </span>
+              {!loadingTokens && !sufficientTokens && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  {hasPurchasedTokens
+                    ? t('enrollment.insufficientTokensShortfall', { count: tokenShortfall })
+                    : t('enrollment.insufficientTokensBadge')}
+                </span>
+              )}
             </p>
             <p>
-              <span className="text-gray-600">{t('enrollment.balance', '可用餘額')}：</span>
-              <span className={`font-semibold ml-1 ${sufficient ? 'text-green-700' : 'text-red-600'}`}>
+              <span className="text-gray-600">{t('enrollment.purchasedBalance', '已購代幣')}：</span>
+              <span className={`font-semibold ml-1 ${hasPurchasedTokens ? 'text-green-700' : 'text-red-600'}`}>
                 {loadingTokens ? '…' : balance}
               </span>
             </p>
-            {!loadingTokens && !sufficient && (
-              <p className="text-red-600 text-xs pt-1">{t('enrollment.insufficientTokens', '代幣不足，無法報名。請先購買套票。')}</p>
-            )}
+            <p className="text-gray-600 text-xs pt-1">{t('enrollment.adminAssignHint')}</p>
           </div>
         </div>
 
@@ -247,7 +234,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
             >
               {t('common.close')}
             </button>
-          ) : !sufficient && !loadingTokens ? (
+          ) : !hasPurchasedTokens && !loadingTokens ? (
             <Link
               to="/student/shop"
               state={{
@@ -268,7 +255,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
           ) : (
             <button
               type="button"
-              disabled={submitting || loadingTokens || !sufficient}
+              disabled={submitting || loadingTokens || !hasPurchasedTokens}
               onClick={handleConfirm}
               className="flex-1 inline-flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
             >

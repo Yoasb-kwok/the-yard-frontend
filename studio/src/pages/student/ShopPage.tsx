@@ -24,6 +24,22 @@ interface TokenPackage {
   validity_days: number;
 }
 
+function isCustomTokenPackage(pkg: TokenPackage): boolean {
+  const texts = [
+    pkg.name,
+    pkg.name_zh_tw,
+    pkg.name_zh_cn,
+    pkg.name_en,
+    pkg.description,
+    pkg.description_zh_tw,
+    pkg.description_zh_cn,
+    pkg.description_en,
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+  return texts.some((s) => s.includes('自訂套裝') || s.includes('自定义套装') || s.includes('custom'));
+}
+
 interface CartItem {
   package: TokenPackage;
   quantity: number;
@@ -115,7 +131,8 @@ export default function ShopPage() {
     try {
       const rows = await fetchTokenPackages();
       setPackagesSource(
-        rows.map((r) => ({
+        rows
+          .map((r) => ({
           id: r.id,
           name: r.name,
           description: r.description,
@@ -128,7 +145,8 @@ export default function ShopPage() {
           token_count: r.token_count,
           price: r.price,
           validity_days: r.validity_days,
-        })),
+          }))
+          .filter((pkg) => !isCustomTokenPackage(pkg)),
       );
     } catch {
       setPackagesSource([]);
@@ -188,7 +206,7 @@ export default function ShopPage() {
     }
     const subtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
     try {
-      const couponEndpoints = ['/coupons/validate', '/coupon/validate', '/admin/coupons/validate'];
+      const couponEndpoints = ['/coupons/validate', '/coupon/validate'];
       let res:
         | {
             success: boolean;

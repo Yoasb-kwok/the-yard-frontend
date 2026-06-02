@@ -38,8 +38,8 @@ interface Lesson {
   tag_values?: Record<string, string | null | undefined>;
   /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
   weekday: number;
-  /** Total lessons in the course (4, 8, or 16 – 每週一次). */
-  total_lessons: 4 | 8 | 16;
+  /** Total lessons in the course (from API `total_lessons`). */
+  total_lessons: number;
   /** Tokens deducted per lesson when enrolling (default 1). */
   token_cost?: number;
   /** 課程分類（日曆篩選用） */
@@ -120,7 +120,7 @@ export default function CalendarPage() {
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(() => {
     if (viewParam && ['day', 'week', 'month'].includes(viewParam)) return viewParam;
-    return 'week';
+    return 'month';
   });
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -245,8 +245,11 @@ export default function CalendarPage() {
       setView('day');
       setSearchParams({ view: 'day' }, { replace: true });
     } else if (viewParam) {
-      setView('week');
-      setSearchParams({ view: 'week' }, { replace: true });
+      setView('month');
+      setSearchParams({ view: 'month' }, { replace: true });
+    } else {
+      setView('month');
+      setSearchParams({ view: 'month' }, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
@@ -265,17 +268,19 @@ export default function CalendarPage() {
       const programTotalLessons: Record<string, number> = {};
       for (const row of rows) {
         const code = (row.program_code || '').toString().trim() || 'default';
-        const num = row.lesson_number != null ? Number(row.lesson_number) : 1;
-        programTotalLessons[code] = Math.max(programTotalLessons[code] ?? 0, num);
+        const lessonNum = row.lesson_number != null ? Number(row.lesson_number) : 0;
+        const courseTotal = row.total_lessons != null ? Number(row.total_lessons) : 0;
+        programTotalLessons[code] = Math.max(programTotalLessons[code] ?? 0, lessonNum, courseTotal);
       }
-      const clampTotal = (n: number): 4 | 8 | 16 => (n >= 16 ? 16 : n >= 8 ? 8 : 4);
       const mapped: Lesson[] = rows
         .filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true))
         .map((cls: any) => {
           const startTime = cls.start_time instanceof Date ? cls.start_time : new Date(cls.start_time);
           const startTimeStr = typeof cls.start_time === 'string' ? cls.start_time : startTime.toISOString();
           const programCode = (cls.program_code || '').toString().trim();
-          const total = programTotalLessons[programCode || 'default'] ?? 8;
+          const apiTotal = cls.total_lessons != null ? Number(cls.total_lessons) : 0;
+          const programMax = programTotalLessons[programCode || 'default'] ?? 0;
+          const total = Math.max(1, apiTotal > 0 ? apiTotal : programMax > 0 ? programMax : 8);
           return {
             id: String(cls.id),
             name: cls.name || '',
@@ -291,7 +296,7 @@ export default function CalendarPage() {
             age_tag: cls.age_group || cls.age_tag || '9-12',
             tag_values: extractClassTagValues(cls),
             weekday: startTime.getDay(),
-            total_lessons: clampTotal(total) as 4 | 8 | 16,
+            total_lessons: total,
             token_cost: cls.token_cost != null ? Number(cls.token_cost) : 1,
             course_type: normalizeCategoryCode(cls.tag_values?.category ?? cls.course_type),
           };

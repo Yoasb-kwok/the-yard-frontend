@@ -591,6 +591,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       residential_district: residentialDistrict ?? null,
       hasJoinedCourses: hasJoinedCourses,
       has_joined_courses: hasJoinedCourses,
+      level: 'entry',
     };
     try {
       const res = await api.post('user/register', body) as {
@@ -629,7 +630,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           contact_number: contactNumber,
           residential_district: residentialDistrict,
           has_joined_courses: hasJoinedCourses,
-          level: null,
+          level:
+            profileData.level === 'entry' ||
+            profileData.level === 'intermediate' ||
+            profileData.level === 'advanced'
+              ? profileData.level
+              : 'entry',
         };
         const sessionObj: Session = { user: userObj };
         const regToken = regBody.token ?? res.token;

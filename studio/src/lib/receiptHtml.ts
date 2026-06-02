@@ -33,6 +33,14 @@ export interface ReceiptData {
   logoSrc?: string;
 }
 
+function resolveDefaultLogoSrc(): string {
+  const path = '/images/(Final)Logo.png';
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return new URL(path, window.location.origin).toString();
+  }
+  return path;
+}
+
 const defaultLabels = {
   orderId: 'Order ID',
   date: 'Date',
@@ -48,7 +56,7 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
     receiptTitle: 'Payment Receipt',
     printHint: 'You can print this page (Ctrl+P / Cmd+P) and choose "Save as PDF".',
     brandName: 'The Yard',
-    logoSrc: '/images/(Final)Logo.png',
+    logoSrc: resolveDefaultLogoSrc(),
     ...rest,
     labels: { ...defaultLabels, ...dataLabels },
   };

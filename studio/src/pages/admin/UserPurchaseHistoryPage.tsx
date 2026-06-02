@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { extractServerErrorText, formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
 import { patchAdminOrderPaymentStatus } from '../../lib/adminOrderApi';
-import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, Package, X, Printer, Pencil } from 'lucide-react';
+import { Search, Receipt, CheckCircle, Clock, XCircle, Filter, X, Printer, Pencil } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Purchase {
@@ -88,7 +87,6 @@ function extractPurchaseList(payload: any): Purchase[] {
 
 export default function UserPurchaseHistoryPage() {
   const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -644,32 +642,29 @@ export default function UserPurchaseHistoryPage() {
                         {getStatusLabel(purchase.payment_status)}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openStatusEdit(purchase)}
-                      className="w-full mt-2 px-4 py-2 border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      {t('admin.purchaseHistory.editPaymentStatus')}
-                    </button>
-                    {purchase.payment_status === 'paid' && (
-                      <div className="pt-2 border-t border-gray-100 space-y-2">
-                        <button
-                          onClick={() => setSelectedPurchase(purchase)}
-                          className="w-full px-4 py-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                        >
-                          <Receipt className="h-4 w-4" />
-                          {t('admin.purchaseHistory.receipt')}
-                        </button>
-                        <button
-                          onClick={() => navigate(`/admin/users/${purchase.user_id}/assign-tokens`)}
-                          className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center justify-center gap-2 text-sm font-medium"
-                        >
-                          <Package className="h-4 w-4" />
-                          {t('admin.users.assignTokens')}
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-100 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => openStatusEdit(purchase)}
+                        className="p-2 border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition-colors"
+                        title={t('admin.purchaseHistory.editPaymentStatus')}
+                        aria-label={t('admin.purchaseHistory.editPaymentStatus')}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      {purchase.payment_status === 'paid' && (
+                        <>
+                          <button
+                            onClick={() => setSelectedPurchase(purchase)}
+                            className="p-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                            title={t('admin.purchaseHistory.receipt')}
+                            aria-label={t('admin.purchaseHistory.receipt')}
+                          >
+                            <Receipt className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -789,29 +784,21 @@ export default function UserPurchaseHistoryPage() {
                             <button
                               type="button"
                               onClick={() => openStatusEdit(purchase)}
-                              className="px-3 py-1.5 border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm font-medium"
+                              className="p-2 border border-gray-300 text-gray-800 rounded-md hover:bg-gray-50 transition-colors"
                               title={t('admin.purchaseHistory.editPaymentStatus')}
+                              aria-label={t('admin.purchaseHistory.editPaymentStatus')}
                             >
                               <Pencil className="h-4 w-4" />
-                              {t('admin.purchaseHistory.editPaymentStatus')}
                             </button>
                             {purchase.payment_status === 'paid' && (
                               <>
                                 <button
                                   onClick={() => setSelectedPurchase(purchase)}
-                                  className="px-3 py-1.5 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors flex items-center gap-2 text-sm font-medium"
+                                  className="p-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
                                   title={t('admin.purchaseHistory.receipt')}
+                                  aria-label={t('admin.purchaseHistory.receipt')}
                                 >
                                   <Receipt className="h-4 w-4" />
-                                  {t('admin.purchaseHistory.receipt')}
-                                </button>
-                                <button
-                                  onClick={() => navigate(`/admin/users/${purchase.user_id}/assign-tokens`)}
-                                  className="px-3 py-1.5 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2 text-sm font-medium"
-                                  title={t('admin.users.assignTokens')}
-                                >
-                                  <Package className="h-4 w-4" />
-                                  {t('admin.users.assignTokens')}
                                 </button>
                               </>
                             )}

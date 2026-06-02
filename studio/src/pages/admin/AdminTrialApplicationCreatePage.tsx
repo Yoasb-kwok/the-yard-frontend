@@ -20,8 +20,12 @@ export default function AdminTrialApplicationCreatePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [applicantName, setApplicantName] = useState('');
-  const [applicantPhone, setApplicantPhone] = useState('');
+  const [studentName, setStudentName] = useState('');
+  const [parentName, setParentName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [residentialDistrict, setResidentialDistrict] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
   const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [classLoadError, setClassLoadError] = useState<string | null>(null);
@@ -129,34 +133,73 @@ export default function AdminTrialApplicationCreatePage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!applicantName.trim() || !applicantPhone.trim() || !selectedClass) {
+    if (
+      !studentName.trim() ||
+      !parentName.trim() ||
+      !contactPhone.trim() ||
+      !residentialDistrict.trim() ||
+      !birthDate.trim() ||
+      !gender.trim() ||
+      !selectedClass
+    ) {
       setError(
         t('admin.trialApplications.requiredHint', {
-          defaultValue: '請先填寫姓名、聯絡電話，並在課程表選擇課堂。',
+          defaultValue: '請先填寫學生姓名、家長姓名、居住地區、聯絡電話、出生日期、性別，並在課程表選擇課堂。',
         })
       );
       return;
     }
 
     const appliedAtIso = new Date().toISOString();
+    const normalizedPhone = contactPhone.trim();
+    const normalizedStudentName = studentName.trim();
+    const normalizedParentName = parentName.trim();
+    const normalizedDistrict = residentialDistrict.trim();
+    const normalizedBirthDate = birthDate.trim();
+    const normalizedGender = gender.trim();
+    const classId = String(selectedClass.id ?? '').trim();
+    const programCode = String(selectedClass.programCode ?? '').trim();
+    const numericClassId = /^\d+$/.test(classId) ? classId : undefined;
 
     const payload = {
-      applicant_name: applicantName.trim(),
-      full_name: applicantName.trim(),
-      student_name: applicantName.trim(),
-      applicant_phone: applicantPhone.trim(),
-      mobile: applicantPhone.trim(),
-      contact_number: applicantPhone.trim(),
+      fullName: normalizedStudentName,
+      applicant_name: normalizedStudentName,
+      full_name: normalizedStudentName,
+      student_name: normalizedStudentName,
+      studentName: normalizedStudentName,
+      parent_name: normalizedParentName,
+      parentName: normalizedParentName,
+      guardian_name: normalizedParentName,
+      guardianName: normalizedParentName,
+      applicant_phone: normalizedPhone,
+      mobile: normalizedPhone,
+      contact_number: normalizedPhone,
+      phone: normalizedPhone,
+      contact_phone: normalizedPhone,
+      district: normalizedDistrict,
+      residential_district: normalizedDistrict,
+      location_district: normalizedDistrict,
+      birth_date: normalizedBirthDate,
+      date_of_birth: normalizedBirthDate,
+      dob: normalizedBirthDate,
+      gender: normalizedGender,
+      sex: normalizedGender,
       trial_class: selectedClass.name,
       class_name: selectedClass.name,
       trialClassName: selectedClass.name,
       requested_trial_class_name: selectedClass.name,
-      class_id: selectedClass.id,
-      assigned_class_id: selectedClass.id,
-      course_code: selectedClass.programCode || null,
-      class_code: selectedClass.programCode || null,
-      program_code: selectedClass.programCode || null,
-      preferred_program: selectedClass.programCode || null,
+      // class identifiers (camelCase + snake_case) for backend compatibility
+      classId: classId || undefined,
+      class_id: classId || undefined,
+      apiClassRowId: classId || undefined,
+      api_class_row_id: classId || undefined,
+      assigned_class_id: classId || undefined,
+      programCode: programCode || undefined,
+      program_code: programCode || undefined,
+      class_code: programCode || undefined,
+      course_code: programCode || undefined,
+      preferred_program: programCode || undefined,
+      ...(numericClassId ? { courseId: numericClassId, course_id: numericClassId } : {}),
       branch: selectedClass.location || null,
       preferred_location: selectedClass.location || null,
       location: selectedClass.location || null,
@@ -259,21 +302,75 @@ export default function AdminTrialApplicationCreatePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="space-y-1">
-              <span className="text-sm font-medium text-gray-700">{t('admin.trialApplications.applicant', '姓名')} *</span>
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.studentName', '學生姓名')} *
+              </span>
               <input
-                value={applicantName}
-                onChange={(e) => setApplicantName(e.target.value)}
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
               />
             </label>
 
             <label className="space-y-1">
-              <span className="text-sm font-medium text-gray-700">{t('admin.trialApplications.phone', '聯絡電話')} *</span>
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.parentName', '家長姓名')} *
+              </span>
               <input
-                value={applicantPhone}
-                onChange={(e) => setApplicantPhone(e.target.value)}
+                value={parentName}
+                onChange={(e) => setParentName(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
               />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.residentialDistrict', '居住地區')} *
+              </span>
+              <input
+                value={residentialDistrict}
+                onChange={(e) => setResidentialDistrict(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.phone', '聯絡電話')} *
+              </span>
+              <input
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.birthDate', '出生日期')} *
+              </span>
+              <input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.gender', '性別')} *
+              </span>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              >
+                <option value="">{t('common.pleaseSelect', { defaultValue: '請選擇' })}</option>
+                <option value="female">{t('common.genderFemale', { defaultValue: '女' })}</option>
+                <option value="male">{t('common.genderMale', { defaultValue: '男' })}</option>
+                <option value="other">{t('common.genderOther', { defaultValue: '其他' })}</option>
+              </select>
             </label>
           </div>
 

@@ -1,10 +1,16 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDate, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
-import { api } from '../../lib/api';
-import { ArrowLeft, Search, Calendar, User, Package, CheckCircle, X, Filter, MapPin, Play, Clock } from 'lucide-react';
+import { api, ApiError } from '../../lib/api';
+import { postAdminAssignTokensToClass } from '../../lib/adminTokenAssignment';
+import {
+  buildEnrollmentConfirmedEmailExtras,
+  buildEnrollmentLessonEmailRows,
+} from '../../lib/enrollmentConfirmedEmailPayload';
+import { useHolidays } from '../../lib/useHolidays';
+import { ArrowLeft, Search, Calendar, User, Package, CheckCircle, X, Filter, MapPin } from 'lucide-react';
 
 interface Class {
   id: string;
@@ -25,11 +31,28 @@ interface Enrollment {
   class_id: string;
   status: 'enrolled' | 'attended' | 'absent' | 'sick_leave';
   created_at: string;
+  className: string;
+  classCode: string;
+  instructor: string;
+  start_time: string;
+  end_time: string;
+  location?: Class['location'];
 }
+
+type ListTab = 'unassigned' | 'assigned';
+
+type AssignedClassRow = {
+  classId: string;
+  classItem: Class | null;
+  tokenCount: number;
+  enrollmentIds: string[];
+  status: Enrollment['status'];
+};
 
 interface User {
   id: string;
   full_name: string;
+  email: string;
   mobile: string | null;
   total_tokens: number;
   assigned_tokens: number;
@@ -54,6 +77,7 @@ function mapAdminUserRow(raw: Record<string, unknown>): User {
   return {
     id: String(raw.id ?? ''),
     full_name: String(raw.full_name ?? raw.name ?? ''),
+    email: String(raw.email ?? '').trim(),
     mobile: raw.mobile != null ? String(raw.mobile) : null,
     total_tokens,
     assigned_tokens: Number.isFinite(assigned_tokens) ? assigned_tokens : 0,
@@ -63,8 +87,11 @@ function mapAdminUserRow(raw: Record<string, unknown>): User {
 
 export default function TokenAssignmentPage() {
   const { t, i18n } = useTranslation();
+  const { holidayDatesSet } = useHolidays();
   const navigate = useNavigate();
   const { userId } = useParams<{ userId: string }>();
+  const [searchParams] = useSearchParams();
+  const prefillHandled = useRef(false);
   const [user, setUser] = useState<User | null>(null);
   const [classes, setClasses] = useState<Class[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -74,17 +101,50 @@ export default function TokenAssignmentPage() {
   const [locationFilter, setLocationFilter] = useState<'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui'>('all');
   const [confirmModal, setConfirmModal] = useState<null | { type: 'assign'; classId: string; className: string } | { type: 'remove'; enrollmentId: string; classId: string; className: string }>(null);
   const [assignTokenInput, setAssignTokenInput] = useState('1');
+  const [assigning, setAssigning] = useState(false);
+  const tabFromUrl = searchParams.get('tab') === 'assigned' ? 'assigned' : 'unassigned';
+  const [listTab, setListTab] = useState<ListTab>(tabFromUrl);
 
   useEffect(() => {
     if (userId) {
-      loadData();
+      void loadData();
     }
   }, [userId]);
 
+  function mapEnrollmentRow(raw: Record<string, unknown>): Enrollment | null {
+    const cls = raw.class as Record<string, unknown> | undefined;
+    const classId = String(raw.class_id ?? cls?.id ?? '');
+    const id = String(raw.id ?? '');
+    if (!id || !classId) return null;
+    const start = String(cls?.start_time ?? raw.start_time ?? '');
+    const end = String(cls?.end_time ?? raw.end_time ?? start);
+    return {
+      id,
+      class_id: classId,
+      status: (raw.status as Enrollment['status']) || 'enrolled',
+      created_at: String(raw.created_at ?? ''),
+      className: String(cls?.name ?? cls?.class_name ?? raw.class_name ?? ''),
+      classCode: String(cls?.class_code ?? cls?.program_code ?? raw.program_code ?? ''),
+      instructor: String(cls?.instructor ?? ''),
+      start_time: start,
+      end_time: end,
+      location: cls?.location as Enrollment['location'],
+    };
+  }
+
   async function loadData() {
+    if (!userId) return;
     setLoading(true);
     try {
-      const usersRes = await api.get<any[]>('/admin/users');
+      const [usersRes, classesRes, enrollRes] = await Promise.all([
+        api.get<Record<string, unknown>[]>('/admin/users'),
+        api.get<any[]>('/admin/classes'),
+        api.get<Record<string, unknown>[]>(`/admin/users/${userId}/class-enrollments`).catch(() => ({
+          success: false,
+          data: [] as Record<string, unknown>[],
+        })),
+      ]);
+
       const users = usersRes.success && Array.isArray(usersRes.data) ? usersRes.data : [];
       const raw = users.find((u) => String(u.id) === String(userId));
       if (!raw) {
@@ -93,9 +153,8 @@ export default function TokenAssignmentPage() {
         setEnrollments([]);
         return;
       }
-      setUser(mapAdminUserRow(raw as Record<string, unknown>));
+      setUser(mapAdminUserRow(raw));
 
-      const classesRes = await api.get<any[]>('/admin/classes');
       if (classesRes.success && Array.isArray(classesRes.data)) {
         const mapped: Class[] = classesRes.data.map((cls: any) => ({
           id: String(cls.id),
@@ -115,8 +174,12 @@ export default function TokenAssignmentPage() {
         setClasses([]);
       }
 
-      // Enrollments: empty until enrollments-by-user API is wired
-      setEnrollments([]);
+      const enrollRows = enrollRes.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
+      setEnrollments(
+        enrollRows
+          .map((row) => mapEnrollmentRow(row as Record<string, unknown>))
+          .filter((e): e is Enrollment => e != null),
+      );
     } catch (err) {
       console.error('TokenAssignment loadData:', err);
       setUser(null);
@@ -126,6 +189,27 @@ export default function TokenAssignmentPage() {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') === 'assigned' ? 'assigned' : 'unassigned';
+    setListTab(tab);
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (loading || prefillHandled.current || classes.length === 0) return;
+    if (searchParams.get('tab') === 'assigned') return;
+    const classId = searchParams.get('classId')?.trim();
+    const quantity = searchParams.get('quantity')?.trim();
+    if (!classId) return;
+    const target = classes.find((c) => c.id === classId);
+    if (!target || target.is_cancelled) return;
+    prefillHandled.current = true;
+    setListTab('unassigned');
+    if (quantity && !isNaN(parseInt(quantity, 10)) && parseInt(quantity, 10) >= 1) {
+      setAssignTokenInput(String(parseInt(quantity, 10)));
+    }
+    setConfirmModal({ type: 'assign', classId: target.id, className: target.name });
+  }, [loading, classes, searchParams]);
 
   const getLocale = (): string => {
     const langMap: { [key: string]: string } = {
@@ -159,9 +243,8 @@ export default function TokenAssignmentPage() {
   };
 
   async function assignTokenToClass(classId: string, count: number): Promise<boolean> {
-    if (!user || count < 1) return false;
+    if (!user || !userId || count < 1) return false;
 
-    // Reject if assigned + count would exceed total: show error and do not assign
     if (user.assigned_tokens + count > user.total_tokens) {
       alert(t('admin.tokenAssignment.assignExceedsTotal', {
         count,
@@ -171,58 +254,65 @@ export default function TokenAssignmentPage() {
       return false;
     }
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    const newEnrollments: Enrollment[] = Array.from({ length: count }, (_, i) => ({
-      id: `enroll-${Date.now()}-${i}`,
-      class_id: classId,
-      status: 'enrolled' as const,
-      created_at: new Date().toISOString(),
-    }));
-
-    setEnrollments([...enrollments, ...newEnrollments]);
-
-    if (user) {
-      setUser({
-        ...user,
-        assigned_tokens: user.assigned_tokens + count,
-      });
+    const enrollmentRequestId = searchParams.get('requestId')?.trim() || undefined;
+    const classItem = classes.find((c) => c.id === classId);
+    if (!classItem) {
+      alert(t('admin.tokenAssignment.classNotFound'));
+      return false;
     }
 
-    setClasses(classes.map(c =>
-      c.id === classId
-        ? { ...c, enrolled_count: c.enrolled_count + count }
-        : c
-    ));
+    const locale = getLocale();
+    const lessons = buildEnrollmentLessonEmailRows({
+      start_time: classItem.start_time,
+      end_time: classItem.end_time,
+      lessonCount: count,
+      locale,
+      holidayDatesSet,
+    });
 
-    alert(t('admin.tokenAssignment.assignedSuccessfully'));
-    return true;
+    const branchLabel = classItem.location ? t(`home.locations.${classItem.location}`) : undefined;
+    const confirmationEmail =
+      user.email &&
+      buildEnrollmentConfirmedEmailExtras({
+        language: i18n.language || 'zh-TW',
+        student_name: user.full_name,
+        student_email: user.email,
+        class_name: classItem.name,
+        class_id: classItem.id,
+        lesson_count: count,
+        tokens_assigned: count,
+        lessons,
+        class_code: classItem.class_code || undefined,
+        instructor: classItem.instructor || undefined,
+        branch: classItem.location,
+        branch_label: branchLabel,
+        enrollment_scope: count > 1 ? 'full_course' : 'single_lesson',
+      });
+
+    setAssigning(true);
+    try {
+      await postAdminAssignTokensToClass({
+        userId,
+        classId,
+        quantity: count,
+        enrollmentRequestId,
+        confirmationEmail: confirmationEmail ?? undefined,
+      });
+      await loadData();
+      setListTab('assigned');
+      alert(t('admin.tokenAssignment.assignedSuccessfully'));
+      return true;
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : t('common.error');
+      alert(msg);
+      return false;
+    } finally {
+      setAssigning(false);
+    }
   }
 
-  async function removeAssignment(enrollmentId: string, classId: string) {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    // Remove enrollment
-    setEnrollments(enrollments.filter(e => e.id !== enrollmentId));
-    
-    // Decrease assigned tokens count
-    if (user) {
-      setUser({
-        ...user,
-        assigned_tokens: Math.max(0, user.assigned_tokens - 1),
-      });
-    }
-    
-    // Update class enrolled count
-    setClasses(classes.map(c =>
-      c.id === classId
-        ? { ...c, enrolled_count: Math.max(0, c.enrolled_count - 1) }
-        : c
-    ));
-    
-    alert(t('admin.tokenAssignment.removedSuccessfully'));
+  async function removeAssignment(_enrollmentId: string, _classId: string) {
+    alert(t('admin.tokenAssignment.removeNotAvailable'));
   }
 
   const handleConfirmModal = async () => {
@@ -247,75 +337,68 @@ export default function TokenAssignmentPage() {
     return t(`home.locations.${location}`);
   };
 
-  const renderClassRow = (classItem: Class) => {
-    const classEnrollments = enrollments.filter(e => e.class_id === classItem.id);
-    const isAssigned = classEnrollments.length > 0;
-    const canAssign = canAssignToClass(classItem);
-    const firstEnrollment = classEnrollments[0];
+  const classMatchesFilters = useCallback(
+    (classItem: Class): boolean => {
+      const locationMatches = locationFilter === 'all' || classItem.location === locationFilter;
+      const searchMatches =
+        classItem.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        classItem.class_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        classItem.instructor.toLowerCase().includes(searchTerm.toLowerCase());
+      if (!locationMatches || !searchMatches) return false;
+      if (monthFilter === 'all') return true;
+      const d = new Date(classItem.start_time);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === monthFilter;
+    },
+    [locationFilter, searchTerm, monthFilter],
+  );
 
-    return (
-      <div
-        key={classItem.id}
-        className={`p-4 rounded-lg border ${
-          isAssigned ? 'bg-green-50 border-green-200' : canAssign ? 'bg-white border-gray-200 hover:border-primary' : 'bg-gray-50 border-gray-200 opacity-60'
-        } ${classItem.is_cancelled ? 'opacity-50' : ''}`}
-      >
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-lg font-semibold text-gray-900">{classItem.name}</h3>
-              {classItem.is_internal && (
-                <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded">{t('admin.tokenAssignment.makeupClass')}</span>
-              )}
-              {classItem.is_cancelled && (
-                <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded">{t('admin.classes.cancelled')}</span>
-              )}
-              {isAssigned && (
-                <span className="bg-primary-lighter text-primary text-xs px-2 py-1 rounded flex items-center gap-1">
-                  <CheckCircle className="h-3 w-3" /> {classEnrollments.length > 1 ? t('admin.tokenAssignment.assignedCount', { count: classEnrollments.length }) : t('admin.tokenAssignment.assigned')}
-                </span>
-              )}
-            </div>
-            <p className="text-sm text-gray-600 mb-1"><span className="font-medium">{t('admin.tokenAssignment.classCode')}:</span> {classItem.class_code}</p>
-            <p className="text-sm text-gray-600 mb-1"><span className="font-medium">{t('admin.tokenAssignment.instructor')}:</span> {classItem.instructor}</p>
-            <p className="text-sm text-gray-600 mb-1">
-              <span className="font-medium">{t('admin.tokenAssignment.time')}:</span>{' '}
-              {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
-            </p>
-            {classItem.location && (
-              <p className="text-sm text-gray-600 mb-1"><span className="font-medium">{t('admin.tokenAssignment.location')}:</span> {getLocationLabel(classItem.location)}</p>
-            )}
-            <p className="text-sm text-gray-600"><span className="font-medium">{t('admin.tokenAssignment.enrolled')}:</span> {classItem.enrolled_count} / {classItem.capacity}</p>
-          </div>
-          <div className="flex gap-2 ml-4">
-            {isAssigned && firstEnrollment ? (
-              <button onClick={() => setConfirmModal({ type: 'remove', enrollmentId: firstEnrollment.id, classId: classItem.id, className: classItem.name })} className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center gap-2">
-                <X className="h-4 w-4" /> {t('admin.tokenAssignment.remove')}
-              </button>
-            ) : canAssign ? (
-              <button onClick={() => { setConfirmModal({ type: 'assign', classId: classItem.id, className: classItem.name }); setAssignTokenInput('1'); }} className="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary-dark flex items-center gap-2">
-                <Package className="h-4 w-4" /> {t('admin.tokenAssignment.assign')}
-              </button>
-            ) : null}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const assignedClassIds = useMemo(
+    () => new Set(enrollments.map((e) => e.class_id)),
+    [enrollments],
+  );
 
-  const filteredClasses = classes.filter(classItem => {
-    const locationMatches = locationFilter === 'all' || classItem.location === locationFilter;
-    const searchMatches =
-      classItem.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      classItem.class_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      classItem.instructor.toLowerCase().includes(searchTerm.toLowerCase());
-    return locationMatches && searchMatches;
-  });
+  const filteredClasses = useMemo(
+    () => classes.filter(classMatchesFilters),
+    [classes, classMatchesFilters],
+  );
 
-  // Unique year-months from classes, plus at least 12 months: current + next 11 (Jan, Feb, Mar...)
-  const yearMonths = (() => {
+  const unassignedClasses = useMemo(
+    () =>
+      filteredClasses
+        .filter((c) => !assignedClassIds.has(c.id))
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
+    [filteredClasses, assignedClassIds],
+  );
+
+  const assignedRows = useMemo(() => {
+    const byClass = new Map<string, AssignedClassRow>();
+    for (const enrollment of enrollments) {
+      const classItem = classes.find((c) => c.id === enrollment.class_id) ?? null;
+      if (classItem && !classMatchesFilters(classItem)) continue;
+      const existing = byClass.get(enrollment.class_id);
+      if (existing) {
+        existing.tokenCount += 1;
+        existing.enrollmentIds.push(enrollment.id);
+      } else {
+        byClass.set(enrollment.class_id, {
+          classId: enrollment.class_id,
+          classItem,
+          tokenCount: 1,
+          enrollmentIds: [enrollment.id],
+          status: enrollment.status,
+        });
+      }
+    }
+    return Array.from(byClass.values()).sort((a, b) => {
+      const ta = a.classItem?.start_time ?? '';
+      const tb = b.classItem?.start_time ?? '';
+      return new Date(ta).getTime() - new Date(tb).getTime();
+    });
+  }, [enrollments, classes, classMatchesFilters]);
+
+  const yearMonths = useMemo(() => {
     const set = new Set<string>();
-    filteredClasses.forEach(c => {
+    classes.forEach((c) => {
       const d = new Date(c.start_time);
       set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     });
@@ -325,7 +408,7 @@ export default function TokenAssignmentPage() {
       set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
     return Array.from(set).sort();
-  })();
+  }, [classes]);
 
   const formatMonthOption = (key: string) => {
     if (key === 'all') return t('admin.tokenAssignment.allMonths');
@@ -333,17 +416,165 @@ export default function TokenAssignmentPage() {
     return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'short', year: 'numeric' });
   };
 
-  const filteredByMonth =
-    monthFilter === 'all'
-      ? filteredClasses
-      : filteredClasses.filter(c => {
-          const d = new Date(c.start_time);
-          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === monthFilter;
-        });
+  const getStatusLabel = (status: Enrollment['status']) => t(`admin.attendance.statuses.${status}`);
 
-  const sortByStartTime = (a: Class, b: Class) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
-  const startedClasses = filteredByMonth.filter(c => new Date(c.start_time) < new Date()).sort(sortByStartTime);
-  const upcomingClasses = filteredByMonth.filter(c => new Date(c.start_time) >= new Date()).sort(sortByStartTime);
+  const renderUnassignedTable = () => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.classes.className')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.classCode')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.instructor')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.time')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.location')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.enrolled')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.actions')}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200 bg-white">
+          {unassignedClasses.length === 0 ? (
+            <tr>
+              <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
+                {t('admin.tokenAssignment.noUnassignedClasses')}
+              </td>
+            </tr>
+          ) : (
+            unassignedClasses.map((classItem) => {
+              const canAssign = canAssignToClass(classItem);
+              return (
+                <tr key={classItem.id} className={classItem.is_cancelled ? 'opacity-60' : undefined}>
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {classItem.name}
+                      {classItem.is_internal && (
+                        <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded">{t('admin.tokenAssignment.makeupClass')}</span>
+                      )}
+                      {classItem.is_cancelled && (
+                        <span className="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded">{t('admin.classes.cancelled')}</span>
+                      )}
+                      {isClassPast(classItem) && (
+                        <span className="text-xs text-amber-700">{t('admin.tokenAssignment.classPast')}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-primary">{classItem.class_code || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{classItem.instructor || '—'}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                    {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{getLocationLabel(classItem.location)}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">
+                    {classItem.enrolled_count} / {classItem.capacity}
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    {canAssign ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setConfirmModal({ type: 'assign', classId: classItem.id, className: classItem.name });
+                          setAssignTokenInput('1');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary-dark"
+                      >
+                        <Package className="h-4 w-4" />
+                        {t('admin.tokenAssignment.assign')}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-500">
+                        {!getUnassignedTokens()
+                          ? t('admin.tokenAssignment.noTokensAvailable')
+                          : isClassFull(classItem)
+                            ? t('admin.tokenAssignment.classFull')
+                            : '—'}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  const renderAssignedTable = () => (
+    <div className="overflow-x-auto">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.classes.className')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.classCode')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.instructor')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.time')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.location')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.tokensAssigned')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.status')}</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.actions')}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200 bg-white">
+          {assignedRows.length === 0 ? (
+            <tr>
+              <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
+                {t('admin.tokenAssignment.noAssignedClasses')}
+              </td>
+            </tr>
+          ) : (
+            assignedRows.map((row) => {
+              const c = row.classItem;
+              const name = c?.name ?? enrollments.find((e) => e.class_id === row.classId)?.className ?? '—';
+              const code = c?.class_code ?? enrollments.find((e) => e.class_id === row.classId)?.classCode ?? '—';
+              const instructor = c?.instructor ?? enrollments.find((e) => e.class_id === row.classId)?.instructor ?? '—';
+              const start = c?.start_time ?? enrollments.find((e) => e.class_id === row.classId)?.start_time ?? '';
+              const end = c?.end_time ?? enrollments.find((e) => e.class_id === row.classId)?.end_time ?? start;
+              const loc = c?.location ?? enrollments.find((e) => e.class_id === row.classId)?.location;
+              return (
+                <tr key={row.classId} className="bg-green-50/40">
+                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                    <div className="flex items-center gap-2">
+                      {name}
+                      <CheckCircle className="h-4 w-4 text-primary shrink-0" />
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-primary">{code}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{instructor}</td>
+                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
+                    {start ? formatDateTimeRange(start, end, getLocale()) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-700">{getLocationLabel(loc)}</td>
+                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.tokenCount}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      {getStatusLabel(row.status)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setConfirmModal({
+                          type: 'remove',
+                          enrollmentId: row.enrollmentIds[0],
+                          classId: row.classId,
+                          className: name,
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200"
+                    >
+                      <X className="h-4 w-4" />
+                      {t('admin.tokenAssignment.remove')}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -489,7 +720,6 @@ export default function TokenAssignmentPage() {
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('admin.tokenAssignment.assignToClasses')}</h2>
 
-          {/* Search */}
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
@@ -503,35 +733,34 @@ export default function TokenAssignmentPage() {
             </div>
           </div>
 
-          {/* 未開課 Not Yet Started - on top */}
-          <div className="mb-8">
-            <h3 className="flex items-center gap-2 text-lg font-medium text-gray-900 mb-3">
-              <Clock className="h-5 w-5 text-primary" />
-              {t('admin.tokenAssignment.upcoming')}
-            </h3>
-            {upcomingClasses.length === 0 ? (
-              <p className="text-gray-500 py-4">{t('admin.tokenAssignment.noClassesInSection')}</p>
-            ) : (
-              <div className="space-y-3">
-                {upcomingClasses.map((c) => renderClassRow(c))}
-              </div>
-            )}
+          <div className="flex flex-wrap gap-2 mb-4 border-b border-gray-200 pb-4">
+            <button
+              type="button"
+              onClick={() => setListTab('unassigned')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                listTab === 'unassigned'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {t('admin.tokenAssignment.tabUnassigned')}
+              <span className="ml-2 opacity-90">({unassignedClasses.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setListTab('assigned')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                listTab === 'assigned'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {t('admin.tokenAssignment.tabAssigned')}
+              <span className="ml-2 opacity-90">({assignedRows.length})</span>
+            </button>
           </div>
 
-          {/* 已開課 Already Started - below */}
-          <div>
-            <h3 className="flex items-center gap-2 text-lg font-medium text-gray-900 mb-3">
-              <Play className="h-5 w-5 text-amber-600" />
-              {t('admin.tokenAssignment.started')}
-            </h3>
-            {startedClasses.length === 0 ? (
-              <p className="text-gray-500 py-4">{t('admin.tokenAssignment.noClassesInSection')}</p>
-            ) : (
-              <div className="space-y-3">
-                {startedClasses.map((c) => renderClassRow(c))}
-              </div>
-            )}
-          </div>
+          {listTab === 'unassigned' ? renderUnassignedTable() : renderAssignedTable()}
         </div>
       </div>
 
@@ -579,10 +808,10 @@ export default function TokenAssignmentPage() {
                 {isAssign ? (
                   <button
                     onClick={handleAssignConfirm}
-                    disabled={!assignValid}
+                    disabled={!assignValid || assigning}
                     className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {t('admin.tokenAssignment.assign')}
+                    {assigning ? t('common.loading', 'Loading…') : t('admin.tokenAssignment.assign')}
                   </button>
                 ) : (
                   <button

@@ -104,6 +104,7 @@ export default function Layout({ children }: LayoutProps) {
       title: t('admin.manage.title', '學員與營運管理'),
       items: [
         { path: '/admin/pending-applications', icon: ListChecks, label: t('admin.dashboard.pendingApplications') },
+        { path: '/admin/enrollment-requests', icon: Package, label: t('admin.enrollmentRequests.title') },
         { path: '/admin/trial-applications', icon: BookOpen, label: t('admin.trialApplications.title') },
         { path: '/admin/users', icon: Users, label: t('admin.users.title') },
         { path: '/admin/purchase-history', icon: Receipt, label: t('admin.purchaseHistory.title') },
@@ -139,6 +140,7 @@ export default function Layout({ children }: LayoutProps) {
     if (!isAdmin) return 0;
     if (path === '/admin/pending-applications') return pendingCounts.pendingApplications;
     if (path === '/admin/trial-applications') return pendingCounts.pendingTrials;
+    if (path === '/admin/enrollment-requests') return pendingCounts.pendingEnrollmentRequests;
     return 0;
   };
 

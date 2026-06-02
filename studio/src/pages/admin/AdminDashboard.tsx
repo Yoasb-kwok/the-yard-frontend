@@ -6,7 +6,7 @@ import { formatCurrency, formatDateTime } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAdminPendingCounts } from '../../lib/useAdminPendingCounts';
-import { DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus, Calendar, BookOpen, ClipboardList, ListChecks, ChevronRight } from 'lucide-react';
+import { DollarSign, Users, AlertCircle, LayoutDashboard, Filter, UserPlus, Calendar, BookOpen, ClipboardList, ListChecks, ChevronRight, Package } from 'lucide-react';
 
 interface UpcomingClass {
   id: string;
@@ -128,6 +128,19 @@ export default function AdminDashboard() {
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-blue-600" />
+            </Link>
+            <Link
+              to="/admin/enrollment-requests"
+              className="flex items-center justify-between p-4 rounded-lg bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Package className="h-8 w-8 text-purple-600" />
+                <div>
+                  <p className="text-sm font-medium text-purple-900">{t('admin.dashboard.todayTodoEnrollmentRequests', '待分配代幣報名')}</p>
+                  <p className="text-2xl font-bold text-purple-800">{pendingCounts.pendingEnrollmentRequests}</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-purple-600" />
             </Link>
             <Link
               to="/admin/users"
