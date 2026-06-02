@@ -799,7 +799,7 @@
       "todayTodo": "今日待辦",
       "todayTodoPendingApps": "待批改期／病假",
       "todayTodoTrials": "待確認試堂",
-      "todayTodoEnrollmentRequests": "待分配代幣報名",
+      "todayTodoEnrollmentRequests": "分配代幣",
       "todayTodoExpiring": "代幣即將到期",
       "todayTodoClasses": "今日課堂",
       "todayClassesList": "今日課堂一覽",
@@ -1662,7 +1662,7 @@
       "refresh": "重新整理"
     },
     "enrollmentRequests": {
-      "title": "待分配代幣報名",
+      "title": "分配代幣",
       "hint": "學生提交課程報名後會出現在此。請在對應表格使用「分配未分配代幣」或「查看已分配代幣」處理；勿從購買紀錄頁分配。",
       "actions": "操作",
       "assignUnassignedTokens": "分配未分配代幣",

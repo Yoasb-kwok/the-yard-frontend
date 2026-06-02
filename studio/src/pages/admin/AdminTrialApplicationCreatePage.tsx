@@ -112,12 +112,31 @@ export default function AdminTrialApplicationCreatePage() {
           const programCode = String(row?.class_code ?? row?.program_code ?? row?.programCode ?? '').trim();
           return { id, name, startTime, location, programCode };
         })
-        .filter((row) => row.id && row.name && row.startTime);
+        .filter((row) => row.id && row.name && row.startTime)
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setClassOptions(mapped);
       if (mapped.length > 0 && !selectedClassId) {
-        setSelectedClassId(mapped[0].id);
-        setDetailClassId(mapped[0].id);
-        const firstDateObj = new Date(mapped[0].startTime);
+        const now = new Date();
+        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+          now.getDate()
+        ).padStart(2, '0')}`;
+        const getDateKey = (iso: string) => {
+          const d = new Date(iso);
+          if (Number.isNaN(d.getTime())) return '';
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(
+            2,
+            '0'
+          )}`;
+        };
+
+        const todayRows = mapped.filter((row) => getDateKey(row.startTime) === todayKey);
+        const upcomingTodayRows = todayRows.filter((row) => new Date(row.startTime).getTime() >= now.getTime());
+        const upcomingRows = mapped.filter((row) => new Date(row.startTime).getTime() >= now.getTime());
+        const defaultClass = upcomingTodayRows[0] ?? todayRows[0] ?? upcomingRows[0] ?? mapped[0];
+
+        setSelectedClassId(defaultClass.id);
+        setDetailClassId(defaultClass.id);
+        const firstDateObj = new Date(defaultClass.startTime);
         if (!Number.isNaN(firstDateObj.getTime())) {
           setCalendarMonth(new Date(firstDateObj.getFullYear(), firstDateObj.getMonth(), 1));
         }

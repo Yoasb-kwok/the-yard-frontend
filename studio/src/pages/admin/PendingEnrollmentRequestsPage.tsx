@@ -26,6 +26,7 @@ type EnrollmentRequest = {
   unassignedTokens: number | null;
   assignedTokens: number | null;
   totalTokens: number | null;
+  status: string;
 };
 
 type ClassOption = {
@@ -92,12 +93,21 @@ function normaliseRequests(data: unknown, userTokensById: Map<string, UserTokenS
       unassignedTokens,
       assignedTokens,
       totalTokens,
+      status: String(row.status ?? 'pending'),
     };
   });
 }
 
 function hasSufficientUnassigned(request: EnrollmentRequest): boolean {
   return request.unassignedTokens != null && request.unassignedTokens >= request.tokensRequired;
+}
+
+function isAssignedRequest(request: EnrollmentRequest): boolean {
+  const status = request.status.trim().toLowerCase();
+  if (status === 'assigned' || status === 'enrolled' || status === 'confirmed' || status === 'completed') {
+    return true;
+  }
+  return (request.assignedTokens ?? 0) > 0;
 }
 
 function buildAssignTokensUrl(request: EnrollmentRequest, tab: 'unassigned' | 'assigned'): string {
@@ -176,7 +186,7 @@ export default function PendingEnrollmentRequestsPage() {
     setApiError(null);
     setLoading(true);
     Promise.all([
-      api.get<unknown>('/admin/enrollment-requests', { status: 'pending' }),
+      api.get<unknown>('/admin/enrollment-requests'),
       api.get<Record<string, unknown>[]>('/admin/users').catch(() => ({ success: false, data: [] as Record<string, unknown>[] })),
     ])
       .then(([reqRes, usersRes]) => {
@@ -262,15 +272,13 @@ export default function PendingEnrollmentRequestsPage() {
 
   const canEnrollFullCourse = (selectedClass?.totalLessons ?? 1) > 1;
 
-  const requestsWithSufficientUnassigned = useMemo(
-    () => requests.filter(hasSufficientUnassigned),
-    [requests],
-  );
+  const requestsWithSufficientUnassigned = useMemo(() => {
+    return requests.filter((r) => !isAssignedRequest(r) && hasSufficientUnassigned(r));
+  }, [requests]);
 
-  const requestsWithInsufficientUnassigned = useMemo(
-    () => requests.filter((r) => !hasSufficientUnassigned(r)),
-    [requests],
-  );
+  const requestsWithAssignedOrInsufficient = useMemo(() => {
+    return requests.filter((r) => isAssignedRequest(r) || !hasSufficientUnassigned(r));
+  }, [requests]);
 
   async function handleSendInsufficientTokensEmail(request: EnrollmentRequest) {
     if (sendingEmailId) return;
@@ -353,6 +361,7 @@ export default function PendingEnrollmentRequestsPage() {
   }
 
   function renderActionsCell(request: EnrollmentRequest, section: 'unassigned' | 'assigned') {
+    const insufficientUnassigned = !hasSufficientUnassigned(request);
     return (
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -376,20 +385,22 @@ export default function PendingEnrollmentRequestsPage() {
           </Link>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={() => handleSendInsufficientTokensEmail(request)}
-              disabled={sendingEmailId === request.id}
-              className="p-2 border border-amber-300 text-amber-800 bg-amber-50 rounded-md hover:bg-amber-100 disabled:opacity-50"
-              title={t('admin.enrollmentRequests.sendInsufficientTokensEmail')}
-              aria-label={t('admin.enrollmentRequests.sendInsufficientTokensEmail')}
-            >
-              {sendingEmailId === request.id ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Mail className="h-4 w-4" />
-              )}
-            </button>
+            {insufficientUnassigned && (
+              <button
+                type="button"
+                onClick={() => handleSendInsufficientTokensEmail(request)}
+                disabled={sendingEmailId === request.id}
+                className="p-2 border border-amber-300 text-amber-800 bg-amber-50 rounded-md hover:bg-amber-100 disabled:opacity-50"
+                title={t('admin.enrollmentRequests.sendInsufficientTokensEmail')}
+                aria-label={t('admin.enrollmentRequests.sendInsufficientTokensEmail')}
+              >
+                {sendingEmailId === request.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mail className="h-4 w-4" />
+                )}
+              </button>
+            )}
             <Link
               to={buildAssignTokensUrl(request, 'assigned')}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-300 text-gray-800 bg-white rounded-md hover:bg-gray-50"
@@ -529,13 +540,13 @@ export default function PendingEnrollmentRequestsPage() {
                 }`}
               >
                 {t('admin.enrollmentRequests.tableAssignedTokens')}
-                <span className="ml-2 opacity-90">({requestsWithInsufficientUnassigned.length})</span>
+                <span className="ml-2 opacity-90">({requestsWithAssignedOrInsufficient.length})</span>
               </button>
             </div>
 
             {listTab === 'unassigned'
               ? renderRequestsTable(requestsWithSufficientUnassigned, 'unassigned')
-              : renderRequestsTable(requestsWithInsufficientUnassigned, 'assigned')}
+              : renderRequestsTable(requestsWithAssignedOrInsufficient, 'assigned')}
           </div>
         )}
       </div>

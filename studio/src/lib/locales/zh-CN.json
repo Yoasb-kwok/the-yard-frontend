@@ -1641,7 +1641,7 @@
       "refresh": "刷新"
     },
     "enrollmentRequests": {
-      "title": "待分配代币报名",
+      "title": "分配代币",
       "hint": "学生提交课程报名后会出现在此。请在对应表格使用「分配未分配代币」或「查看已分配代币」处理；勿从购买纪录页分配。",
       "actions": "操作",
       "assignUnassignedTokens": "分配未分配代币",
