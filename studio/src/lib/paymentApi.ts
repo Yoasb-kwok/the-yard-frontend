@@ -70,12 +70,22 @@ export function parsePaymentOrder(raw: unknown): PaymentOrderStatus | null {
   };
 }
 
-export async function createCheckoutSession(packageId: number): Promise<{ url: string; session_id: string }> {
+export async function createCheckoutSession(
+  packageId: number,
+  options?: { studentProfileId?: string | null },
+): Promise<{ url: string; session_id: string }> {
   const returnUrls = buildStripeCheckoutReturnUrls();
-  const res = (await api.post('/payment/checkout-session', {
+  const body: Record<string, unknown> = {
     package_id: packageId,
     ...returnUrls,
-  })) as ApiEnvelope;
+  };
+  const profileId = options?.studentProfileId?.trim();
+  if (profileId) {
+    body.student_profile_id = profileId;
+    body.studentProfileId = profileId;
+    body.profile_id = profileId;
+  }
+  const res = (await api.post('/payment/checkout-session', body)) as ApiEnvelope;
   const payload = unwrapPayload(res);
   const url = String(payload.url ?? res.url ?? '').trim();
   const sessionId = String(payload.session_id ?? res.session_id ?? '').trim();

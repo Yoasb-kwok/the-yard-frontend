@@ -15,8 +15,8 @@ export interface AdminUserStudentsTableProps {
   /** 帳戶層級：最早到期且仍有餘額的代幣批次 */
   tokenExpiryDate?: string | null;
   onViewTrials?: () => void;
-  onAssignTokens?: () => void;
-  onUpcomingClasses?: () => void;
+  onAssignTokens?: (studentProfileId: string) => void;
+  onUpcomingClasses?: (studentProfileId: string) => void;
   onEditTokenExpiry?: () => void;
 }
 
@@ -60,20 +60,20 @@ export default function AdminUserStudentsTable({
 
   const studentActionButtons = (
     <div className="flex flex-nowrap items-center gap-0.5">
-      {onAssignTokens && (
+      {onAssignTokens && students[0] && (
         <button
           type="button"
-          onClick={onAssignTokens}
+          onClick={() => onAssignTokens(students[0].id)}
           className="text-green-600 hover:text-green-800 p-0.5 inline-flex shrink-0"
           title={t('admin.users.assignTokens')}
         >
           <Package className="h-3.5 w-3.5" />
         </button>
       )}
-      {onUpcomingClasses && (
+      {onUpcomingClasses && students[0] && (
         <button
           type="button"
-          onClick={onUpcomingClasses}
+          onClick={() => onUpcomingClasses(students[0].id)}
           className="text-purple-600 hover:text-purple-800 p-0.5 inline-flex shrink-0"
           title={t('admin.users.upcomingClasses')}
         >
@@ -93,9 +93,40 @@ export default function AdminUserStudentsTable({
     </div>
   );
 
-  const studentActionsCell = (rowSpan?: number) => (
-    <td className="px-3 py-2 align-middle w-0" rowSpan={rowSpan}>
-      {studentActionButtons}
+  const studentActionsCell = (studentId: string) => (
+    <td className="px-3 py-2 align-middle w-0">
+      <div className="flex flex-nowrap items-center gap-0.5">
+        {onAssignTokens && (
+          <button
+            type="button"
+            onClick={() => onAssignTokens(studentId)}
+            className="text-green-600 hover:text-green-800 p-0.5 inline-flex shrink-0"
+            title={t('admin.users.assignTokens')}
+          >
+            <Package className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onUpcomingClasses && (
+          <button
+            type="button"
+            onClick={() => onUpcomingClasses(studentId)}
+            className="text-purple-600 hover:text-purple-800 p-0.5 inline-flex shrink-0"
+            title={t('admin.users.upcomingClasses')}
+          >
+            <Clock className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {onEditTokenExpiry && (
+          <button
+            type="button"
+            onClick={onEditTokenExpiry}
+            className="text-amber-600 hover:text-amber-800 p-0.5 inline-flex shrink-0"
+            title={t('admin.users.editTokenExpiryDate')}
+          >
+            <Calendar className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </td>
   );
 
@@ -139,9 +170,15 @@ export default function AdminUserStudentsTable({
               <td className="px-3 py-2 text-gray-700">{formatSexLabel(s.sex, t)}</td>
               <td className="px-3 py-2 text-gray-700 font-mono text-center">{s.id_card_last4 || '—'}</td>
               <td className="px-3 py-2">{trialCell}</td>
-              <td className="px-3 py-2 text-gray-700 text-center tabular-nums">{remainingTokens}</td>
+              <td className="px-3 py-2 text-gray-700 text-center tabular-nums">
+                {s.remaining_tokens != null ? s.remaining_tokens : index === 0 ? remainingTokens : '—'}
+              </td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums">
-                {tokenExpiryDate ? formatDateDdMmYy(tokenExpiryDate) : '—'}
+                {s.token_expiry_date
+                  ? formatDateDdMmYy(s.token_expiry_date)
+                  : index === 0 && tokenExpiryDate
+                    ? formatDateDdMmYy(tokenExpiryDate)
+                    : '—'}
               </td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                 {formatStudentAgeLabel(s, t, getAgeFromDateOfBirth)}
@@ -149,7 +186,7 @@ export default function AdminUserStudentsTable({
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                 {formatStudentLevelLabel(s.level, t)}
               </td>
-              {hasStudentActions && index === 0 && studentActionsCell(students.length)}
+              {hasStudentActions && studentActionsCell(s.id)}
             </tr>
           ))}
         </tbody>

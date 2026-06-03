@@ -886,8 +886,16 @@ export default function UsersPage() {
                               remainingTokens={totalTokens}
                               tokenExpiryDate={earliestExpiry}
                               onViewTrials={() => navigate('/admin/trial-applications')}
-                              onAssignTokens={() => navigate(`/admin/users/${user.id}/assign-tokens`)}
-                              onUpcomingClasses={() => navigate(`/admin/users/${user.id}/schedule`)}
+                              onAssignTokens={(profileId) =>
+                                navigate(
+                                  `/admin/users/${user.id}/assign-tokens?profileId=${encodeURIComponent(profileId)}`,
+                                )
+                              }
+                              onUpcomingClasses={(profileId) =>
+                                navigate(
+                                  `/admin/users/${user.id}/schedule?profileId=${encodeURIComponent(profileId)}`,
+                                )
+                              }
                               onEditTokenExpiry={() => openTokenExpiryModal(user)}
                             />
                           </div>

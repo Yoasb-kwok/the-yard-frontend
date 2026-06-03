@@ -83,7 +83,8 @@
 | 方法 | 路徑 | 說明 |
 |------|------|------|
 | `POST` | `/api/admin/users/:id/student-profiles` | Admin 專用；`user_id` 在 URL，body 同 `student_profiles` 單筆欄位 |
-| `POST` | `/api/profiles` | 需帶 `user_id` + `full_name`（admin token）；家長前台新增家庭成員亦用此端點 |
+| `POST` | `/api/student/profiles` | **家長前台**：Bearer 學員/家長 token，body 含 `full_name` 等，**勿帶 `user_id`** |
+| `POST` | `/api/profiles` | **Admin only**（需 admin JWT + body `user_id`） |
 
 ### Response
 

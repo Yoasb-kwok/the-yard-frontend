@@ -7,7 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { containsWhitespace, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import type { EnrolledClass } from '../../lib/studentEnrollments';
+import { pickEnrollmentProfileId, type EnrolledClass } from '../../lib/studentEnrollments';
+import { fetchStudentUpcomingClasses } from '../../lib/studentUpcomingClasses';
 import { Home, User, ChevronRight, Plus, KeyRound, Mail, Phone, Bell, Users, Calendar } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import AccountSecurityCard from '../../components/AccountSecurityCard';
@@ -52,10 +53,6 @@ export default function DashboardPage() {
   const [parentSaveMessage, setParentSaveMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (primaryProfileId) switchProfile(primaryProfileId);
-  }, [primaryProfileId, switchProfile]);
-
-  useEffect(() => {
     if (!masterProfile) return;
     setParentForm({
       parents_name: masterProfile.parents_name ?? '',
@@ -70,7 +67,7 @@ export default function DashboardPage() {
       map[p.id] = { count: 0, name: p.full_name ?? t('dashboard.child') };
     });
     upcomingClasses.forEach((e) => {
-      const id = (e.profile_id || e.user_id || '').trim();
+      const id = pickEnrollmentProfileId(e) ?? '';
       if (!id) return;
       if (map[id]) {
         map[id].count += 1;
@@ -102,9 +99,10 @@ export default function DashboardPage() {
       return;
     }
     try {
-      const classesRes = await api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes');
-      const classesData = (classesRes as { data?: UpcomingClass[] }).data;
-      setUpcomingClasses(Array.isArray(classesData) ? classesData : []);
+      const classesData = await fetchStudentUpcomingClasses(undefined, {
+        singleProfileAccount: (profiles?.length ?? 0) <= 1,
+      });
+      setUpcomingClasses(classesData);
     } catch {
       setUpcomingClasses([]);
     } finally {

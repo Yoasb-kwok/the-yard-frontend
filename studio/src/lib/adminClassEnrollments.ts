@@ -1,0 +1,166 @@
+/**
+ * Normalize admin GET /admin/users/:userId/class-enrollments responses.
+ */
+
+import type { TokenAssignmentClassRow } from './tokenAssignmentGroups';
+
+export type AdminClassEnrollmentRow = {
+  id: string;
+  class_id: string;
+  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave';
+  tokens_charged: number;
+  created_at: string;
+  className: string;
+  classCode: string;
+  instructor: string;
+  start_time: string;
+  end_time: string;
+  location?: TokenAssignmentClassRow['location'];
+  is_internal?: boolean;
+  is_cancelled?: boolean;
+  lesson_number?: number | null;
+  total_lessons?: number;
+  token_cost?: number;
+};
+
+/** Stable string id for Set/Map lookups (API may return number or string). */
+export function normalizeClassId(id: string | number | null | undefined): string {
+  if (id == null || id === '') return '';
+  return String(id).trim();
+}
+
+function readTokensCharged(raw: Record<string, unknown>): number {
+  const direct = Number(
+    raw.tokens_charged ??
+      raw.tokensCharged ??
+      raw.tokens_assigned ??
+      raw.tokensAssigned ??
+      raw.token_count ??
+      raw.tokenCount ??
+      NaN,
+  );
+  if (Number.isFinite(direct) && direct > 0) return direct;
+
+  const cls = raw.class as Record<string, unknown> | undefined;
+  if (cls) {
+    const nested = Number(cls.tokens_charged ?? cls.tokensCharged ?? NaN);
+    if (Number.isFinite(nested) && nested > 0) return nested;
+  }
+  return 0;
+}
+
+/** Unwrap list payloads from various backend shapes. */
+export function extractClassEnrollmentRows(payload: unknown): unknown[] {
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== 'object') return [];
+  const root = payload as Record<string, unknown>;
+  const candidates = [
+    root.data,
+    root.enrollments,
+    root.class_enrollments,
+    root.classEnrollments,
+    root.items,
+    root.results,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  const nested = root.data;
+  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+    const inner = nested as Record<string, unknown>;
+    for (const key of ['data', 'enrollments', 'class_enrollments', 'classEnrollments', 'items'] as const) {
+      if (Array.isArray(inner[key])) return inner[key] as unknown[];
+    }
+  }
+  return [];
+}
+
+export function mapAdminClassEnrollmentRow(raw: Record<string, unknown>): AdminClassEnrollmentRow | null {
+  const cls = (raw.class ?? raw.class_info ?? raw.classInfo) as Record<string, unknown> | undefined;
+  const classId = normalizeClassId(raw.class_id ?? raw.classId ?? cls?.id);
+  if (!classId) return null;
+
+  const start = String(cls?.start_time ?? raw.start_time ?? '');
+  const end = String(cls?.end_time ?? raw.end_time ?? start);
+  const enrollmentId = String(raw.id ?? raw.enrollment_id ?? raw.enrollmentId ?? '').trim();
+  const id =
+    enrollmentId && enrollmentId !== '0' && enrollmentId !== 'undefined'
+      ? enrollmentId
+      : `${classId}-${start || 'row'}`;
+
+  const tokensCharged = readTokensCharged(raw);
+  const status = (raw.status as AdminClassEnrollmentRow['status']) || 'enrolled';
+
+  return {
+    id,
+    class_id: classId,
+    status,
+    tokens_charged: tokensCharged,
+    created_at: String(raw.created_at ?? raw.createdAt ?? ''),
+    className: String(cls?.name ?? cls?.class_name ?? raw.class_name ?? raw.className ?? ''),
+    classCode: String(cls?.class_code ?? cls?.program_code ?? raw.class_code ?? raw.program_code ?? ''),
+    instructor: String(cls?.instructor ?? raw.instructor ?? ''),
+    start_time: start,
+    end_time: end,
+    location: cls?.location as AdminClassEnrollmentRow['location'],
+    is_internal: cls?.is_internal === 1 || cls?.is_internal === true,
+    is_cancelled: cls?.is_cancelled === 1 || cls?.is_cancelled === true,
+    lesson_number: cls?.lesson_number != null ? Number(cls.lesson_number) : null,
+    total_lessons:
+      cls?.total_lessons != null
+        ? Number(cls.total_lessons)
+        : raw.total_lessons != null
+          ? Number(raw.total_lessons)
+          : undefined,
+    token_cost:
+      cls?.token_cost != null
+        ? Number(cls.token_cost)
+        : raw.token_cost != null
+          ? Number(raw.token_cost)
+          : undefined,
+  };
+}
+
+/** Build a class row from enrollment when GET /admin/classes omits that lesson. */
+export function classRowFromEnrollment(enrollment: AdminClassEnrollmentRow): TokenAssignmentClassRow {
+  return {
+    id: enrollment.class_id,
+    name: enrollment.className || enrollment.classCode || enrollment.class_id,
+    class_code: enrollment.classCode,
+    instructor: enrollment.instructor,
+    start_time: enrollment.start_time,
+    end_time: enrollment.end_time || enrollment.start_time,
+    capacity: 0,
+    enrolled_count: 0,
+    is_internal: enrollment.is_internal === true,
+    is_cancelled: enrollment.is_cancelled === true,
+    location: enrollment.location,
+    lesson_number: enrollment.lesson_number ?? null,
+    total_lessons: enrollment.total_lessons,
+    token_cost: enrollment.token_cost ?? 1,
+  };
+}
+
+export function mergeClassRowsWithEnrollments(
+  classes: TokenAssignmentClassRow[],
+  enrollments: AdminClassEnrollmentRow[],
+  options?: { onlyWithTokens?: boolean },
+): TokenAssignmentClassRow[] {
+  const onlyWithTokens = options?.onlyWithTokens ?? false;
+  const byId = new Map<string, TokenAssignmentClassRow>();
+  for (const c of classes) {
+    const id = normalizeClassId(c.id);
+    if (id) byId.set(id, c);
+  }
+  for (const e of enrollments) {
+    if (onlyWithTokens && e.tokens_charged <= 0) continue;
+    const id = normalizeClassId(e.class_id);
+    if (!id || byId.has(id)) continue;
+    byId.set(id, classRowFromEnrollment(e));
+  }
+  return Array.from(byId.values());
+}
+
+export function enrollmentIsTokenAssigned(enrollment: AdminClassEnrollmentRow): boolean {
+  return enrollment.tokens_charged > 0;
+}

@@ -30,10 +30,24 @@ interface ApiResponse<T = any> {
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string, public code?: string) {
+  /** Extra fields from error JSON (e.g. current_status). */
+  data?: Record<string, unknown>;
+
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    data?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.data = data;
   }
+
+  status: number;
+  code?: string;
 }
 
 /**
@@ -106,7 +120,19 @@ async function request<T = any>(
           : (data.data && typeof (data.data as { code?: unknown }).code === 'string')
             ? ((data.data as { code: string }).code)
             : undefined;
-      throw new ApiError(response.status, errText, errCode);
+      const errPayload: Record<string, unknown> = {};
+      if (typeof data.current_status === 'string') {
+        errPayload.current_status = data.current_status;
+      }
+      if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+        Object.assign(errPayload, data.data as Record<string, unknown>);
+      }
+      throw new ApiError(
+        response.status,
+        errText,
+        errCode,
+        Object.keys(errPayload).length > 0 ? errPayload : undefined,
+      );
     }
 
     return data;

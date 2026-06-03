@@ -43,6 +43,8 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 | | | | | | | | |
 | getSiteContent | About, Terms, Privacy, FAQ | GET | /api/site-content/:pageKey | — | {<br>    "success": true,<br>    "data": {<br>        "page_key": "about",<br>        "title": "...",<br>        "content": "..."<br>    }<br>} | {<br>    "success": false,<br>    "msg": "Not found"<br>} | pageKey: about, terms, privacy, faq |
 | | | | | | | | |
+| getCourseIntros | Courses | GET | /api/course-intros | — | {<br>    "success": true,<br>    "data": [{ "id": 1, "class_code": "...", "name_zh_tw": "...", "intro_zh_tw": "...", "is_active": 1 }]<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Active rows only. Merged on frontend by `class_code` / `program_code`. See `COURSE_INTRO_CMS_SPEC.md`. |
+| | | | | | | | |
 
 ---
 
@@ -63,7 +65,8 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 | | | | | | | | |
 | updateProfile | Profile | PATCH | /api/profiles/me | {<br>    "full_name": "...",<br>    "nick_name": "...",<br>    "date_of_birth": "...",<br>    "sex": true,<br>    "parents_name": "...",<br>    "contact_number": "...",<br>    "residential_district": "...",<br>    "has_joined_courses": true,<br>    "level": "entry"<br>} | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | For sub-accounts: PATCH /api/profiles/:id |
 | | | | | | | | |
-| addProfile | Profile | POST | /api/profiles | {<br>    "full_name": "張三",<br>    "nick_name": "小明",<br>    "date_of_birth": "2010-05-15",<br>    "sex": true,<br>    "parents_name": "張大華",<br>    "contact_number": "91234567",<br>    "residential_district": "Kowloon",<br>    "has_joined_courses": true,<br>    "level": "entry"<br>} | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Add family member (sub-account) |
+| addProfile | Profile | POST | /api/student/profiles | Same body as below (no `user_id`) | {<br>    "success": true,<br>    "data": {}<br>} | 401 / 403 / 400 | **Parent/student portal** — adds child under logged-in account |
+| addProfileAdmin | Profile | POST | /api/profiles | {<br>    "user_id": 123,<br>    "full_name": "張三",<br>    ...<br>} | 201 + profile | 403 without admin JWT | **Admin only** — create profile for any user |
 | | | | | | | | |
 | deleteProfile | Profile | DELETE | /api/profiles/:id | — | {<br>    "success": true,<br>    "msg": "Deleted."<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Cannot delete primary profile |
 | | | | | | | | |
@@ -118,6 +121,14 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 | | | | | | | | |
 | deleteInstructor | Instructors | DELETE | /api/admin/instructors/:id | — | {<br>    "success": true,<br>    "msg": "Deleted."<br>} | {<br>    "success": false,<br>    "msg": "Not found"<br>} | — |
 | | | | | | | | |
+| getAdminCourseIntros | AdminCourseIntro | GET | /api/admin/course-intros | — | {<br>    "success": true,<br>    "data": []<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | All rows. See `COURSE_INTRO_CMS_SPEC.md`. |
+| | | | | | | | |
+| createCourseIntro | AdminCourseIntro | POST | /api/admin/course-intros | body: class_code + 3-lang fields | {<br>    "success": true,<br>    "data": {}<br>} | 409 if class_code exists | — |
+| | | | | | | | |
+| updateCourseIntro | AdminCourseIntro | PATCH | /api/admin/course-intros/:id | partial body | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | — |
+| | | | | | | | |
+| deleteCourseIntro | AdminCourseIntro | DELETE | /api/admin/course-intros/:id | — | {<br>    "success": true,<br>    "msg": "Deleted."<br>} | 404 | Removes entire CMS row |
+| | | | | | | | |
 | getCoupons | Coupons | GET | /api/admin/coupons | {<br>    "search": "SUMMER"<br>} | {<br>    "success": true,<br>    "data": [<br>        {<br>            "id": 1,<br>            "code": "...",<br>            "discount_type": "percentage",<br>            "discount_value": 20,<br>            "min_order_amount": 500,<br>            "quantity": 100,<br>            "used_count": 45,<br>            "valid_from": "...",<br>            "valid_until": "...",<br>            "is_active": 1<br>        }<br>    ]<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Query |
 | | | | | | | | |
 | createCoupon | Coupons | POST | /api/admin/coupons | {<br>    "code": "...",<br>    "discount_type": "percentage",<br>    "discount_value": 20,<br>    "min_order_amount": 500,<br>    "quantity": 100,<br>    "valid_from": "...",<br>    "valid_until": "...",<br>    "is_active": 1<br>} | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "Code already exists."<br>} | Code unique |
@@ -135,6 +146,7 @@ Use this table in Excel or docs with columns: **API name**, **Page**, **Type**, 
 | assignTokens | TokenAssignment | POST | /api/admin/user-tokens/assign | {<br>    "user_id": 1,<br>    "package_id": 1,<br>    "quantity": 1,<br>    "expiry_date": "2026-06-01"<br>} | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "Assigned tokens would exceed total."<br>} | Manual token grant from package. quantity: any positive integer. Validate assigned_tokens + quantity ≤ total_tokens (or package cap); reject if exceeded. |
 | | | | | | | | |
 | assignTokensToClass | TokenAssignment | POST | /api/admin/token-assignment/assign-to-class | {<br>    "user_id": 1,<br>    "class_id": 1,<br>    "quantity": 2<br>} | {<br>    "success": true,<br>    "data": { "enrollments": [] }<br>} | {<br>    "success": false,<br>    "msg": "Assigned tokens would exceed total. Currently assigned: X, total: Y."<br>} | Assigns quantity tokens from user's pool to class (creates quantity class_enrollments). Fails if user.assigned_tokens + quantity > user.total_tokens. |
+| unassignTokensFromClass | TokenAssignment | POST | /api/admin/token-assignment/unassign-from-class | {<br>    "enrollment_id": "...",<br>    "user_id": 1,<br>    "class_id": 42,<br>    "student_profile_id": "...",<br>    "remarks": "..."<br>} | {<br>    "success": true,<br>    "data": { "tokens_refunded": 1, "remaining_tokens": 6, "assigned_tokens": 2 }<br>} | ENROLLMENT_NOT_FOUND, NOT_TOKEN_ASSIGNED, CANNOT_UNASSIGN_ATTENDED | Removes one lesson's token assignment; refunds tokens to unassigned pool. See TOKEN_ENROLLMENT_SPEC §3.3. |
 | | | | | | | | |
 | reassignEnrollment | ReassignStudents | PATCH | /api/admin/class-enrollments/:id | {<br>    "user_token_id": 2<br>} | {<br>    "success": true,<br>    "data": {}<br>} | {<br>    "success": false,<br>    "msg": "..."<br>} | Change token used for enrollment |
 | | | | | | | | |

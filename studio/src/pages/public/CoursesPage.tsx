@@ -6,7 +6,15 @@ import { BookOpen, Calendar, MapPin, Search, ArrowDownWideNarrow, ChevronDown, C
 import type { AgeTag, CourseLevel } from '../../contexts/AuthContext';
 import type { CourseItem, CourseType } from '../../lib/coursesData';
 import { courseItemHasVerifiedClasses, mapApiCourseRowToCourseItem } from '../../lib/mapApiCourseRow';
-import { applyCourseIntroOverrides } from '../../lib/courseIntroStorage';
+import {
+  applyCourseIntroCatalog,
+  clearLegacyCourseIntroLocalStorage,
+  courseIntrosByClassCode,
+  fetchPublicCourseIntros,
+  filterCoursesForPublicListing,
+  isCourseIntroApiUnavailable,
+  type CourseIntroCatalogStatus,
+} from '../../lib/courseIntroApi';
 import { getCoursesPageHero, getHeroTitleForLocale, getHeroDescForLocale, getHeroNoteForLocale } from '../../lib/coursesPageHeroStorage';
 import { api, ApiError } from '../../lib/api';
 
@@ -135,6 +143,35 @@ export default function CoursesPage() {
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
   /** 每課程的「可供試堂時段」快取：展開時呼叫 GET /classes，無資料則不顯示假時段 */
   const [trialSlotsCache, setTrialSlotsCache] = useState<Record<string, { slots: TrialSlot[]; loading: boolean }>>({});
+  const [introCatalog, setIntroCatalog] = useState(() => courseIntrosByClassCode([]));
+  const [introCatalogStatus, setIntroCatalogStatus] = useState<CourseIntroCatalogStatus>('loading');
+
+  useEffect(() => {
+    clearLegacyCourseIntroLocalStorage();
+    let cancelled = false;
+    setIntroCatalogStatus('loading');
+    fetchPublicCourseIntros()
+      .then((rows) => {
+        if (!cancelled) {
+          setIntroCatalog(courseIntrosByClassCode(rows));
+          setIntroCatalogStatus('ready');
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (isCourseIntroApiUnavailable(err)) {
+          setIntroCatalog(courseIntrosByClassCode([]));
+          setIntroCatalogStatus('unavailable');
+        } else {
+          console.warn('Failed to load course intro CMS', err);
+          setIntroCatalog(courseIntrosByClassCode([]));
+          setIntroCatalogStatus('ready');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // GET /api/courses 為「課程介紹用聚合 API」，不必對應名為 courses 的 table；fromClasses=1 應僅由 classes 等推出。
   useEffect(() => {
@@ -236,11 +273,17 @@ export default function CoursesPage() {
   const heroDesc = getHeroDescForLocale(hero, t('courses.promotionFlowDesc', '學生完成指定堂數及達到導師評核標準後，便有機會晉升至更高級別班別；個別級別或需參與內部評核／考試作實。'), i18n.language);
   const heroNote = getHeroNoteForLocale(hero, t('courses.promotionFlowNote', '以上為示意說明；實際晉升準則以中心最新安排為準。'), i18n.language);
 
-  /** Apply admin 3-lang overrides for 課堂介紹 */
-  const displayCourses = useMemo(
-    () => courses.map((c) => applyCourseIntroOverrides(c, i18n.language)),
-    [courses, i18n.language]
-  );
+  /**
+   * 前台課程介紹 = 班表聚合 ∩ 後台已發布的 course_intros（is_active）。
+   * 後台刪除 CMS 列後，該 program_code 不應再出現或預約試堂。
+   */
+  const displayCourses = useMemo(() => {
+    if (introCatalogStatus !== 'ready') return [];
+    const merged = courses.map((c) => applyCourseIntroCatalog(c, introCatalog, i18n.language));
+    return filterCoursesForPublicListing(merged, introCatalog);
+  }, [courses, introCatalog, introCatalogStatus, i18n.language]);
+
+  const pageLoading = coursesListLoading || introCatalogStatus === 'loading';
 
   const toggleTrialExpand = useCallback((courseId: string) => {
     setExpandedCourseId((prev) => (prev === courseId ? null : courseId));
@@ -352,18 +395,24 @@ export default function CoursesPage() {
             </div>
           </div>
 
-          {/* Course list：僅顯示後端回傳，不再使用靜態 demo 課程表 */}
+          {/* Course list：僅顯示後台 course_intros 已發布且 is_active 的課程 */}
           <div className="space-y-4">
-            {coursesListLoading ? (
+            {pageLoading ? (
               <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-500">
                 {t('courses.loadingList', '載入課程列表中…')}
               </div>
-            ) : courses.length === 0 ? (
+            ) : introCatalogStatus === 'unavailable' ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-12 text-center text-amber-900 space-y-2">
+                <p>{t('courses.cmsApiUnavailable', '課堂介紹服務尚未就緒，暫不顯示課程列表。請管理員確認後端已實作 GET /api/course-intros。')}</p>
+              </div>
+            ) : displayCourses.length === 0 ? (
               <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-600 space-y-2">
                 {coursesListError === 'server' ? (
                   <p>{t('courses.loadErrorServer', '課程列表暫時無法載入（伺服器錯誤）。請稍後再試，或請管理員查看後端日誌。')}</p>
                 ) : coursesListError === 'network' ? (
                   <p>{t('courses.loadErrorNetwork', '無法連線載入課程列表。請檢查網路或 API 位址後再試。')}</p>
+                ) : courses.length > 0 ? (
+                  <p>{t('courses.noPublishedIntros', '後台尚未發布任何課堂介紹，或已全部刪除／停用。請到管理後台「課堂介紹」新增並勾選「前台顯示」。')}</p>
                 ) : (
                   <p>{t('courses.emptyFromApi', '目前沒有從系統載入到可顯示的課程。請確認後端已提供課程資料，或稍後再試。')}</p>
                 )}

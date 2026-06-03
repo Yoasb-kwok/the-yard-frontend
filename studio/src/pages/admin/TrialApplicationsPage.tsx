@@ -450,7 +450,7 @@ export default function TrialApplicationsPage() {
     return translated !== key ? translated : value;
   }
   function getBooleanLabel(value: boolean | null | undefined): string {
-    if (value == null) return '—';
+    if (value == null) return t('common.no', { defaultValue: '否' });
     return value ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' });
   }
 

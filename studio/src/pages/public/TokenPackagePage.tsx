@@ -78,7 +78,7 @@ function pickLocalized(
 
 export default function TokenPackagePage() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const classData = (location.state as { classData?: ClassData })?.classData;
@@ -288,7 +288,9 @@ export default function TokenPackagePage() {
       }
       setSubmitting(true);
       try {
-        const { url } = await createCheckoutSession(selectedItem.package.id);
+        const { url } = await createCheckoutSession(selectedItem.package.id, {
+          studentProfileId: profile?.id,
+        });
         window.location.href = url;
       } catch (e) {
         alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));

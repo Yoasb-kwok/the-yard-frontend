@@ -1,15 +1,25 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { Edit, BookOpen, Plus, Trash2 } from 'lucide-react';
-import { api } from '../../lib/api';
+import { ApiError, api } from '../../lib/api';
 import {
-  deleteCourseIntroOverrides,
-  getCourseIntroOverrides,
-  setCourseIntroOverrides,
+  clearLegacyCourseIntroLocalStorage,
+  collectClassCodesFromScheduleRows,
+  createCourseIntro,
+  deleteCourseIntro,
+  emptyCourseIntroForm,
+  fetchAdminCourseIntros,
+  getCourseIntroName,
+  getCourseIntroText,
+  hasCourseIntroContent,
+  isCourseIntroApiUnavailable,
+  recordToFormFields,
+  updateCourseIntro,
+  type CourseIntroFormFields,
   type CourseIntroLang,
-  type CourseIntroOverrides,
-} from '../../lib/courseIntroStorage';
+  type CourseIntroRecord,
+} from '../../lib/courseIntroApi';
 
 const LANG_OPTIONS: Array<{ value: CourseIntroLang; label: string }> = [
   { value: 'zh-TW', label: '繁中' },
@@ -17,186 +27,193 @@ const LANG_OPTIONS: Array<{ value: CourseIntroLang; label: string }> = [
   { value: 'en', label: 'EN' },
 ];
 
-interface AdminCourseIntroOption {
-  /** Use class_code as stable key for overrides. */
-  id: string;
-  classCode: string;
-  nameZhTw: string;
-  nameZhCn: string;
-  nameEn: string;
-  intro: string;
-  note: string;
+function formValue(
+  form: CourseIntroFormFields,
+  field: 'title' | 'content' | 'note',
+  lang: CourseIntroLang,
+): string {
+  if (field === 'title') {
+    if (lang === 'zh-TW') return form.name_zh_tw;
+    if (lang === 'zh-CN') return form.name_zh_cn;
+    return form.name_en;
+  }
+  if (field === 'content') {
+    if (lang === 'zh-TW') return form.intro_zh_tw;
+    if (lang === 'zh-CN') return form.intro_zh_cn;
+    return form.intro_en;
+  }
+  if (lang === 'zh-TW') return form.trial_class_name_zh_tw;
+  if (lang === 'zh-CN') return form.trial_class_name_zh_cn;
+  return form.trial_class_name_en;
 }
 
-function pickLocalizedName(course: AdminCourseIntroOption, lang: CourseIntroLang): string {
-  if (lang === 'zh-CN') {
-    return course.nameZhCn || course.nameZhTw || course.nameEn || course.classCode;
+function setFormField(
+  prev: CourseIntroFormFields,
+  field: 'title' | 'content' | 'note',
+  lang: CourseIntroLang,
+  value: string,
+): CourseIntroFormFields {
+  if (field === 'title') {
+    if (lang === 'zh-TW') return { ...prev, name_zh_tw: value };
+    if (lang === 'zh-CN') return { ...prev, name_zh_cn: value };
+    return { ...prev, name_en: value };
   }
-  if (lang === 'en') {
-    return course.nameEn || course.nameZhTw || course.nameZhCn || course.classCode;
+  if (field === 'content') {
+    if (lang === 'zh-TW') return { ...prev, intro_zh_tw: value };
+    if (lang === 'zh-CN') return { ...prev, intro_zh_cn: value };
+    return { ...prev, intro_en: value };
   }
-  return course.nameZhTw || course.nameZhCn || course.nameEn || course.classCode;
-}
-
-function toAdminCourseOptions(rows: Record<string, unknown>[]): AdminCourseIntroOption[] {
-  const byCode = new Map<string, AdminCourseIntroOption>();
-  for (const row of rows) {
-    const r = row as Record<string, unknown>;
-    const classCode = String(r.class_code ?? r.program_code ?? '').trim();
-    if (!classCode) continue;
-    const nameZhTw = String(r.class_name_zh_tw ?? r.name_zh_tw ?? r.class_name ?? r.name ?? '').trim();
-    const nameZhCn = String(r.class_name_zh_cn ?? r.name_zh_cn ?? '').trim();
-    const nameEn = String(r.class_name_en ?? r.name_en ?? '').trim();
-    const intro = String(r.intro ?? r.description ?? '').trim();
-    const note = String(r.trial_class_name ?? r.class_name ?? r.name ?? classCode).trim();
-    if (!byCode.has(classCode)) {
-      byCode.set(classCode, {
-        id: classCode,
-        classCode,
-        nameZhTw: nameZhTw || nameZhCn || nameEn || classCode,
-        nameZhCn: nameZhCn || '',
-        nameEn: nameEn || '',
-        intro,
-        note,
-      });
-    }
-  }
-  return Array.from(byCode.values()).sort((a, b) =>
-    pickLocalizedName(a, 'zh-TW').localeCompare(pickLocalizedName(b, 'zh-TW'))
-  );
+  if (lang === 'zh-TW') return { ...prev, trial_class_name_zh_tw: value };
+  if (lang === 'zh-CN') return { ...prev, trial_class_name_zh_cn: value };
+  return { ...prev, trial_class_name_en: value };
 }
 
 export default function AdminCourseIntroPage() {
   const { t } = useTranslation();
-  const [courses, setCourses] = useState<AdminCourseIntroOption[]>([]);
-  const [coursesLoading, setCoursesLoading] = useState(true);
-  const [coursesLoadFailed, setCoursesLoadFailed] = useState(false);
+  const [items, setItems] = useState<CourseIntroRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [apiUnavailable, setApiUnavailable] = useState(false);
+  const [scheduleClassCodes, setScheduleClassCodes] = useState<string[]>([]);
   const [showModal, setShowModal] = useState(false);
-  const [selectedCourseId, setSelectedCourseId] = useState('');
-  const [form, setForm] = useState<CourseIntroOverrides>({});
+  const [editing, setEditing] = useState<CourseIntroRecord | null>(null);
+  const [selectedClassCode, setSelectedClassCode] = useState('');
+  const [form, setForm] = useState<CourseIntroFormFields>(emptyCourseIntroForm());
   const [activeLang, setActiveLang] = useState<CourseIntroLang>('zh-TW');
+  const [saving, setSaving] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusKind, setStatusKind] = useState<'success' | 'info'>('info');
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setCoursesLoading(true);
-      setCoursesLoadFailed(false);
-      try {
-        const adminRes = await api.get<Record<string, unknown>[]>('/admin/classes');
-        const rows = adminRes.success && Array.isArray(adminRes.data) ? adminRes.data : [];
-        if (!cancelled && rows.length > 0) {
-          setCourses(toAdminCourseOptions(rows));
-        } else {
-          const res = await api.get<Record<string, unknown>[]>('/classes');
-          if (cancelled) return;
-          const fallbackRows = res.success && Array.isArray(res.data) ? res.data : [];
-          setCourses(toAdminCourseOptions(fallbackRows));
-          if (fallbackRows.length === 0) setCoursesLoadFailed(true);
-        }
-      } catch {
-        if (!cancelled) {
-          setCourses([]);
-          setCoursesLoadFailed(true);
-        }
-      }
-      if (!cancelled) setCoursesLoading(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const showStatus = useCallback((message: string, kind: 'success' | 'info') => {
+    setStatusKind(kind);
+    setStatusMessage(message);
   }, []);
 
-  function getFormValue(field: 'title' | 'content' | 'note', lang: CourseIntroLang): string {
-    if (field === 'title') {
-      if (lang === 'zh-TW') return form.name_zh_tw ?? '';
-      if (lang === 'zh-CN') return form.name_zh_cn ?? '';
-      return form.name_en ?? '';
+  const loadItems = useCallback(async () => {
+    setLoading(true);
+    setApiUnavailable(false);
+    try {
+      const rows = await fetchAdminCourseIntros();
+      setItems(rows);
+    } catch (err) {
+      setItems([]);
+      if (isCourseIntroApiUnavailable(err)) {
+        setApiUnavailable(true);
+      } else {
+        const msg = err instanceof Error ? err.message : t('admin.courseIntro.loadFailed', '無法從 API 載入課程資料，請稍後再試。');
+        showStatus(msg, 'info');
+      }
+    } finally {
+      setLoading(false);
     }
-    if (field === 'content') {
-      if (lang === 'zh-TW') return form.intro_zh_tw ?? '';
-      if (lang === 'zh-CN') return form.intro_zh_cn ?? '';
-      return form.intro_en ?? '';
-    }
-    if (lang === 'zh-TW') return form.trial_class_name_zh_tw ?? '';
-    if (lang === 'zh-CN') return form.trial_class_name_zh_cn ?? '';
-    return form.trial_class_name_en ?? '';
-  }
+  }, [showStatus, t]);
 
-  function setFormValue(field: 'title' | 'content' | 'note', lang: CourseIntroLang, value: string) {
-    setForm((prev) => {
-      if (field === 'title') {
-        if (lang === 'zh-TW') return { ...prev, name_zh_tw: value };
-        if (lang === 'zh-CN') return { ...prev, name_zh_cn: value };
-        return { ...prev, name_en: value };
+  const loadScheduleCodes = useCallback(async () => {
+    try {
+      const adminRes = await api.get<Record<string, unknown>[]>('/admin/classes');
+      const rows = adminRes.success && Array.isArray(adminRes.data) ? adminRes.data : [];
+      if (rows.length > 0) {
+        setScheduleClassCodes(collectClassCodesFromScheduleRows(rows));
+        return;
       }
-      if (field === 'content') {
-        if (lang === 'zh-TW') return { ...prev, intro_zh_tw: value };
-        if (lang === 'zh-CN') return { ...prev, intro_zh_cn: value };
-        return { ...prev, intro_en: value };
-      }
-      if (lang === 'zh-TW') return { ...prev, trial_class_name_zh_tw: value };
-      if (lang === 'zh-CN') return { ...prev, trial_class_name_zh_cn: value };
-      return { ...prev, trial_class_name_en: value };
-    });
-  }
+      const res = await api.get<Record<string, unknown>[]>('/classes');
+      const fallback = res.success && Array.isArray(res.data) ? res.data : [];
+      setScheduleClassCodes(collectClassCodesFromScheduleRows(fallback));
+    } catch {
+      setScheduleClassCodes([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    clearLegacyCourseIntroLocalStorage();
+    void loadItems();
+    void loadScheduleCodes();
+  }, [loadItems, loadScheduleCodes]);
+
+  const usedClassCodes = useMemo(() => new Set(items.map((i) => i.class_code)), [items]);
+
+  const availableClassCodes = useMemo(() => {
+    if (editing) return [editing.class_code];
+    return scheduleClassCodes.filter((code) => !usedClassCodes.has(code));
+  }, [editing, scheduleClassCodes, usedClassCodes]);
 
   function openCreate() {
-    setSelectedCourseId('');
-    setForm({});
+    setEditing(null);
+    setSelectedClassCode(availableClassCodes[0] ?? '');
+    setForm(emptyCourseIntroForm());
     setActiveLang('zh-TW');
     setShowModal(true);
   }
 
-  function openEdit(course: AdminCourseIntroOption) {
-    setSelectedCourseId(course.id);
-    const overrides = getCourseIntroOverrides(course.id) || {};
-    setForm({
-      name_zh_tw: overrides.name_zh_tw ?? course.nameZhTw,
-      name_zh_cn: overrides.name_zh_cn ?? course.nameZhCn,
-      name_en: overrides.name_en ?? course.nameEn,
-      intro_zh_tw: overrides.intro_zh_tw ?? course.intro,
-      intro_zh_cn: overrides.intro_zh_cn ?? '',
-      intro_en: overrides.intro_en ?? '',
-      trial_class_name_zh_tw: overrides.trial_class_name_zh_tw ?? course.note,
-      trial_class_name_zh_cn: overrides.trial_class_name_zh_cn ?? '',
-      trial_class_name_en: overrides.trial_class_name_en ?? '',
-    });
+  function openEdit(record: CourseIntroRecord) {
+    setEditing(record);
+    setSelectedClassCode(record.class_code);
+    setForm(recordToFormFields(record));
     setActiveLang('zh-TW');
     setShowModal(true);
-  }
-
-  function handleDelete(course: AdminCourseIntroOption) {
-    const ok = window.confirm(
-      t('admin.courseIntro.confirmDelete', '確定刪除此課程介紹內容？')
-    );
-    if (!ok) return;
-    deleteCourseIntroOverrides(course.id);
   }
 
   function closeModal() {
     setShowModal(false);
-    setSelectedCourseId('');
-    setForm({});
+    setEditing(null);
+    setSelectedClassCode('');
+    setForm(emptyCourseIntroForm());
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleDelete(record: CourseIntroRecord) {
+    const ok = window.confirm(
+      t(
+        'admin.courseIntro.confirmDeleteEntry',
+        '確定刪除此課堂介紹？刪除後將從列表移除，前台不再套用此自訂內容。',
+      ),
+    );
+    if (!ok) return;
+    try {
+      await deleteCourseIntro(record.id);
+      await loadItems();
+      showStatus(t('admin.courseIntro.deleted', '已刪除課堂介紹。'), 'success');
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : t('admin.courseIntro.deleteFailed', '刪除失敗，請重新整理頁面後再試。');
+      showStatus(msg, 'info');
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selectedCourseId) return;
-    setCourseIntroOverrides(selectedCourseId, {
-      name_zh_tw: form.name_zh_tw?.trim() || undefined,
-      name_zh_cn: form.name_zh_cn?.trim() || undefined,
-      name_en: form.name_en?.trim() || undefined,
-      intro_zh_tw: form.intro_zh_tw?.trim() || undefined,
-      intro_zh_cn: form.intro_zh_cn?.trim() || undefined,
-      intro_en: form.intro_en?.trim() || undefined,
-      trial_class_name_zh_tw: form.trial_class_name_zh_tw?.trim() || undefined,
-      trial_class_name_zh_cn: form.trial_class_name_zh_cn?.trim() || undefined,
-      trial_class_name_en: form.trial_class_name_en?.trim() || undefined,
-    });
-    closeModal();
+    const classCode = (editing?.class_code ?? selectedClassCode).trim();
+    if (!classCode) return;
+    if (!hasCourseIntroContent(form)) {
+      showStatus(
+        t('admin.courseIntro.validationRequired', '請至少填寫一種語言的課程名稱或簡介。'),
+        'info',
+      );
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = { class_code: classCode, ...form };
+      if (editing) {
+        await updateCourseIntro(editing.id, payload);
+      } else {
+        await createCourseIntro(payload);
+      }
+      await loadItems();
+      await loadScheduleCodes();
+      showStatus(t('admin.courseIntro.saved', '已儲存至伺服器。'), 'success');
+      closeModal();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗');
+      showStatus(msg, 'info');
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const selectedCourse = courses.find((course) => course.id === selectedCourseId) || null;
+  const modalTitle = editing
+    ? t('admin.courseIntro.editTitle', '編輯課堂介紹')
+    : t('admin.courseIntro.addTitle', '新增課堂介紹');
 
   return (
     <Layout>
@@ -209,50 +226,113 @@ export default function AdminCourseIntroPage() {
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-colors"
+            disabled={apiUnavailable}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-colors disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
             {t('common.add', '新增')}
           </button>
         </div>
 
+        <p className="mb-4 text-sm text-gray-600">
+          {t(
+            'admin.courseIntro.apiHint',
+            '資料儲存於後端 course_intros。刪除會移除整筆記錄；前台依 class_code 合併至課程介紹頁。',
+          )}
+        </p>
+
+        {apiUnavailable && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {t(
+              'admin.courseIntro.apiUnavailable',
+              '後端尚未提供課堂介紹 API（GET /api/admin/course-intros）。請依 studio/docs/COURSE_INTRO_CMS_SPEC.md 實作後再使用此頁。',
+            )}
+          </div>
+        )}
+
+        {statusMessage && (
+          <div
+            className={`mb-4 rounded-lg border px-4 py-3 text-sm flex items-start justify-between gap-3 ${
+              statusKind === 'success'
+                ? 'border-green-200 bg-green-50 text-green-800'
+                : 'border-amber-200 bg-amber-50 text-amber-800'
+            }`}
+            role="status"
+          >
+            <span>{statusMessage}</span>
+            <button
+              type="button"
+              onClick={() => setStatusMessage(null)}
+              className="shrink-0 text-current opacity-70 hover:opacity-100"
+              aria-label={t('common.close', '關閉')}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          {coursesLoading ? (
+          {loading ? (
             <div className="p-6 text-sm text-gray-500">{t('common.loading', '載入中…')}</div>
-          ) : courses.length === 0 ? (
-            <div className="p-6 text-sm text-gray-500">
-              {coursesLoadFailed
-                ? t('admin.courseIntro.loadFailed', '無法從 API 載入課程資料，請稍後再試。')
-                : t('admin.courseIntro.empty', '目前沒有可用課程資料。')}
+          ) : items.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <BookOpen className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+              <p>{t('admin.courseIntro.empty', '尚未建立任何課堂介紹。')}</p>
+              {!apiUnavailable && (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="mt-4 text-primary font-medium hover:underline"
+                >
+                  {t('admin.courseIntro.addFirst', '新增第一筆')}
+                </button>
+              )}
             </div>
           ) : (
             <ul className="divide-y divide-gray-200">
-              {courses.map((course) => (
-                <li key={course.id} className="flex items-center justify-between gap-4 p-4 hover:bg-gray-50">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-900 truncate">{pickLocalizedName(course, 'zh-TW')}</p>
-                    <p className="text-sm text-gray-500 truncate">{course.classCode}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => openEdit(course)}
-                      className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
-                      title={t('common.edit', '編輯')}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(course)}
-                      className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
-                      title={t('common.delete', '刪除')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </li>
-              ))}
+              {items.map((record) => {
+                const nameZhTw = getCourseIntroName(record, 'zh-TW');
+                const introZhTw = getCourseIntroText(record, 'zh-TW');
+                return (
+                  <li
+                    key={record.id}
+                    className="flex items-center justify-between gap-4 p-4 hover:bg-gray-50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                        <p className="font-semibold text-gray-900 truncate">{nameZhTw || record.class_code}</p>
+                        {!record.is_active && (
+                          <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                            {t('admin.courseIntro.inactiveBadge', '已停用')}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500 truncate">{record.class_code}</p>
+                      {introZhTw && (
+                        <p className="text-sm text-gray-600 mt-1 line-clamp-2">{introZhTw}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => openEdit(record)}
+                        className="p-2 rounded-lg text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+                        title={t('common.edit', '編輯')}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(record)}
+                        className="p-2 rounded-lg text-red-600 hover:bg-red-50 transition-colors"
+                        title={t('common.delete', '刪除')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -262,12 +342,14 @@ export default function AdminCourseIntroPage() {
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-center justify-center p-4">
             <div className="fixed inset-0 bg-black/50" onClick={closeModal} aria-hidden />
-            <div className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true">
+            <div
+              className="relative bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+              role="dialog"
+              aria-modal="true"
+            >
               <div className="p-6">
                 <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                  <h2 className="text-xl font-bold text-gray-900">
-                    {t('common.add', '新增')} · {t('admin.courseIntro.title', '課堂介紹')}
-                  </h2>
+                  <h2 className="text-xl font-bold text-gray-900">{modalTitle}</h2>
                   <div className="inline-flex items-center rounded-md border border-gray-200 p-0.5 bg-white">
                     {LANG_OPTIONS.map((option) => (
                       <button
@@ -288,32 +370,51 @@ export default function AdminCourseIntroPage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('admin.courseIntro.courseName', '課程名稱')}
+                      {t('common.courseCode', '課程 Code')}
                     </label>
-                    <select
-                      value={selectedCourseId}
-                      onChange={(e) => setSelectedCourseId(e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
-                      required
-                    >
-                      <option value="">{t('admin.classNotice.selectClass', '請選擇')}</option>
-                      {courses.map((course) => (
-                        <option key={course.id} value={course.id}>
-                          {pickLocalizedName(course, activeLang)}
-                        </option>
-                      ))}
-                    </select>
+                    {editing ? (
+                      <input
+                        type="text"
+                        value={editing.class_code}
+                        readOnly
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600"
+                      />
+                    ) : (
+                      <select
+                        value={selectedClassCode}
+                        onChange={(e) => setSelectedClassCode(e.target.value)}
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+                        required
+                      >
+                        <option value="">{t('admin.classNotice.selectClass', '請選擇')}</option>
+                        {availableClassCodes.map((code) => (
+                          <option key={code} value={code}>
+                            {code}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    {!editing && availableClassCodes.length === 0 && (
+                      <p className="mt-1 text-xs text-amber-700">
+                        {t(
+                          'admin.courseIntro.noClassCodes',
+                          '班表內沒有可用的課程 Code，或已全部建立介紹。',
+                        )}
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      {t('common.courseCode', '課程 Code')}
+                      {t('admin.courseIntro.courseName', '課程名稱')}
                     </label>
                     <input
                       type="text"
-                      value={selectedCourse?.classCode ?? ''}
-                      readOnly
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-gray-50 text-gray-600"
+                      value={formValue(form, 'title', activeLang)}
+                      onChange={(e) =>
+                        setForm((prev) => setFormField(prev, 'title', activeLang, e.target.value))
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                     />
                   </div>
 
@@ -323,22 +424,52 @@ export default function AdminCourseIntroPage() {
                     </label>
                     <textarea
                       rows={4}
-                      value={getFormValue('content', activeLang)}
-                      onChange={(e) => setFormValue('content', activeLang, e.target.value)}
+                      value={formValue(form, 'content', activeLang)}
+                      onChange={(e) =>
+                        setForm((prev) => setFormField(prev, 'content', activeLang, e.target.value))
+                      }
                       className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y"
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('admin.courseIntro.trialClassName', '試堂名稱')}
+                    </label>
+                    <input
+                      type="text"
+                      value={formValue(form, 'note', activeLang)}
+                      onChange={(e) =>
+                        setForm((prev) => setFormField(prev, 'note', activeLang, e.target.value))
+                      }
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={form.is_active}
+                      onChange={(e) => setForm((prev) => ({ ...prev, is_active: e.target.checked }))}
+                      className="rounded border-gray-300"
+                    />
+                    {t('admin.courseIntro.activeLabel', '前台顯示')}
+                  </label>
+
                   <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={closeModal} className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+                    >
                       {t('common.cancel', '取消')}
                     </button>
                     <button
                       type="submit"
+                      disabled={saving || (!editing && !selectedClassCode)}
                       className="px-4 py-2 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark disabled:opacity-50"
-                      disabled={!selectedCourseId}
                     >
-                      {t('common.save', '儲存')}
+                      {saving ? t('common.saving', '儲存中…') : t('common.save', '儲存')}
                     </button>
                   </div>
                 </form>

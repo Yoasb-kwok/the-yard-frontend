@@ -4,51 +4,55 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDate, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
-import { postAdminAssignTokensToClass } from '../../lib/adminTokenAssignment';
+import {
+  postAdminAssignTokensToClass,
+  postAdminUnassignTokensFromClass,
+  patchFulfillEnrollmentRequest,
+  isBenignFulfillEnrollmentError,
+  formatAssignTokensApiError,
+  readUnassignTokensRefunded,
+} from '../../lib/adminTokenAssignment';
 import { getAdminUserTokenBalance } from '../../lib/adminUserTokens';
+import type { EnrollmentScope } from '../../lib/classEnrollmentTokens';
 import {
   buildEnrollmentConfirmedEmailExtras,
   buildEnrollmentLessonEmailRows,
+  buildEnrollmentLessonEmailRowsFromClassSchedule,
+  type EnrollmentConfirmedEmailExtras,
 } from '../../lib/enrollmentConfirmedEmailPayload';
 import { useHolidays } from '../../lib/useHolidays';
-import { ArrowLeft, Search, Calendar, User, Package, CheckCircle, X, Filter, MapPin } from 'lucide-react';
+import { ArrowLeft, Search, Calendar, User, Package, X, Filter } from 'lucide-react';
+import TokenAssignmentCourseList from '../../components/admin/TokenAssignmentCourseList';
+import {
+  buildCourseGroups,
+  filterGroupsForTab,
+  getCourseGroupKey,
+  resolveTokenAssignPlan,
+  type TokenAssignmentClassRow,
+  type TokenAssignmentCourseGroup,
+} from '../../lib/tokenAssignmentGroups';
+import {
+  extractClassEnrollmentRows,
+  mapAdminClassEnrollmentRow,
+  mergeClassRowsWithEnrollments,
+  normalizeClassId,
+  enrollmentIsTokenAssigned,
+  type AdminClassEnrollmentRow,
+} from '../../lib/adminClassEnrollments';
+import { withStudentProfileQuery } from '../../lib/studentProfileScope';
+import { readProfilesArray } from '../../lib/adminUserFields';
+import { parseLessonClassIds } from '../../lib/courseLessonEnrollment';
 
-interface Class {
-  id: string;
-  name: string;
-  class_code: string;
-  instructor: string;
-  start_time: string;
-  end_time: string;
-  capacity: number;
-  enrolled_count: number;
-  is_internal: boolean;
-  is_cancelled: boolean;
-  location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
-}
+interface Class extends TokenAssignmentClassRow {}
 
-interface Enrollment {
-  id: string;
-  class_id: string;
-  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave';
-  created_at: string;
-  className: string;
-  classCode: string;
-  instructor: string;
-  start_time: string;
-  end_time: string;
-  location?: Class['location'];
-}
+type Enrollment = AdminClassEnrollmentRow;
 
 type ListTab = 'unassigned' | 'assigned';
 
-type AssignedClassRow = {
-  classId: string;
-  classItem: Class | null;
-  tokenCount: number;
-  enrollmentIds: string[];
-  status: Enrollment['status'];
-};
+type ConfirmModal =
+  | { type: 'assign'; classId: string; className: string }
+  | { type: 'assignBatch'; className: string; lessonIds: string[]; expectedLessonCount?: number }
+  | { type: 'remove'; enrollmentId: string; classId: string; className: string };
 
 interface User {
   id: string;
@@ -61,8 +65,12 @@ interface User {
   expiry_date: string;
 }
 
-function mapAdminUserRow(raw: Record<string, unknown>, enrollmentRows?: unknown): User {
-  const balance = getAdminUserTokenBalance(raw, enrollmentRows);
+function mapAdminUserRow(
+  raw: Record<string, unknown>,
+  enrollmentRows?: unknown,
+  studentProfileId?: string | null,
+): User {
+  const balance = getAdminUserTokenBalance(raw, enrollmentRows, studentProfileId);
   const tokens = Array.isArray(raw.user_tokens) ? raw.user_tokens : [];
   let earliestExpiry = '';
   for (const t of tokens) {
@@ -93,7 +101,18 @@ export default function TokenAssignmentPage() {
   const navigate = useNavigate();
   const { userId } = useParams<{ userId: string }>();
   const [searchParams] = useSearchParams();
-  const prefillHandled = useRef(false);
+  const studentProfileId = searchParams.get('profileId')?.trim() || searchParams.get('studentProfileId')?.trim() || '';
+  /** Prevents re-opening the same URL prefill; reset when user dismisses the modal. */
+  const consumedPrefillKeyRef = useRef<string | null>(null);
+  /** Persists ?requestId=&classId=&quantity= after URL is cleared so the modal does not re-open. */
+  const enrollmentAssignLinkRef = useRef<{
+    requestId?: string;
+    classId: string;
+    quantity: number;
+    lessonCount?: number;
+    scope?: EnrollmentScope;
+    lessonClassIds?: string[];
+  } | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [classes, setClasses] = useState<Class[]>([]);
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
@@ -101,93 +120,111 @@ export default function TokenAssignmentPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [monthFilter, setMonthFilter] = useState<string>('all');
   const [locationFilter, setLocationFilter] = useState<'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui'>('all');
-  const [confirmModal, setConfirmModal] = useState<null | { type: 'assign'; classId: string; className: string } | { type: 'remove'; enrollmentId: string; classId: string; className: string }>(null);
+  const [confirmModal, setConfirmModal] = useState<ConfirmModal | null>(null);
   const [assignTokenInput, setAssignTokenInput] = useState('1');
   const [assigning, setAssigning] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const tabFromUrl = searchParams.get('tab') === 'assigned' ? 'assigned' : 'unassigned';
   const [listTab, setListTab] = useState<ListTab>(tabFromUrl);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+  const [enrollmentsLoadWarning, setEnrollmentsLoadWarning] = useState<string | null>(null);
+  const [activeStudentName, setActiveStudentName] = useState<string | null>(null);
 
   useEffect(() => {
     if (userId) {
+      consumedPrefillKeyRef.current = null;
+      enrollmentAssignLinkRef.current = null;
       void loadData();
     }
-  }, [userId]);
-
-  function mapEnrollmentRow(raw: Record<string, unknown>): Enrollment | null {
-    const cls = raw.class as Record<string, unknown> | undefined;
-    const classId = String(raw.class_id ?? cls?.id ?? '');
-    const id = String(raw.id ?? '');
-    if (!id || !classId) return null;
-    const start = String(cls?.start_time ?? raw.start_time ?? '');
-    const end = String(cls?.end_time ?? raw.end_time ?? start);
-    return {
-      id,
-      class_id: classId,
-      status: (raw.status as Enrollment['status']) || 'enrolled',
-      created_at: String(raw.created_at ?? ''),
-      className: String(cls?.name ?? cls?.class_name ?? raw.class_name ?? ''),
-      classCode: String(cls?.class_code ?? cls?.program_code ?? raw.program_code ?? ''),
-      instructor: String(cls?.instructor ?? ''),
-      start_time: start,
-      end_time: end,
-      location: cls?.location as Enrollment['location'],
-    };
-  }
+  }, [userId, studentProfileId]);
 
   async function loadData() {
     if (!userId) return;
     setLoading(true);
+    setEnrollmentsLoadWarning(null);
     try {
       const [usersRes, classesRes, enrollRes] = await Promise.all([
         api.get<Record<string, unknown>[]>('/admin/users'),
         api.get<any[]>('/admin/classes'),
-        api.get<Record<string, unknown>[]>(`/admin/users/${userId}/class-enrollments`).catch(() => ({
-          success: false,
-          data: [] as Record<string, unknown>[],
+        api
+          .get<unknown>(
+            `/admin/users/${userId}/class-enrollments`,
+            withStudentProfileQuery(undefined, studentProfileId || undefined),
+          )
+          .catch((err) => ({
+          success: false as const,
+          data: undefined,
+          msg: err instanceof Error ? err.message : String(err),
         })),
       ]);
 
       const users = usersRes.success && Array.isArray(usersRes.data) ? usersRes.data : [];
-      const raw = users.find((u) => String(u.id) === String(userId));
+      const raw = users.find((u) => normalizeClassId(u.id) === normalizeClassId(userId));
       if (!raw) {
         setUser(null);
         setClasses([]);
         setEnrollments([]);
         return;
       }
-      const enrollRows = enrollRes.success && Array.isArray(enrollRes.data) ? enrollRes.data : [];
+
+      if (enrollRes.success === false) {
+        setEnrollmentsLoadWarning(
+          enrollRes.msg ||
+            t('admin.tokenAssignment.enrollmentsLoadFailed', {
+              defaultValue: '無法載入已分配課程記錄，已分配分頁可能不完整。',
+            }),
+        );
+      }
+
+      const enrollRows = extractClassEnrollmentRows(
+        enrollRes.success !== false ? (enrollRes.data ?? enrollRes) : [],
+      );
       const mappedEnrollments = enrollRows
-        .map((row) => mapEnrollmentRow(row as Record<string, unknown>))
+        .map((row) => mapAdminClassEnrollmentRow(row as Record<string, unknown>))
         .filter((e): e is Enrollment => e != null);
       setEnrollments(mappedEnrollments);
 
-      const mappedUser = mapAdminUserRow(raw, enrollRows);
+      const profiles = readProfilesArray(raw);
+      const profileRow = studentProfileId
+        ? profiles.find((p) => normalizeClassId((p as Record<string, unknown>).id) === studentProfileId)
+        : undefined;
+      setActiveStudentName(
+        profileRow
+          ? String((profileRow as Record<string, unknown>).full_name ?? (profileRow as Record<string, unknown>).name ?? '')
+          : null,
+      );
+      const mappedUser = mapAdminUserRow(raw, enrollRows, studentProfileId || undefined);
       setUser(mappedUser);
 
+      let mappedClasses: Class[] = [];
       if (classesRes.success && Array.isArray(classesRes.data)) {
-        const mapped: Class[] = classesRes.data.map((cls: any) => ({
-          id: String(cls.id),
-          name: cls.name || '',
-          class_code: cls.program_code || '',
-          instructor: cls.instructor || '',
-          start_time: cls.start_time,
-          end_time: cls.end_time,
-          capacity: cls.capacity ?? 0,
-          enrolled_count: cls.enrolled_count ?? 0,
+        mappedClasses = classesRes.data.map((cls: Record<string, unknown>) => ({
+          id: normalizeClassId(cls.id),
+          name: String(cls.name ?? ''),
+          class_code: String(cls.program_code ?? cls.class_code ?? ''),
+          instructor: String(cls.instructor ?? ''),
+          start_time: String(cls.start_time ?? ''),
+          end_time: String(cls.end_time ?? cls.start_time ?? ''),
+          capacity: Number(cls.capacity ?? 0),
+          enrolled_count: Number(cls.enrolled_count ?? 0),
           is_internal: cls.is_internal === 1 || cls.is_internal === true,
           is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
-          location: cls.location,
+          location: cls.location as Class['location'],
+          lesson_number: cls.lesson_number != null ? Number(cls.lesson_number) : null,
+          total_lessons: cls.total_lessons != null ? Number(cls.total_lessons) : undefined,
+          token_cost: cls.token_cost != null ? Number(cls.token_cost) : 1,
         }));
-        setClasses(mapped);
-      } else {
-        setClasses([]);
       }
+      setClasses(mergeClassRowsWithEnrollments(mappedClasses, mappedEnrollments));
 
     } catch (err) {
       console.error('TokenAssignment loadData:', err);
       setUser(null);
       setClasses([]);
       setEnrollments([]);
+      setEnrollmentsLoadWarning(
+        err instanceof Error ? err.message : t('admin.tokenAssignment.enrollmentsLoadFailed'),
+      );
     } finally {
       setLoading(false);
     }
@@ -198,21 +235,64 @@ export default function TokenAssignmentPage() {
     setListTab(tab);
   }, [searchParams]);
 
-  useEffect(() => {
-    if (loading || prefillHandled.current || classes.length === 0) return;
-    if (searchParams.get('tab') === 'assigned') return;
-    const classId = searchParams.get('classId')?.trim();
-    const quantity = searchParams.get('quantity')?.trim();
-    if (!classId) return;
-    const target = classes.find((c) => c.id === classId);
-    if (!target || target.is_cancelled) return;
-    prefillHandled.current = true;
-    setListTab('unassigned');
-    if (quantity && !isNaN(parseInt(quantity, 10)) && parseInt(quantity, 10) >= 1) {
-      setAssignTokenInput(String(parseInt(quantity, 10)));
+  const toggleGroupExpand = useCallback((key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  /** Only link pending enrollment request when assigning the exact class from enrollment queue. */
+  const getEnrollmentRequestIdForClass = useCallback(
+    (classId: string): string | undefined => {
+      const fromRef = enrollmentAssignLinkRef.current;
+      if (fromRef?.requestId && String(fromRef.classId) === String(classId)) {
+        return fromRef.requestId;
+      }
+      const requestId = searchParams.get('requestId')?.trim();
+      const linkedClassId = searchParams.get('classId')?.trim();
+      if (!requestId || !linkedClassId) return undefined;
+      if (String(linkedClassId) !== String(classId)) return undefined;
+      return requestId;
+    },
+    [searchParams],
+  );
+
+  const clearEnrollmentAssignLinkFromUrl = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    if (
+      !next.has('requestId') &&
+      !next.has('classId') &&
+      !next.has('quantity') &&
+      !next.has('lessonCount') &&
+      !next.has('scope') &&
+      !next.has('lessonClassIds')
+    ) {
+      return;
     }
-    setConfirmModal({ type: 'assign', classId: target.id, className: target.name });
-  }, [loading, classes, searchParams]);
+    next.delete('requestId');
+    next.delete('classId');
+    next.delete('quantity');
+    next.delete('lessonCount');
+    next.delete('scope');
+    next.delete('lessonClassIds');
+    navigate(
+      { pathname: `/admin/users/${userId}/assign-tokens`, search: next.toString() },
+      { replace: true },
+    );
+  }, [navigate, searchParams, userId]);
+
+  const consumeEnrollmentRequestLink = useCallback(() => {
+    if (enrollmentAssignLinkRef.current) {
+      enrollmentAssignLinkRef.current = {
+        ...enrollmentAssignLinkRef.current,
+        requestId: undefined,
+      };
+    }
+    clearEnrollmentAssignLinkFromUrl();
+  }, [clearEnrollmentAssignLinkFromUrl]);
 
   const getLocale = (): string => {
     const langMap: { [key: string]: string } = {
@@ -228,8 +308,83 @@ export default function TokenAssignmentPage() {
     return user.remaining_tokens;
   };
 
-  const isClassAssigned = (classId: string): boolean => {
-    return enrollments.some(e => e.class_id === classId);
+  const getClassTokenCost = useCallback(
+    (classId: string): number => {
+      const row = classes.find((c) => c.id === classId);
+      return Math.max(1, Number(row?.token_cost) || 1);
+    },
+    [classes],
+  );
+
+  const sumTokensForLessonIds = useCallback(
+    (lessonIds: string[]): number =>
+      lessonIds.reduce((sum, id) => sum + getClassTokenCost(id), 0),
+    [getClassTokenCost],
+  );
+
+  const applyLocalAssignmentDelta = useCallback(
+    (classId: string, tokensCharged: number) => {
+      setUser((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          remaining_tokens: Math.max(0, prev.remaining_tokens - tokensCharged),
+          assigned_tokens: prev.assigned_tokens + tokensCharged,
+        };
+      });
+      setEnrollments((prev) => {
+        const existing = prev.find((e) => e.class_id === classId);
+        if (existing) {
+          return prev.map((e) =>
+            e.class_id === classId ? { ...e, tokens_charged: tokensCharged } : e,
+          );
+        }
+        const classItem = classes.find((c) => c.id === classId);
+        if (!classItem) return prev;
+        return [
+          ...prev,
+          {
+            id: `local-${classId}`,
+            class_id: classId,
+            status: 'enrolled' as const,
+            tokens_charged: tokensCharged,
+            created_at: new Date().toISOString(),
+            className: classItem.name,
+            classCode: classItem.class_code,
+            instructor: classItem.instructor,
+            start_time: classItem.start_time,
+            end_time: classItem.end_time,
+            location: classItem.location,
+          },
+        ];
+      });
+    },
+    [classes],
+  );
+
+  const applyLocalUnassignmentDelta = useCallback((classId: string, tokensRefunded: number) => {
+    const key = normalizeClassId(classId);
+    setUser((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        remaining_tokens: prev.remaining_tokens + tokensRefunded,
+        assigned_tokens: Math.max(0, prev.assigned_tokens - tokensRefunded),
+      };
+    });
+    setEnrollments((prev) => prev.filter((e) => normalizeClassId(e.class_id) !== key));
+  }, []);
+
+  const isClassTokensAssigned = (classId: string): boolean => {
+    const key = normalizeClassId(classId);
+    return enrollments.some((e) => normalizeClassId(e.class_id) === key && enrollmentIsTokenAssigned(e));
+  };
+
+  const hasEnrollmentAwaitingTokens = (classId: string): boolean => {
+    const key = normalizeClassId(classId);
+    return enrollments.some(
+      (e) => normalizeClassId(e.class_id) === key && !enrollmentIsTokenAssigned(e),
+    );
   };
 
   const isClassFull = (classItem: Class): boolean => {
@@ -240,29 +395,219 @@ export default function TokenAssignmentPage() {
     return new Date(classItem.start_time) < new Date();
   };
 
+  const isClassIdPast = useCallback(
+    (classId: string): boolean => {
+      const row = classes.find((c) => c.id === classId);
+      return row ? isClassPast(row) : false;
+    },
+    [classes],
+  );
+
+  /** Future lessons first so partial batch succeeds for upcoming dates before past-lesson API errors. */
+  const sortLessonIdsForBatch = useCallback(
+    (ids: string[]): string[] => {
+      return [...ids].sort((a, b) => {
+        const ca = classes.find((c) => c.id === a);
+        const cb = classes.find((c) => c.id === b);
+        const pa = ca && isClassPast(ca) ? 1 : 0;
+        const pb = cb && isClassPast(cb) ? 1 : 0;
+        if (pa !== pb) return pa - pb;
+        return (
+          (Number(ca?.lesson_number) || 0) - (Number(cb?.lesson_number) || 0) ||
+          new Date(ca?.start_time ?? 0).getTime() - new Date(cb?.start_time ?? 0).getTime()
+        );
+      });
+    },
+    [classes],
+  );
+
+  const formatAssignError = useCallback(
+    (err: unknown): string => {
+      if (err instanceof ApiError && err.code === 'CLASS_PAST') {
+        return t('admin.tokenAssignment.errorClassPast');
+      }
+      let msg = formatAssignTokensApiError(err);
+      if (/CLASS_PAST/i.test(msg)) {
+        return t('admin.tokenAssignment.errorClassPast');
+      }
+      return msg;
+    },
+    [t],
+  );
+
   const canAssignToClass = (classItem: Class): boolean => {
     const unassignedTokens = getUnassignedTokens();
-    return !isClassAssigned(classItem.id) && !isClassFull(classItem) && !isClassPast(classItem) && !classItem.is_cancelled && unassignedTokens > 0;
+    if (isClassTokensAssigned(classItem.id)) return false;
+    if (isClassFull(classItem) || isClassPast(classItem) || classItem.is_cancelled || unassignedTokens <= 0) {
+      return false;
+    }
+    return true;
   };
 
-  async function assignTokenToClass(classId: string, count: number): Promise<boolean> {
-    if (!user || !userId || count < 1) return false;
+  const canAssignFullCourseBatch = (classItem: Class): boolean => {
+    if (isClassTokensAssigned(classItem.id)) return false;
+    if (classItem.is_cancelled || isClassPast(classItem) || isClassFull(classItem)) return false;
+    return getUnassignedTokens() > 0;
+  };
+
+  const getRequestLessonClassIds = useCallback((): string[] => {
+    const fromRef = enrollmentAssignLinkRef.current?.lessonClassIds;
+    if (fromRef?.length) return fromRef;
+    return parseLessonClassIds(searchParams.get('lessonClassIds'));
+  }, [searchParams]);
+
+  const getAssignLinkContext = useCallback((): {
+    enrollmentScope?: EnrollmentScope;
+    expectedLessonCount?: number;
+    lessonClassIds?: string[];
+  } => {
+    const link = enrollmentAssignLinkRef.current;
+    if (link?.scope || link?.lessonCount || link?.lessonClassIds?.length) {
+      return {
+        enrollmentScope: link.scope,
+        expectedLessonCount: link.lessonCount,
+        lessonClassIds: link.lessonClassIds,
+      };
+    }
+    const scopeRaw = searchParams.get('scope')?.trim();
+    const lessonRaw = searchParams.get('lessonCount')?.trim();
+    const lessonCount = lessonRaw && !isNaN(parseInt(lessonRaw, 10)) ? parseInt(lessonRaw, 10) : undefined;
+    const enrollmentScope =
+      scopeRaw === 'full_course' ? 'full_course' : scopeRaw === 'single_lesson' ? 'single_lesson' : undefined;
+    const lessonClassIds = parseLessonClassIds(searchParams.get('lessonClassIds'));
+    return { enrollmentScope, expectedLessonCount: lessonCount, lessonClassIds };
+  }, [searchParams]);
+
+  const buildTokenAssignPlan = useCallback(
+    (classId: string, tokenCount: number) => {
+      const ctx = getAssignLinkContext();
+      return resolveTokenAssignPlan({
+        classId,
+        tokenCount,
+        classes,
+        canAssign: canAssignToClass,
+        canAssignFullCourse: canAssignFullCourseBatch,
+        enrollmentScope: ctx.enrollmentScope,
+        expectedLessonCount: ctx.expectedLessonCount,
+        preferredLinkClassId: enrollmentAssignLinkRef.current?.classId ?? classId,
+        requestLessonClassIds: ctx.lessonClassIds?.length ? ctx.lessonClassIds : getRequestLessonClassIds(),
+      });
+    },
+    [classes, getAssignLinkContext, getRequestLessonClassIds, enrollments, user],
+  );
+
+  const dismissConfirmModal = useCallback(() => {
+    consumedPrefillKeyRef.current = null;
+    setConfirmModal(null);
+  }, []);
+
+  useEffect(() => {
+    if (loading || classes.length === 0) return;
+    if (searchParams.get('tab') === 'assigned') return;
+    const classId = searchParams.get('classId')?.trim();
+    const quantity = searchParams.get('quantity')?.trim();
+    const lessonCountRaw = searchParams.get('lessonCount')?.trim();
+    const scopeRaw = searchParams.get('scope')?.trim();
+    if (!classId) return;
+    const lessonClassIdsRaw = searchParams.get('lessonClassIds')?.trim() ?? '';
+    const prefillKey = `${classId}|${searchParams.get('requestId')?.trim() ?? ''}|${quantity ?? ''}|${lessonCountRaw ?? ''}|${scopeRaw ?? ''}|${lessonClassIdsRaw}`;
+    if (consumedPrefillKeyRef.current === prefillKey) return;
+    const target = classes.find((c) => c.id === classId);
+    if (!target || target.is_cancelled) {
+      consumedPrefillKeyRef.current = prefillKey;
+      clearEnrollmentAssignLinkFromUrl();
+      return;
+    }
+    consumedPrefillKeyRef.current = prefillKey;
+    const lessonCount =
+      lessonCountRaw && !isNaN(parseInt(lessonCountRaw, 10)) ? parseInt(lessonCountRaw, 10) : undefined;
+    const scope: EnrollmentScope | undefined =
+      scopeRaw === 'full_course' ? 'full_course' : scopeRaw === 'single_lesson' ? 'single_lesson' : undefined;
+    const quantityN = quantity && !isNaN(parseInt(quantity, 10)) ? parseInt(quantity, 10) : 1;
+    const tokenCount =
+      scope === 'full_course' && lessonCount != null ? Math.max(quantityN, lessonCount) : quantityN;
+    const requestId = searchParams.get('requestId')?.trim() || undefined;
+    const lessonClassIds = parseLessonClassIds(lessonClassIdsRaw);
+    enrollmentAssignLinkRef.current = {
+      requestId,
+      classId,
+      quantity: tokenCount,
+      lessonCount,
+      scope,
+      lessonClassIds: lessonClassIds.length > 0 ? lessonClassIds : undefined,
+    };
+    clearEnrollmentAssignLinkFromUrl();
+    setListTab('unassigned');
+    setExpandedGroups((prev) => new Set(prev).add(getCourseGroupKey(target)));
+    const plan = buildTokenAssignPlan(target.id, tokenCount);
+    if (plan.mode === 'batch') {
+      setAssignTokenInput(String(plan.lessonIds.length * plan.tokensPerLesson));
+      setConfirmModal({
+        type: 'assignBatch',
+        className: plan.courseName,
+        lessonIds: plan.lessonIds,
+        expectedLessonCount: plan.expectedLessonCount,
+      });
+      return;
+    }
+    setAssignTokenInput(String(plan.quantity));
+    setConfirmModal({ type: 'assign', classId: target.id, className: target.name });
+  }, [loading, classes, searchParams, clearEnrollmentAssignLinkFromUrl, buildTokenAssignPlan]);
+
+  const resolveEnrollmentRequestIdForAssign = useCallback(
+    (classId: string, assignQuantity: number): string | undefined => {
+      const candidate = getEnrollmentRequestIdForClass(classId);
+      if (!candidate) return undefined;
+      const link = enrollmentAssignLinkRef.current;
+      const tokensRequired = link?.quantity ?? link?.lessonCount;
+      // Backend TOKEN_MISMATCH: with enrollment_request_id, quantity must equal tokens_required.
+      // Full-course uses per-lesson quantity=1 batch + separate fulfill PATCH.
+      if (tokensRequired != null && tokensRequired > 1 && assignQuantity !== tokensRequired) {
+        return undefined;
+      }
+      return candidate;
+    },
+    [getEnrollmentRequestIdForClass],
+  );
+
+  async function assignTokenToClass(
+    classId: string,
+    count: number,
+    options?: {
+      skipReload?: boolean;
+      skipSuccessAlert?: boolean;
+      skipAssigningState?: boolean;
+      /** Batch / other lessons in same course must not reuse ?requestId= from URL */
+      skipEnrollmentRequest?: boolean;
+      /** Batch middle calls should not trigger confirmation email per lesson. */
+      skipConfirmationEmail?: boolean;
+      confirmationEmailOverride?: EnrollmentConfirmedEmailExtras;
+      enrollmentScope?: 'single_lesson' | 'full_course';
+      allowPastLessons?: boolean;
+      lessonClassIds?: string[];
+    },
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (!user || !userId || count < 1) return { ok: false, error: t('common.error') };
 
     const available = getUnassignedTokens();
     if (count > available) {
-      alert(t('admin.tokenAssignment.assignExceedsTotal', {
+      const msg = t('admin.tokenAssignment.assignExceedsTotal', {
         count,
         assigned: user.assigned_tokens,
-        total: available,
-      }));
-      return false;
+        remaining: available,
+      });
+      if (!options?.skipSuccessAlert) alert(msg);
+      return { ok: false, error: msg };
     }
 
-    const enrollmentRequestId = searchParams.get('requestId')?.trim() || undefined;
+    const enrollmentRequestId = options?.skipEnrollmentRequest
+      ? undefined
+      : resolveEnrollmentRequestIdForAssign(classId, count);
     const classItem = classes.find((c) => c.id === classId);
     if (!classItem) {
-      alert(t('admin.tokenAssignment.classNotFound'));
-      return false;
+      const msg = t('admin.tokenAssignment.classNotFound');
+      if (!options?.skipSuccessAlert) alert(msg);
+      return { ok: false, error: msg };
     }
 
     const locale = getLocale();
@@ -276,62 +621,388 @@ export default function TokenAssignmentPage() {
 
     const branchLabel = classItem.location ? t(`home.locations.${classItem.location}`) : undefined;
     const confirmationEmail =
-      user.email &&
-      buildEnrollmentConfirmedEmailExtras({
-        language: i18n.language || 'zh-TW',
-        student_name: user.full_name,
-        student_email: user.email,
-        class_name: classItem.name,
-        class_id: classItem.id,
-        lesson_count: count,
-        tokens_assigned: count,
-        lessons,
-        class_code: classItem.class_code || undefined,
-        instructor: classItem.instructor || undefined,
-        branch: classItem.location,
-        branch_label: branchLabel,
-        enrollment_scope: count > 1 ? 'full_course' : 'single_lesson',
-      });
+      options?.confirmationEmailOverride ??
+      (!options?.skipConfirmationEmail &&
+        user.email &&
+        buildEnrollmentConfirmedEmailExtras({
+          language: i18n.language || 'zh-TW',
+          student_name: activeStudentName || user.full_name,
+          student_email: user.email,
+          class_name: classItem.name,
+          class_id: classItem.id,
+          lesson_count: count,
+          tokens_assigned: count,
+          lessons,
+          class_code: classItem.class_code || undefined,
+          instructor: classItem.instructor || undefined,
+          branch: classItem.location,
+          branch_label: branchLabel,
+          enrollment_scope: count > 1 ? 'full_course' : 'single_lesson',
+        }));
 
-    setAssigning(true);
+    if (!options?.skipAssigningState) setAssigning(true);
     try {
       await postAdminAssignTokensToClass({
         userId,
         classId,
         quantity: count,
+        studentProfileId: studentProfileId || undefined,
         enrollmentRequestId,
         confirmationEmail: confirmationEmail ?? undefined,
+        enrollmentScope: options?.enrollmentScope,
+        allowPastLessons: options?.allowPastLessons,
+        lessonClassIds: options?.lessonClassIds,
       });
+      if (enrollmentRequestId) {
+        consumeEnrollmentRequestLink();
+      }
+      applyLocalAssignmentDelta(classId, count);
+      if (!options?.skipReload) {
+        await loadData();
+      }
+      if (!options?.skipSuccessAlert) {
+        alert(t('admin.tokenAssignment.assignedSuccessfully'));
+      }
+      return { ok: true };
+    } catch (err) {
+      let msg = formatAssignError(err);
+      if (/already enrolled/i.test(msg) && hasEnrollmentAwaitingTokens(classId)) {
+        msg = t('admin.tokenAssignment.assignTokensToExistingEnrollment');
+      }
+      if (!options?.skipSuccessAlert) alert(msg);
+      return { ok: false, error: msg };
+    } finally {
+      if (!options?.skipAssigningState) setAssigning(false);
+    }
+  }
+
+  const formatUnassignError = useCallback(
+    (err: unknown): string => {
+      if (err instanceof ApiError) {
+        if (err.code === 'ENROLLMENT_NOT_FOUND') {
+          return t('admin.tokenAssignment.errorEnrollmentNotFound');
+        }
+        if (err.code === 'NOT_TOKEN_ASSIGNED') {
+          return t('admin.tokenAssignment.errorNotTokenAssigned');
+        }
+        if (err.code === 'CANNOT_UNASSIGN_ATTENDED' || err.code === 'ALREADY_ATTENDED') {
+          return t('admin.tokenAssignment.errorCannotUnassignAttended');
+        }
+      }
+      return formatAssignTokensApiError(err);
+    },
+    [t],
+  );
+
+  async function removeAssignment(enrollmentId: string, classId: string): Promise<boolean> {
+    if (!user || !userId) return false;
+
+    const key = normalizeClassId(classId);
+    const enrollment =
+      enrollments.find((e) => e.id === enrollmentId) ??
+      enrollments.find((e) => normalizeClassId(e.class_id) === key);
+    if (!enrollment || !enrollmentIsTokenAssigned(enrollment)) {
+      alert(t('admin.tokenAssignment.errorNotTokenAssigned'));
+      return false;
+    }
+
+    const fallbackRefund = Math.max(1, enrollment.tokens_charged || getClassTokenCost(classId));
+    const classItem = classes.find((c) => normalizeClassId(c.id) === key);
+    const remarks = classItem
+      ? t('admin.tokenAssignment.removeRemarksDefault', {
+          className: classItem.name,
+          defaultValue: 'Admin removed token assignment: {{className}}',
+        })
+      : undefined;
+
+    setRemoving(true);
+    try {
+      const data = await postAdminUnassignTokensFromClass({
+        enrollmentId: enrollment.id,
+        userId,
+        classId,
+        studentProfileId: studentProfileId || undefined,
+        remarks,
+      });
+      const refunded = readUnassignTokensRefunded(data) || fallbackRefund;
+      applyLocalUnassignmentDelta(classId, refunded);
       await loadData();
-      setListTab('assigned');
-      alert(t('admin.tokenAssignment.assignedSuccessfully'));
+      alert(
+        t('admin.tokenAssignment.removeSuccess', {
+          count: refunded,
+          defaultValue: '已移除分配，{{count}} 個代幣已退回未分配餘額。',
+        }),
+      );
       return true;
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : err instanceof Error ? err.message : t('common.error');
-      alert(msg);
+      alert(formatUnassignError(err));
       return false;
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  const handleConfirmModal = async () => {
+    if (!confirmModal || confirmModal.type !== 'remove') return;
+    const ok = await removeAssignment(confirmModal.enrollmentId, confirmModal.classId);
+    if (ok) setConfirmModal(null);
+  };
+
+  /** Mark request fulfilled when every lesson in *this batch* (idsToAssign) succeeded — not original request lessonCount (may include skipped in-progress lessons). */
+  async function fulfillEnrollmentRequestIfNeeded(
+    pendingRequestId: string | undefined,
+    lessonsInBatch: number,
+    assignedCount: number,
+    options?: { assignIncludedRequestId?: boolean },
+  ): Promise<void> {
+    if (!pendingRequestId) return;
+    const target = Math.max(1, lessonsInBatch);
+    if (assignedCount < target) return;
+    if (options?.assignIncludedRequestId) {
+      consumeEnrollmentRequestLink();
+      return;
+    }
+    try {
+      await patchFulfillEnrollmentRequest(pendingRequestId);
+      consumeEnrollmentRequestLink();
+    } catch (err) {
+      if (isBenignFulfillEnrollmentError(err)) {
+        consumeEnrollmentRequestLink();
+        return;
+      }
+      alert(
+        t('admin.tokenAssignment.fulfillRequestFailed', {
+          error: formatAssignTokensApiError(err),
+          defaultValue: '代幣已分配，但標記報名申請完成失敗：{{error}}',
+        }),
+      );
+    }
+  }
+
+  async function assignBatchLessons(
+    lessonIds: string[],
+    courseName: string,
+    _tokensPerLesson = 1,
+  ): Promise<boolean> {
+    if (!user || !userId || lessonIds.length === 0) return false;
+
+    const idsToAssign = sortLessonIdsForBatch(lessonIds.filter((id) => !isClassTokensAssigned(id)));
+    const pastLessonCount = idsToAssign.filter((id) => isClassIdPast(id)).length;
+    const batchAssignOpts = {
+      enrollmentScope: 'full_course' as const,
+      allowPastLessons: true,
+      lessonClassIds: idsToAssign,
+    };
+    if (idsToAssign.length === 0) {
+      alert(t('admin.tokenAssignment.assignedBatchSuccess', { count: 0, courseName }));
+      return true;
+    }
+
+    const totalTokensNeeded = sumTokensForLessonIds(idsToAssign);
+    const available = getUnassignedTokens();
+    if (totalTokensNeeded > available) {
+      alert(
+        t('admin.tokenAssignment.assignExceedsTotal', {
+          count: totalTokensNeeded,
+          assigned: user.assigned_tokens,
+          remaining: available,
+        }),
+      );
+      return false;
+    }
+
+    setAssigning(true);
+    const link = enrollmentAssignLinkRef.current;
+    const pendingRequestId = link?.requestId;
+    const tokensRequired = link?.quantity;
+    let firstError: string | null = null;
+
+    try {
+      const tryBulkAssign = async (anchorId: string, includeRequestId: boolean): Promise<boolean> => {
+        const anchor = classes.find((c) => c.id === anchorId);
+        const scheduled = idsToAssign
+          .map((id) => classes.find((c) => c.id === id))
+          .filter((c): c is Class => c != null)
+          .sort(
+            (a, b) =>
+              (Number(a.lesson_number) || 0) - (Number(b.lesson_number) || 0) ||
+              new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+          );
+        const locale = getLocale();
+        const branchLabel = anchor?.location ? t(`home.locations.${anchor.location}`) : undefined;
+        const confirmationEmailOverride =
+          user.email && anchor
+            ? buildEnrollmentConfirmedEmailExtras({
+                language: i18n.language || 'zh-TW',
+                student_name: activeStudentName || user.full_name,
+                student_email: user.email,
+                class_name: anchor.name,
+                class_id: anchor.id,
+                lesson_count: scheduled.length,
+                tokens_assigned: totalTokensNeeded,
+                lessons: buildEnrollmentLessonEmailRowsFromClassSchedule(scheduled, locale),
+                class_code: anchor.class_code || undefined,
+                instructor: anchor.instructor || undefined,
+                branch: anchor.location,
+                branch_label: branchLabel,
+                enrollment_scope: 'full_course',
+              })
+            : undefined;
+
+        const bulk = await assignTokenToClass(anchorId, totalTokensNeeded, {
+          skipReload: true,
+          skipSuccessAlert: true,
+          skipAssigningState: true,
+          skipEnrollmentRequest: !includeRequestId,
+          skipConfirmationEmail: !confirmationEmailOverride,
+          confirmationEmailOverride: confirmationEmailOverride ?? undefined,
+          ...batchAssignOpts,
+        });
+        if (bulk.ok) {
+          await loadData();
+          await fulfillEnrollmentRequestIfNeeded(pendingRequestId, idsToAssign.length, idsToAssign.length, {
+            assignIncludedRequestId: includeRequestId,
+          });
+          alert(
+            t('admin.tokenAssignment.assignedBatchSuccess', {
+              count: scheduled.length,
+              courseName,
+            }),
+          );
+          return true;
+        }
+        firstError = bulk.error ?? null;
+        return false;
+      };
+
+      // Full-course: prefer one API call (backend enrolls all lesson rows).
+      if (idsToAssign.length > 1 && totalTokensNeeded <= available) {
+        const anchorId =
+          link?.classId && idsToAssign.includes(link.classId) ? link.classId : idsToAssign[0];
+        const useRequestId = Boolean(
+          pendingRequestId &&
+            tokensRequired != null &&
+            tokensRequired > 1 &&
+            tokensRequired === totalTokensNeeded,
+        );
+        if (await tryBulkAssign(anchorId, useRequestId)) {
+          return true;
+        }
+      }
+
+      // Per-lesson fallback when bulk assign is not supported by backend.
+      const scheduledLessons = idsToAssign
+        .map((id) => classes.find((c) => c.id === id))
+        .filter((c): c is Class => c != null);
+      const anchor = scheduledLessons[0];
+      const locale = getLocale();
+      const batchEmailOverride =
+        user.email && anchor
+          ? buildEnrollmentConfirmedEmailExtras({
+              language: i18n.language || 'zh-TW',
+              student_name: activeStudentName || user.full_name,
+              student_email: user.email,
+              class_name: anchor.name,
+              class_id: anchor.id,
+              lesson_count: scheduledLessons.length,
+              tokens_assigned: totalTokensNeeded,
+              lessons: buildEnrollmentLessonEmailRowsFromClassSchedule(scheduledLessons, locale),
+              class_code: anchor.class_code || undefined,
+              instructor: anchor.instructor || undefined,
+              branch: anchor.location,
+              branch_label: anchor.location ? t(`home.locations.${anchor.location}`) : undefined,
+              enrollment_scope: 'full_course',
+            })
+          : undefined;
+
+      let done = 0;
+      for (let i = 0; i < idsToAssign.length; i++) {
+        const classId = idsToAssign[i];
+        if (isClassTokensAssigned(classId)) {
+          done += 1;
+          continue;
+        }
+        const cost = getClassTokenCost(classId);
+        if (cost > getUnassignedTokens()) {
+          if (!firstError) {
+            firstError = t('admin.tokenAssignment.assignExceedsTotal', {
+              count: cost,
+              assigned: user.assigned_tokens,
+              remaining: getUnassignedTokens(),
+            });
+          }
+          continue;
+        }
+        const isLast = i === idsToAssign.length - 1;
+        const result = await assignTokenToClass(classId, cost, {
+          skipReload: true,
+          skipSuccessAlert: true,
+          skipAssigningState: true,
+          skipEnrollmentRequest: true,
+          skipConfirmationEmail: !(isLast && batchEmailOverride),
+          confirmationEmailOverride: isLast ? batchEmailOverride ?? undefined : undefined,
+          ...batchAssignOpts,
+        });
+        if (!result.ok) {
+          if (!firstError) firstError = result.error ?? t('admin.tokenAssignment.assignBatchFailed');
+          continue;
+        }
+        done += 1;
+      }
+
+      await loadData();
+
+      if (done === idsToAssign.length) {
+        await fulfillEnrollmentRequestIfNeeded(pendingRequestId, idsToAssign.length, done);
+        alert(t('admin.tokenAssignment.assignedBatchSuccess', { count: done, courseName }));
+        return true;
+      }
+
+      if (done > 0) {
+        const reason =
+          firstError?.trim() ||
+          (pastLessonCount > 0
+            ? t('admin.tokenAssignment.assignedBatchPartialPastHint', { count: pastLessonCount })
+            : t('admin.tokenAssignment.assignedBatchPartialHint'));
+        alert(
+          t('admin.tokenAssignment.assignedBatchPartial', {
+            done,
+            total: idsToAssign.length,
+            reason,
+          }),
+        );
+      } else {
+        alert(firstError ?? t('admin.tokenAssignment.assignBatchFailed'));
+      }
+      return done > 0;
     } finally {
       setAssigning(false);
     }
   }
 
-  async function removeAssignment(_enrollmentId: string, _classId: string) {
-    alert(t('admin.tokenAssignment.removeNotAvailable'));
-  }
-
-  const handleConfirmModal = async () => {
-    if (!confirmModal) return;
-    if (confirmModal.type === 'remove') {
-      await removeAssignment(confirmModal.enrollmentId, confirmModal.classId);
-    }
-    setConfirmModal(null);
-  };
-
   const handleAssignConfirm = async () => {
-    if (!confirmModal || confirmModal.type !== 'assign') return;
+    if (!confirmModal) return;
+    if (confirmModal.type === 'assignBatch') {
+      const firstLesson = classes.find((c) => c.id === confirmModal.lessonIds[0]);
+      const tokensPerLesson = Math.max(1, Number(firstLesson?.token_cost) || 1);
+      const result = await assignBatchLessons(
+        confirmModal.lessonIds,
+        confirmModal.className,
+        tokensPerLesson,
+      );
+      if (result) dismissConfirmModal();
+      return;
+    }
+    if (confirmModal.type !== 'assign') return;
     const n = Math.max(1, parseInt(assignTokenInput, 10) || 1);
-    const ok = await assignTokenToClass(confirmModal.classId, n);
-    if (ok) setConfirmModal(null);
+    const plan = buildTokenAssignPlan(confirmModal.classId, n);
+    if (plan.mode === 'batch') {
+      const result = await assignBatchLessons(plan.lessonIds, plan.courseName, plan.tokensPerLesson);
+      if (result) dismissConfirmModal();
+      return;
+    }
+    const result = await assignTokenToClass(plan.classId, plan.quantity);
+    if (result.ok) dismissConfirmModal();
   };
 
   const getLocationLabel = (location?: string | typeof locationFilter): string => {
@@ -342,14 +1013,14 @@ export default function TokenAssignmentPage() {
   };
 
   const classMatchesFilters = useCallback(
-    (classItem: Class): boolean => {
+    (classItem: Class, options?: { skipMonth?: boolean }): boolean => {
       const locationMatches = locationFilter === 'all' || classItem.location === locationFilter;
       const searchMatches =
         classItem.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         classItem.class_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
         classItem.instructor.toLowerCase().includes(searchTerm.toLowerCase());
       if (!locationMatches || !searchMatches) return false;
-      if (monthFilter === 'all') return true;
+      if (options?.skipMonth || monthFilter === 'all') return true;
       const d = new Date(classItem.start_time);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === monthFilter;
     },
@@ -357,48 +1028,71 @@ export default function TokenAssignmentPage() {
   );
 
   const assignedClassIds = useMemo(
-    () => new Set(enrollments.map((e) => e.class_id)),
+    () =>
+      new Set(
+        enrollments
+          .filter(enrollmentIsTokenAssigned)
+          .map((e) => normalizeClassId(e.class_id))
+          .filter(Boolean),
+      ),
     [enrollments],
   );
 
-  const filteredClasses = useMemo(
-    () => classes.filter(classMatchesFilters),
-    [classes, classMatchesFilters],
-  );
+  const enrollmentIdByClassId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of enrollments) m.set(normalizeClassId(e.class_id), e.id);
+    return m;
+  }, [enrollments]);
 
-  const unassignedClasses = useMemo(
-    () =>
-      filteredClasses
-        .filter((c) => !assignedClassIds.has(c.id))
-        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()),
-    [filteredClasses, assignedClassIds],
-  );
+  const tokensChargedByClassId = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of enrollments) m.set(normalizeClassId(e.class_id), e.tokens_charged);
+    return m;
+  }, [enrollments]);
 
-  const assignedRows = useMemo(() => {
-    const byClass = new Map<string, AssignedClassRow>();
-    for (const enrollment of enrollments) {
-      const classItem = classes.find((c) => c.id === enrollment.class_id) ?? null;
-      if (classItem && !classMatchesFilters(classItem)) continue;
-      const existing = byClass.get(enrollment.class_id);
-      if (existing) {
-        existing.tokenCount += 1;
-        existing.enrollmentIds.push(enrollment.id);
-      } else {
-        byClass.set(enrollment.class_id, {
-          classId: enrollment.class_id,
-          classItem,
-          tokenCount: 1,
-          enrollmentIds: [enrollment.id],
-          status: enrollment.status,
+  const enrollmentStatusByClassId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const e of enrollments) m.set(normalizeClassId(e.class_id), e.status);
+    return m;
+  }, [enrollments]);
+
+  const enrollmentByClassId = useMemo(() => {
+    const m = new Map<string, { class_id: string; tokens_charged: number; status: string }>();
+    for (const e of enrollments) {
+      const key = normalizeClassId(e.class_id);
+      const existing = m.get(key);
+      if (!existing || e.tokens_charged > existing.tokens_charged) {
+        m.set(key, {
+          class_id: key,
+          tokens_charged: e.tokens_charged,
+          status: e.status,
         });
       }
     }
-    return Array.from(byClass.values()).sort((a, b) => {
-      const ta = a.classItem?.start_time ?? '';
-      const tb = b.classItem?.start_time ?? '';
-      return new Date(ta).getTime() - new Date(tb).getTime();
-    });
-  }, [enrollments, classes, classMatchesFilters]);
+    return m;
+  }, [enrollments]);
+
+  const filteredClasses = useMemo(() => {
+    const skipMonth = listTab === 'assigned';
+    const filtered = classes.filter((c) => classMatchesFilters(c, { skipMonth }));
+    if (listTab !== 'assigned') return filtered;
+    return mergeClassRowsWithEnrollments(filtered, enrollments, { onlyWithTokens: true });
+  }, [classes, classMatchesFilters, listTab, enrollments]);
+
+  const allCourseGroups = useMemo(
+    () => buildCourseGroups(filteredClasses, assignedClassIds, enrollmentByClassId),
+    [filteredClasses, assignedClassIds, enrollmentByClassId],
+  );
+
+  const unassignedGroups = useMemo(
+    () => filterGroupsForTab(allCourseGroups, 'unassigned'),
+    [allCourseGroups],
+  );
+
+  const assignedGroups = useMemo(
+    () => filterGroupsForTab(allCourseGroups, 'assigned'),
+    [allCourseGroups],
+  );
 
   const yearMonths = useMemo(() => {
     const set = new Set<string>();
@@ -420,165 +1114,64 @@ export default function TokenAssignmentPage() {
     return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'short', year: 'numeric' });
   };
 
-  const getStatusLabel = (status: Enrollment['status']) => t(`admin.attendance.statuses.${status}`);
+  const getStatusLabel = (status: string) =>
+    t(`admin.attendance.statuses.${status as Enrollment['status']}`);
 
-  const renderUnassignedTable = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.classes.className')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.classCode')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.instructor')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.time')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.location')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.enrolled')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.actions')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 bg-white">
-          {unassignedClasses.length === 0 ? (
-            <tr>
-              <td colSpan={7} className="px-4 py-10 text-center text-gray-500">
-                {t('admin.tokenAssignment.noUnassignedClasses')}
-              </td>
-            </tr>
-          ) : (
-            unassignedClasses.map((classItem) => {
-              const canAssign = canAssignToClass(classItem);
-              return (
-                <tr key={classItem.id} className={classItem.is_cancelled ? 'opacity-60' : undefined}>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {classItem.name}
-                      {classItem.is_internal && (
-                        <span className="bg-green-100 text-green-800 text-xs px-2 py-0.5 rounded">{t('admin.tokenAssignment.makeupClass')}</span>
-                      )}
-                      {classItem.is_cancelled && (
-                        <span className="bg-red-100 text-red-800 text-xs px-2 py-0.5 rounded">{t('admin.classes.cancelled')}</span>
-                      )}
-                      {isClassPast(classItem) && (
-                        <span className="text-xs text-amber-700">{t('admin.tokenAssignment.classPast')}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-primary">{classItem.class_code || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{classItem.instructor || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {formatDateTimeRange(classItem.start_time, classItem.end_time, getLocale())}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{getLocationLabel(classItem.location)}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">
-                    {classItem.enrolled_count} / {classItem.capacity}
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    {canAssign ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConfirmModal({ type: 'assign', classId: classItem.id, className: classItem.name });
-                          setAssignTokenInput('1');
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary-dark"
-                      >
-                        <Package className="h-4 w-4" />
-                        {t('admin.tokenAssignment.assign')}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-500">
-                        {!getUnassignedTokens()
-                          ? t('admin.tokenAssignment.noTokensAvailable')
-                          : isClassFull(classItem)
-                            ? t('admin.tokenAssignment.classFull')
-                            : '—'}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+  const openAssignLesson = (classItem: Class) => {
+    setConfirmModal({ type: 'assign', classId: classItem.id, className: classItem.name });
+    setAssignTokenInput('1');
+  };
 
-  const renderAssignedTable = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.classes.className')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.classCode')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.instructor')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.time')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.location')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.tokenAssignment.tokensAssigned')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.attendance.status')}</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.actions')}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200 bg-white">
-          {assignedRows.length === 0 ? (
-            <tr>
-              <td colSpan={8} className="px-4 py-10 text-center text-gray-500">
-                {t('admin.tokenAssignment.noAssignedClasses')}
-              </td>
-            </tr>
-          ) : (
-            assignedRows.map((row) => {
-              const c = row.classItem;
-              const name = c?.name ?? enrollments.find((e) => e.class_id === row.classId)?.className ?? '—';
-              const code = c?.class_code ?? enrollments.find((e) => e.class_id === row.classId)?.classCode ?? '—';
-              const instructor = c?.instructor ?? enrollments.find((e) => e.class_id === row.classId)?.instructor ?? '—';
-              const start = c?.start_time ?? enrollments.find((e) => e.class_id === row.classId)?.start_time ?? '';
-              const end = c?.end_time ?? enrollments.find((e) => e.class_id === row.classId)?.end_time ?? start;
-              const loc = c?.location ?? enrollments.find((e) => e.class_id === row.classId)?.location;
-              return (
-                <tr key={row.classId} className="bg-green-50/40">
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900">
-                    <div className="flex items-center gap-2">
-                      {name}
-                      <CheckCircle className="h-4 w-4 text-primary shrink-0" />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-primary">{code}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{instructor}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {start ? formatDateTimeRange(start, end, getLocale()) : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-700">{getLocationLabel(loc)}</td>
-                  <td className="px-4 py-3 text-sm font-semibold text-gray-900">{row.tokenCount}</td>
-                  <td className="px-4 py-3 text-sm">
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                      {getStatusLabel(row.status)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmModal({
-                          type: 'remove',
-                          enrollmentId: row.enrollmentIds[0],
-                          classId: row.classId,
-                          className: name,
-                        })
-                      }
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200"
-                    >
-                      <X className="h-4 w-4" />
-                      {t('admin.tokenAssignment.remove')}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+  const openAssignGroup = (group: TokenAssignmentCourseGroup, _lessonIds: string[]) => {
+    const first = group.lessons[0];
+    if (!first) return;
+    const tokenCount = Math.max(group.totalLessons, group.lessons.length);
+    const plan = buildTokenAssignPlan(first.id, tokenCount);
+    if (plan.mode === 'batch') {
+      setConfirmModal({
+        type: 'assignBatch',
+        className: plan.courseName,
+        lessonIds: plan.lessonIds,
+        expectedLessonCount: plan.expectedLessonCount ?? group.totalLessons,
+      });
+      return;
+    }
+    setConfirmModal({
+      type: 'assignBatch',
+      className: group.displayName,
+      lessonIds: group.lessons.filter((l) => canAssignFullCourseBatch(l)).map((l) => l.id),
+      expectedLessonCount: group.totalLessons,
+    });
+  };
+
+  const awaitingTokensClassIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const e of enrollments) {
+      if (!enrollmentIsTokenAssigned(e)) s.add(normalizeClassId(e.class_id));
+    }
+    return s;
+  }, [enrollments]);
+
+  const listSharedProps = {
+    expandedKeys: expandedGroups,
+    onToggleExpand: toggleGroupExpand,
+    locale: getLocale(),
+    assignedClassIds,
+    awaitingTokensClassIds,
+    getLocationLabel,
+    getStatusLabel,
+    getUnassignedTokens,
+    canAssignToClass,
+    canAssignFullCourseBatch,
+    isClassFull,
+    onAssignLesson: openAssignLesson,
+    onAssignGroup: openAssignGroup,
+    onRemoveAssignment: (enrollmentId: string, classId: string, className: string) =>
+      setConfirmModal({ type: 'remove', enrollmentId, classId, className }),
+    enrollmentIdByClassId,
+    tokensChargedByClassId,
+    enrollmentStatusByClassId,
+  };
 
   if (loading) {
     return (
@@ -633,7 +1226,12 @@ export default function TokenAssignmentPage() {
               <User className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">{user.full_name}</h2>
+              <h2 className="text-xl font-semibold text-gray-900">
+                {activeStudentName || user.full_name}
+              </h2>
+              {activeStudentName && (
+                <p className="text-sm text-gray-500">{t('admin.tokenAssignment.accountLabel', { name: user.full_name })}</p>
+              )}
               <p className="text-gray-600">{formatMobileForDisplay(user.mobile, '-')}</p>
             </div>
           </div>
@@ -643,10 +1241,10 @@ export default function TokenAssignmentPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Package className="h-5 w-5 text-primary" />
-                  <span className="font-medium text-gray-900">{t('admin.tokenAssignment.totalTokens')}</span>
+                  <Package className="h-5 w-5 text-green-600" />
+                  <span className="font-medium text-gray-900">{t('admin.tokenAssignment.remainingTokens')}</span>
                 </div>
-                <div className="text-2xl font-bold text-gray-900">{user.purchased_tokens}</div>
+                <div className="text-2xl font-bold text-green-600">{unassignedTokens}</div>
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-2">
@@ -658,17 +1256,8 @@ export default function TokenAssignmentPage() {
                 </div>
               </div>
             </div>
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-green-600" />
-                  <span className="font-medium text-gray-900">{t('admin.tokenAssignment.unassignedTokens')}</span>
-                </div>
-                <span className="text-2xl font-bold text-green-600">{unassignedTokens}</span>
-              </div>
-              <div className="mt-2 text-sm text-gray-600">
-                {t('admin.tokenAssignment.assignedTokens')}: {user.assigned_tokens} / {user.purchased_tokens}
-              </div>
+            <div className="mt-4 pt-4 border-t border-gray-200 text-sm text-gray-600">
+              {t('admin.tokenAssignment.assignedTokens')}: {user.assigned_tokens}
             </div>
           </div>
         </div>
@@ -720,6 +1309,12 @@ export default function TokenAssignmentPage() {
           </div>
         </div>
 
+        {enrollmentsLoadWarning && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {enrollmentsLoadWarning}
+          </div>
+        )}
+
         {/* Course List: 已開課 / 未開課 */}
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('admin.tokenAssignment.assignToClasses')}</h2>
@@ -748,7 +1343,7 @@ export default function TokenAssignmentPage() {
               }`}
             >
               {t('admin.tokenAssignment.tabUnassigned')}
-              <span className="ml-2 opacity-90">({unassignedClasses.length})</span>
+              <span className="ml-2 opacity-90">({unassignedGroups.length})</span>
             </button>
             <button
               type="button"
@@ -760,35 +1355,83 @@ export default function TokenAssignmentPage() {
               }`}
             >
               {t('admin.tokenAssignment.tabAssigned')}
-              <span className="ml-2 opacity-90">({assignedRows.length})</span>
+              <span className="ml-2 opacity-90">({assignedGroups.length})</span>
             </button>
           </div>
 
-          {listTab === 'unassigned' ? renderUnassignedTable() : renderAssignedTable()}
+          <TokenAssignmentCourseList
+            mode={listTab}
+            groups={listTab === 'unassigned' ? unassignedGroups : assignedGroups}
+            {...listSharedProps}
+          />
         </div>
       </div>
 
       {/* Confirm modal for 分配 / 移除 */}
       {confirmModal && (() => {
-        const isAssign = confirmModal.type === 'assign';
+        const isSingleAssign = confirmModal.type === 'assign';
+        const isBatchAssign = confirmModal.type === 'assignBatch';
         const parsed = parseInt(assignTokenInput, 10);
-        const assignValid = isAssign && !isNaN(parsed) && parsed >= 1;
+        const assignValid = isSingleAssign && !isNaN(parsed) && parsed >= 1;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setConfirmModal(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={dismissConfirmModal}>
             <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center gap-3 mb-4">
-                <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${isAssign ? 'bg-primary/20' : 'bg-red-100'}`}>
-                  {isAssign ? <Package className="h-5 w-5 text-primary" /> : <X className="h-5 w-5 text-red-600" />}
+                <div
+                  className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                    isSingleAssign || isBatchAssign ? 'bg-primary/20' : 'bg-red-100'
+                  }`}
+                >
+                  {isSingleAssign || isBatchAssign ? (
+                    <Package className="h-5 w-5 text-primary" />
+                  ) : (
+                    <X className="h-5 w-5 text-red-600" />
+                  )}
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {isAssign ? t('admin.tokenAssignment.assignTokensModalTitle') : t('admin.tokenAssignment.confirmRemove')}
+                  {isSingleAssign || isBatchAssign
+                    ? t('admin.tokenAssignment.assignTokensModalTitle')
+                    : t('admin.tokenAssignment.confirmRemove')}
                 </h3>
               </div>
-              {isAssign ? (
+              {isBatchAssign ? (
                 <>
-                  <p className="text-gray-600 mb-2">{t('admin.tokenAssignment.assignTokensToClass', { className: confirmModal.className })}</p>
+                  <p className="text-gray-600 mb-4">
+                    {t('admin.tokenAssignment.confirmAssignBatch', {
+                      count: confirmModal.lessonIds.length,
+                      className: confirmModal.className,
+                      defaultValue:
+                        '確認將 {{count}} 個代幣分配到「{{className}}」的 {{count}} 堂課？',
+                    })}
+                  </p>
+                  {confirmModal.expectedLessonCount != null &&
+                    confirmModal.lessonIds.length < confirmModal.expectedLessonCount && (
+                      <p className="mb-4 text-xs text-amber-800 bg-amber-50 rounded-md px-3 py-2">
+                        {t('admin.tokenAssignment.assignPartialCourseWarning', {
+                          found: confirmModal.lessonIds.length,
+                          expected: confirmModal.expectedLessonCount,
+                        })}
+                      </p>
+                    )}
+                  {(() => {
+                    const pastN = confirmModal.lessonIds.filter((id) => isClassIdPast(id)).length;
+                    if (pastN <= 0) return null;
+                    return (
+                      <p className="mb-4 text-xs text-amber-800 bg-amber-50 rounded-md px-3 py-2">
+                        {t('admin.tokenAssignment.assignBatchPastLessonsWarning', { count: pastN })}
+                      </p>
+                    );
+                  })()}
+                </>
+              ) : isSingleAssign ? (
+                <>
+                  <p className="text-gray-600 mb-2">
+                    {t('admin.tokenAssignment.assignTokensToClass', { className: confirmModal.className })}
+                  </p>
                   <div className="mb-6">
-                    <label htmlFor="assign-token-count" className="block text-sm font-medium text-gray-700 mb-1">{t('admin.tokenAssignment.tokensToAssign')}</label>
+                    <label htmlFor="assign-token-count" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('admin.tokenAssignment.tokensToAssign')}
+                    </label>
                     <input
                       id="assign-token-count"
                       type="number"
@@ -797,22 +1440,43 @@ export default function TokenAssignmentPage() {
                       onChange={(e) => setAssignTokenInput(e.target.value.replace(/[^0-9]/g, ''))}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                     />
+                    {(() => {
+                      const parsed = parseInt(assignTokenInput, 10);
+                      if (isNaN(parsed) || parsed < 2) return null;
+                      const plan = buildTokenAssignPlan(confirmModal.classId, parsed);
+                      if (plan.mode !== 'batch') return null;
+                      return (
+                        <p className="mt-2 text-xs text-blue-800 bg-blue-50 rounded-md px-3 py-2">
+                          {t('admin.tokenAssignment.assignDistributedPerLesson', {
+                            count: plan.lessonIds.length,
+                            tokens: plan.tokensPerLesson,
+                          })}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </>
               ) : (
-                <p className="text-gray-600 mb-6">{t('admin.tokenAssignment.confirmRemoveMessage', { className: confirmModal.className })}</p>
+                <>
+                  <p className="text-gray-600 mb-2">
+                    {t('admin.tokenAssignment.confirmRemoveMessage', { className: confirmModal.className })}
+                  </p>
+                  <p className="text-sm text-amber-800 bg-amber-50 rounded-md px-3 py-2 mb-6">
+                    {t('admin.tokenAssignment.confirmRemoveRefundHint')}
+                  </p>
+                </>
               )}
               <div className="flex gap-3 justify-end">
                 <button
-                  onClick={() => setConfirmModal(null)}
+                  onClick={dismissConfirmModal}
                   className="px-4 py-2 rounded-md text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50"
                 >
                   {t('common.cancel')}
                 </button>
-                {isAssign ? (
+                {isSingleAssign || isBatchAssign ? (
                   <button
                     onClick={handleAssignConfirm}
-                    disabled={!assignValid || assigning}
+                    disabled={(isSingleAssign && !assignValid) || assigning}
                     className="px-4 py-2 rounded-md text-sm font-medium text-white bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {assigning ? t('common.loading', 'Loading…') : t('admin.tokenAssignment.assign')}
@@ -820,9 +1484,10 @@ export default function TokenAssignmentPage() {
                 ) : (
                   <button
                     onClick={handleConfirmModal}
-                    className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700"
+                    disabled={removing}
+                    className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {t('common.confirm')}
+                    {removing ? t('common.loading', 'Loading…') : t('common.confirm')}
                   </button>
                 )}
               </div>

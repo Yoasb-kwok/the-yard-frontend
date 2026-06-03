@@ -1815,6 +1815,8 @@ export default function CalendarPage() {
                 program_code: selectedLesson.program_code,
                 total_lessons: selectedLesson.total_lessons,
                 token_cost: selectedLesson.token_cost,
+                capacity: selectedLesson.capacity,
+                enrolled_count: selectedLesson.enrolled_count,
               } satisfies ClassEnrollLesson)
             : null
         }

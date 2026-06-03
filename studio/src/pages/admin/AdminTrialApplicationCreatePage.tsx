@@ -26,6 +26,10 @@ export default function AdminTrialApplicationCreatePage() {
   const [residentialDistrict, setResidentialDistrict] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [gender, setGender] = useState('');
+  const [hasJoinedCourses, setHasJoinedCourses] = useState(false);
+  const [hasDanceExperience, setHasDanceExperience] = useState(false);
+  const [howDidYouHear, setHowDidYouHear] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [classLoadError, setClassLoadError] = useState<string | null>(null);
@@ -229,6 +233,14 @@ export default function AdminTrialApplicationCreatePage() {
       applied_at: appliedAtIso,
       created_at: appliedAtIso,
       notes: '',
+      hasJoinedCourses,
+      has_joined_courses: hasJoinedCourses,
+      hasDanceExperience,
+      has_dance_experience: hasDanceExperience,
+      howDidYouHear: howDidYouHear || undefined,
+      how_did_you_hear: howDidYouHear || undefined,
+      promoCode: promoCode.trim() || undefined,
+      promo_code: promoCode.trim() || undefined,
     };
 
     setSaving(true);
@@ -390,6 +402,88 @@ export default function AdminTrialApplicationCreatePage() {
                 <option value="male">{t('common.genderMale', { defaultValue: '男' })}</option>
                 <option value="other">{t('common.genderOther', { defaultValue: '其他' })}</option>
               </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <span className="text-sm font-medium text-gray-700">{t('trial.hasJoinedCourses')}</span>
+              <div className="mt-1 flex gap-4">
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasJoinedCourses"
+                    checked={hasJoinedCourses === true}
+                    onChange={() => setHasJoinedCourses(true)}
+                    className="mr-2"
+                  />
+                  {t('common.yes')}
+                </label>
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasJoinedCourses"
+                    checked={hasJoinedCourses === false}
+                    onChange={() => setHasJoinedCourses(false)}
+                    className="mr-2"
+                  />
+                  {t('common.no')}
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-sm font-medium text-gray-700">{t('trial.hasDanceExperience')}</span>
+              <div className="mt-1 flex gap-4">
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasDanceExperience"
+                    checked={hasDanceExperience === true}
+                    onChange={() => setHasDanceExperience(true)}
+                    className="mr-2"
+                  />
+                  {t('common.yes')}
+                </label>
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasDanceExperience"
+                    checked={hasDanceExperience === false}
+                    onChange={() => setHasDanceExperience(false)}
+                    className="mr-2"
+                  />
+                  {t('common.no')}
+                </label>
+              </div>
+            </div>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">{t('trial.howDidYouHear')}</span>
+              <select
+                value={howDidYouHear}
+                onChange={(e) => setHowDidYouHear(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              >
+                <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
+                <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
+                <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
+                <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
+                <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
+                <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
+              </select>
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('trial.usedPromoCode', '使用了推廣碼')} ({t('common.optional')})
+              </span>
+              <input
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
+              />
             </label>
           </div>
 

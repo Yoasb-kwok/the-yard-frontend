@@ -164,6 +164,116 @@
 - 前端建構：`enrollmentConfirmedEmailPayload.ts` + `getEnrollmentLessonSlots()`（與學生報名預覽相同）。
 - 勿僅顯示首堂；全期報名須列出每一堂。
 
+#### §3.2 管理員整期分配（多堂一次完成）— **後端必改**
+
+學生端 `POST /class-enrollment-requests` 會拒絕 `CLASS_PAST`；**管理員**在「分配代幣」頁為**全期報名**扣款時，必須能分配到該課程系列中**已開始／已過去**的課堂列（`classes` 表中同 `program_code` 的每一行），否則前端逐堂呼叫時只會成功未來的第一堂，其餘回 `CLASS_PAST`（例如「已分配 1/7 堂」）。
+
+**`POST /api/admin/token-assignment/assign-to-class` 建議行為：**
+
+| 欄位 | 說明 |
+| --- | --- |
+| `enrollment_scope` | `"full_course"` 表示整期（非單堂） |
+| `allow_past_lessons` | `true` 時**管理員**分配不套用 `CLASS_PAST`（僅此 endpoint + admin auth） |
+| `lesson_class_ids` | 可選；同系列所有 `class_id` 陣列。若提供，後端應為每一 id 建立／更新 `class_enrollments` 並扣對應代幣 |
+| `enrollment_request_id` | 可選；`quantity` 須等於申請的 `tokens_required` |
+| `quantity` | 整期總代幣數（通常 = `lesson_class_ids.length × token_cost`） |
+
+**建議實作（擇一或並存）：**
+
+1. **單次請求（推薦）：** 當 `enrollment_scope=full_course` 且帶 `lesson_class_ids` + `quantity`，後端在同一 transaction 內為每個 `class_id` 入班並扣代幣，略過 `CLASS_PAST`（若 `allow_past_lessons=true`）。
+2. **逐堂請求：** 若仍一次只處理一個 `class_id`，則當 `allow_past_lessons=true` 且為 admin 時，該堂 `start_time < now` 仍允許分配（學生自助報名仍維持 `CLASS_PAST`）。
+
+**錯誤碼：** 學生自助報名保留 `CLASS_PAST`；管理員整期分配不應因已過期課堂而失敗。
+
+**前端（已送出的 body）：** 整期分配時會附 `enrollment_scope`, `allow_past_lessons`, `lesson_class_ids`（見 `adminTokenAssignment.ts`）。後端部署前，行為不會改變。
+
+#### §3.3 管理員移除已分配代幣（退回未分配池）— **後端必實作**
+
+管理員在「分配代幣」頁的 **已分配** 分頁，可對**單一堂**移除代幣分配。前台呼叫後端後，代幣應**自動退回**該學員（或該子女 profile）的**未分配**餘額，並取消該堂入班紀錄。
+
+**Endpoint：** `POST /api/admin/token-assignment/unassign-from-class`  
+**Auth：** Admin
+
+**Request（snake_case / camelCase 擇一接受）：**
+
+```json
+{
+  "enrollment_id": "enr_abc",
+  "user_id": 1,
+  "class_id": 42,
+  "student_profile_id": "profile-uuid",
+  "remarks": "Admin removed token assignment: 兒童芭蕾 第3堂"
+}
+```
+
+| 欄位 | 必填 | 說明 |
+| --- | --- | --- |
+| `enrollment_id` | 是 | `class_enrollments.id`（該堂入班紀錄） |
+| `user_id` | 是 | 帳戶 user id |
+| `class_id` | 是 | 該堂 `classes.id`（與 enrollment 一致，供校驗） |
+| `student_profile_id` | 多子女時建議 | 從該 profile 的已分配池退回 |
+| `remarks` | 否 | 稽核／退幣紀錄備註 |
+
+**成功 200：**
+
+```json
+{
+  "success": true,
+  "data": {
+    "tokens_refunded": 1,
+    "remaining_tokens": 6,
+    "assigned_tokens": 2,
+    "enrollment_request_id": "er_123",
+    "enrollment_request_status": "pending"
+  }
+}
+```
+
+- `tokens_refunded`：本次退回代幣數（通常 = 該 enrollment 的 `tokens_charged`，或 `classes.token_cost`）。
+- `remaining_tokens` / `assigned_tokens`：操作後該學員（或 profile）錢包快照，供前台更新餘額顯示。
+- `enrollment_request_status`：若有关联報名申請且因移除而需改狀態，回傳 `pending`（見下方流程）。
+
+**建議後端流程（同一 transaction）：**
+
+1. **載入並鎖定** `class_enrollments`（`enrollment_id`），確認 `user_id`、`class_id` 與請求一致。
+2. **校驗可移除：**
+   - `tokens_charged`（或等價欄位）> 0，否則 `NOT_TOKEN_ASSIGNED`。
+   - 若業務規定已點名／已出席不可退：當 `status` 為 `attended`（或已確認出席）→ `CANNOT_UNASSIGN_ATTENDED`（可改為允許管理員強制退，需與客戶確認）。
+3. **退回代幣：**
+   - `refund_qty = tokens_charged`（無則用 `classes.token_cost`，至少 1）。
+   - 自該 user／`student_profile_id` 的**已分配**代幣扣減 `refund_qty`，**未分配**餘額加回 `refund_qty`（與 `assign-to-class` 相反）。
+   - 不得使 `assigned_tokens < 0` 或 `remaining + assigned > total_tokens`。
+4. **更新入班：**
+   - 刪除該 `class_enrollments` 列，或設 `status=cancelled` / `refunded` 且 `tokens_charged=0`（學生端 `GET /class-enrollments/me`、`GET /student/upcoming-classes` 不得再顯示此堂）。
+   - `classes.enrolled_count` 對該 `class_id` 減 1（若 assign 時有加）。
+5. **關聯報名申請（可選但建議）：**
+   - 若此 enrollment 來自 `enrollment_request` 且該 request 為 `fulfilled`：
+     - 若該 request 下**已無任何**仍為「已分配代幣」的 enrollment → 將 request 改回 `pending`（或 `partially_assigned` 若支援部分完成）。
+     - 若仍有其他堂已分配 → 維持 `fulfilled` 或改 `partially_assigned`。
+   - 前台**不會**在移除單堂後自動 PATCH request；建議後端在 unassign 內一併處理。
+6. **稽核（建議）：**
+   - 寫入 `refund_records` 或 `token_ledger`：`kind=unassign`，`tokens_refunded=refund_qty`，`refunded_by`=admin，`remarks`。
+   - 可選 audit log：`action=unassign_tokens_from_class`。
+7. **提交 transaction**；失敗則全部回滾。
+
+**錯誤碼（建議）：**
+
+| code | 說明 |
+| --- | --- |
+| `ENROLLMENT_NOT_FOUND` | 找不到 enrollment 或 id／user／class 不一致 |
+| `NOT_TOKEN_ASSIGNED` | 該堂從未分配代幣或已移除 |
+| `CANNOT_UNASSIGN_ATTENDED` | 已出席／已點名，政策不允許退 |
+| `PROFILE_MISMATCH` | `student_profile_id` 與 enrollment 不符 |
+
+**與點名頁「退還代幣」的差異：**
+
+| | `unassign-from-class` | `POST /admin/refund-records`（點名） |
+| --- | --- | --- |
+| 用途 | 取消該堂**入班＋分配**，代幣回未分配池 | 病假等退幣紀錄，可能仍保留 enrollment |
+| 誰觸發 | 分配代幣頁「移除」 | 課堂點名／出席管理 |
+
+**前端：** `adminTokenAssignment.ts` → `postAdminUnassignTokensFromClass`；`TokenAssignmentPage.tsx` 已分配列表「移除」按鈕。
+
 ### `GET /api/class-enrollments/me`
 
 僅回傳**已分配代幣、已入班**的紀錄（`status=enrolled` 等）。pending 申請不回傳為已報名課程。
@@ -176,7 +286,8 @@
 | --- | --- |
 | `ClassEnrollModal.tsx` | 學生提交報名申請 |
 | `PendingEnrollmentRequestsPage.tsx` | 管理員待分配列表 |
-| `TokenAssignmentPage.tsx` | 管理員分配代幣到課程 |
+| `TokenAssignmentPage.tsx` | 管理員分配／移除代幣到課程 |
+| `adminTokenAssignment.ts` | `assign-to-class`、`unassign-from-class` |
 | `enrollmentConfirmedEmailPayload.ts` | 分配成功時附帶確認信課表 |
 | `useAdminPendingCounts.ts` | 側欄／儀表板紅點 |
 
@@ -191,4 +302,6 @@
 - [ ] 分配代幣成功時自動 fulfill 對應 request（可帶 `request_id` query）
 - [ ] Email／站內通知：admin 新申請、學生分配完成／拒絕
 - [ ] `assign-to-class`：讀取 §3.1 欄位並寄送 `class_enrollment_confirmed`（列出全部 `lessons`）
+- [ ] `assign-to-class`：§3.2 整期分配支援 `allow_past_lessons` + `lesson_class_ids`（管理員不受 `CLASS_PAST` 限制）
+- [ ] `unassign-from-class`：§3.3 移除單堂分配、代幣退回未分配池、更新 enrollment／request 狀態
 - [ ] 停用或拒絕學生端 `POST /class-enrollments` 即時扣款（若仍保留 endpoint）

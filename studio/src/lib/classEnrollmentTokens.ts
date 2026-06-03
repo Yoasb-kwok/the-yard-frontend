@@ -37,3 +37,42 @@ export function getEnrollmentCostLabel(
   const cost = getEnrollmentTokenCost({ lessonCount, tokenCostPerLesson });
   return t('enrollment.tokenCost', { count: cost, defaultValue: '{{count}} 個代幣' });
 }
+
+/** Derive lesson + token counts for admin queue rows (handles full_course + class total_lessons). */
+export function normalizeEnrollmentRequestCounts(row: Record<string, unknown>): {
+  enrollmentScope: EnrollmentScope;
+  lessonCount: number;
+  tokensRequired: number;
+} {
+  const enrollmentScope: EnrollmentScope =
+    (row.enrollment_scope ?? row.enrollmentScope) === 'full_course' ? 'full_course' : 'single_lesson';
+  const lessonCountFromApi = Math.max(1, Number(row.lesson_count ?? row.lessonCount ?? 1) || 1);
+  const classTotalLessons = Math.max(
+    0,
+    Number(row.class_total_lessons ?? row.classTotalLessons ?? row.total_lessons ?? row.totalLessons ?? 0) || 0,
+  );
+  const tokenCostPerLesson = Math.max(
+    1,
+    Number(row.token_cost ?? row.tokenCost ?? row.class_token_cost ?? row.classTokenCost ?? 1) || 1,
+  );
+  const tokensFromApi = Math.max(1, Number(row.tokens_required ?? row.tokensRequired ?? lessonCountFromApi) || 1);
+
+  if (enrollmentScope === 'full_course') {
+    const lessonCount = Math.max(
+      lessonCountFromApi,
+      classTotalLessons > 0 ? classTotalLessons : 0,
+      getLessonsForScope('full_course', classTotalLessons || lessonCountFromApi),
+    );
+    const tokensRequired = Math.max(
+      tokensFromApi,
+      getEnrollmentTokenCost({ lessonCount, tokenCostPerLesson }),
+    );
+    return { enrollmentScope, lessonCount, tokensRequired };
+  }
+
+  return {
+    enrollmentScope,
+    lessonCount: lessonCountFromApi,
+    tokensRequired: Math.max(tokensFromApi, getEnrollmentTokenCost({ lessonCount: lessonCountFromApi, tokenCostPerLesson })),
+  };
+}

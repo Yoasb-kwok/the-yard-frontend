@@ -75,6 +75,20 @@ export default function Layout({ children }: LayoutProps) {
   const resetToMasterProfile = () => {
     if (!isAdmin && primaryProfileId) switchProfile(primaryProfileId);
   };
+
+  // 儀表板＝主帳戶視圖；僅在「路由進入」/dashboard 時切回第一位 profile。
+  // 不可監聽 activeProfileId，否則在儀表板點子女（switchProfile + navigate）會被立即改回第一位。
+  const prevPathnameRef = useRef(location.pathname);
+  useEffect(() => {
+    const prev = prevPathnameRef.current;
+    prevPathnameRef.current = location.pathname;
+    if (isAdmin) return;
+    const enteredDashboard = location.pathname === '/dashboard' && prev !== '/dashboard';
+    if (enteredDashboard && primaryProfileId) {
+      switchProfile(primaryProfileId);
+    }
+  }, [location.pathname, isAdmin, primaryProfileId, switchProfile]);
+
   const studentNavItemsDashboard = [
     { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
     { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },

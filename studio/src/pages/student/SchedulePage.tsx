@@ -9,12 +9,14 @@ import { useTranslation } from 'react-i18next';
 import { formatDateTime } from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
 import { api, ApiError } from '../../lib/api';
+import { buildLessonDatesByEnrollmentId, type EnrolledClass } from '../../lib/studentEnrollments';
 import {
-  getLessonDatesForEnrollment,
-  type EnrolledClass,
-} from '../../lib/studentEnrollments';
+  buildStudentScheduleEventOccurrences,
+  fetchStudentUpcomingClasses,
+  findLeaveRequestForEnrollment,
+} from '../../lib/studentUpcomingClasses';
 import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
-import { getLocationInfo } from '../../lib/locationInfo';
+import { getLocationCalendarColor, getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
 import StudentTokenBalanceSection from '../../components/student/StudentTokenBalanceSection';
 import StudentTrialApplicationsSection from '../../components/student/StudentTrialApplicationsSection';
@@ -97,9 +99,6 @@ type ViewType = 'month' | 'week' | 'day';
 const TIME_GRID_START_HOUR = 8;
 const TIME_GRID_END_HOUR = 22;
 const TIME_GRID_ROW_HEIGHT_PX = 48;
-
-/** One color per course for calendar (same idea as admin location colors). */
-const LESSON_COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 
 /** Per-lesson leave: enrollmentId -> lessonIndex (0-based) -> { type, status, documentName? } */
 type LessonLeaveRequest = { type: 'personal' | 'sick'; status: 'pending' | 'approved' | 'rejected'; documentName?: string };
@@ -287,7 +286,7 @@ function DayDetailModal({ isOpen, day, items, getLocale, onClose, onRequestLeave
               const durationMs = classEnd.getTime() - classStart.getTime();
               const endDate = new Date(lessonDate.getTime() + durationMs);
               const locInfo = getLocationInfo(enrollment.class.location);
-              const fromApi = enrollment.leave_requests?.find((r) => r.lesson_index === lessonIndex);
+              const fromApi = findLeaveRequestForEnrollment(enrollment, lessonIndex);
               const leaveReq = fromApi
                 ? { type: fromApi.leave_type as 'personal' | 'sick', status: fromApi.status as 'pending' | 'approved' | 'rejected' }
                 : null;
@@ -342,7 +341,8 @@ function DayDetailModal({ isOpen, day, items, getLocale, onClose, onRequestLeave
 }
 
 export default function SchedulePage() {
-  const { profile } = useAuth();
+  const { profile, profiles } = useAuth();
+  const singleProfileAccount = (profiles?.length ?? 0) <= 1;
   const { t, i18n } = useTranslation();
   const { getHolidayName, holidayDatesSet } = useHolidays();
   const [enrollments, setEnrollments] = useState<EnrolledClass[]>([]);
@@ -360,7 +360,7 @@ export default function SchedulePage() {
 
   useEffect(() => {
     if (profile?.id) loadEnrolledClasses();
-  }, [profile?.id]);
+  }, [profile?.id, singleProfileAccount]);
 
   async function loadEnrolledClasses() {
     setLoading(true);
@@ -373,13 +373,7 @@ export default function SchedulePage() {
       return;
     }
     try {
-      const response = await api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes');
-      const data = (response as any).data;
-      let list: EnrolledClass[] = Array.isArray(data) ? data : [];
-      if (profile?.id && list.length > 0) {
-        const filtered = list.filter((e: EnrolledClass) => (e.profile_id || e.user_id || '') === profile.id);
-        if (filtered.length > 0) list = filtered;
-      }
+      const list = await fetchStudentUpcomingClasses(profile?.id, { singleProfileAccount });
       setEnrollments(list);
       setLessonLeaveRequests((prev) => {
         const next = { ...prev };
@@ -414,10 +408,15 @@ export default function SchedulePage() {
     );
   }, [enrollments]);
 
-  /** Lesson dates per enrollment = paid/booked slots only (not full course 16). */
+  /** Lesson dates from API class.start_time per row; no holiday re-shift; leave does not postpone. */
+  const lessonDatesByEnrollmentId = useMemo(
+    () => buildLessonDatesByEnrollmentId(myEnrollments),
+    [myEnrollments],
+  );
+
   const lessonDatesByEnrollment = useMemo(() => {
-    return myEnrollments.map((e) => getLessonDatesForEnrollment(e, holidayDatesSet));
-  }, [myEnrollments, holidayDatesSet]);
+    return myEnrollments.map((e) => lessonDatesByEnrollmentId.get(e.id) ?? []);
+  }, [myEnrollments, lessonDatesByEnrollmentId]);
 
   /** Attendance rate by local time: 已出席堂數 / 已過嘅課堂數（已舉行） */
   const attendanceRate = useMemo(() => {
@@ -453,22 +452,11 @@ export default function SchedulePage() {
     return end;
   };
 
-  /** Flatten all lesson occurrences for week/day time grid: start, end, enrollment, lessonIndex, color */
   const scheduleEvents = useMemo(() => {
-    const out: Array<{ start: Date; end: Date; enrollment: EnrolledClass; lessonIndex: number; color: string }> = [];
-    myEnrollments.forEach((e, idx) => {
-      const dates = lessonDatesByEnrollment[idx] ?? [];
-      const classStart = new Date(e.class.start_time);
-      const classEnd = new Date(e.class.end_time);
-      const durationMs = classEnd.getTime() - classStart.getTime();
-      const color = LESSON_COLORS[idx % LESSON_COLORS.length];
-      dates.forEach((lessonDate, lessonIndex) => {
-        const start = new Date(lessonDate);
-        const end = new Date(lessonDate.getTime() + durationMs);
-        out.push({ start, end, enrollment: e, lessonIndex, color });
-      });
-    });
-    return out.sort((a, b) => a.start.getTime() - b.start.getTime());
+    return buildStudentScheduleEventOccurrences(myEnrollments, lessonDatesByEnrollment).map((ev) => ({
+      ...ev,
+      color: getLocationCalendarColor(ev.enrollment.class.location),
+    }));
   }, [myEnrollments, lessonDatesByEnrollment]);
 
   /** Events for a single day (for day view) */
@@ -577,14 +565,16 @@ export default function SchedulePage() {
     lessonDatesByEnrollment.forEach((dates, idx) => {
       const enrollment = myEnrollments[idx];
       if (!enrollment) return;
-      const color = LESSON_COLORS[idx % LESSON_COLORS.length];
+      const color = getLocationCalendarColor(enrollment.class.location);
       dates.forEach((lessonDate, lessonIndex) => {
         if (lessonDate.getFullYear() === y && lessonDate.getMonth() === m && lessonDate.getDate() === d) {
-          const approvedLeave = enrollment.leave_requests?.find(
-            (r) => r.lesson_index === lessonIndex && r.status === 'approved'
-          );
-          const leaveLabel = approvedLeave
-            ? (approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal'))
+          const approvedLeave = findLeaveRequestForEnrollment(enrollment, lessonIndex);
+          const approved =
+            approvedLeave && approvedLeave.status === 'approved' ? approvedLeave : undefined;
+          const leaveLabel = approved
+            ? approved.leave_type === 'sick'
+              ? t('notifications.leaveTypeSick')
+              : t('notifications.leaveTypePersonal')
             : '';
           const name = leaveLabel ? `${enrollment.class.name} ${leaveLabel}` : enrollment.class.name;
           result.push({
@@ -607,7 +597,7 @@ export default function SchedulePage() {
     lessonDatesByEnrollment.forEach((dates, idx) => {
       const enrollment = myEnrollments[idx];
       if (!enrollment) return;
-      const color = LESSON_COLORS[idx % LESSON_COLORS.length];
+      const color = getLocationCalendarColor(enrollment.class.location);
       dates.forEach((lessonDate, lessonIndex) => {
         if (lessonDate.getFullYear() === y && lessonDate.getMonth() === m && lessonDate.getDate() === d) {
           out.push({ enrollment, lessonIndex, lessonDate, color });
@@ -660,6 +650,7 @@ export default function SchedulePage() {
           profileId={profile?.id}
           profileName={profile?.full_name ?? undefined}
           upcomingClasses={myEnrollments}
+          singleProfileAccount={singleProfileAccount}
         />
         <StudentTrialApplicationsSection profileId={profile?.id} />
 
@@ -754,10 +745,19 @@ export default function SchedulePage() {
           <p className="text-xs text-primary/80 mt-1">{t('schedule.calendarClickHint')}</p>
           {myEnrollments.length > 0 && (
             <div className="flex flex-wrap gap-3 mt-2 text-xs">
-              {myEnrollments.map((e, idx) => (
-                <span key={e.id} className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded flex-shrink-0" style={{ backgroundColor: LESSON_COLORS[idx % LESSON_COLORS.length] }} />
-                  {e.class.name}
+              {Array.from(
+                new Map(
+                  myEnrollments
+                    .filter((e) => e.class.location)
+                    .map((e) => [e.class.location!, e] as const),
+                ).values(),
+              ).map((e) => (
+                <span key={e.class.location} className="flex items-center gap-1.5">
+                  <span
+                    className="w-3 h-3 rounded flex-shrink-0"
+                    style={{ backgroundColor: getLocationCalendarColor(e.class.location) }}
+                  />
+                  {t(`home.locations.${e.class.location}`)}
                 </span>
               ))}
             </div>
@@ -790,8 +790,11 @@ export default function SchedulePage() {
                           <p className="text-xs text-gray-400 py-2 text-center">{t('schedule.noClassesToday')}</p>
                         ) : (
                           evs.map((ev) => {
-                            const approvedLeave = ev.enrollment.leave_requests?.find((r) => r.lesson_index === ev.lessonIndex && r.status === 'approved');
-                            const name = approvedLeave ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}` : ev.enrollment.class.name;
+                            const approvedLeave = findLeaveRequestForEnrollment(ev.enrollment, ev.lessonIndex);
+                            const name =
+                              approvedLeave?.status === 'approved'
+                                ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}`
+                                : ev.enrollment.class.name;
                             return (
                               <button key={`${ev.enrollment.id}-${ev.lessonIndex}`} type="button" onClick={() => setDayDetailModalDate(new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate()))} className="w-full text-left rounded-lg px-3 py-2 text-white text-sm flex items-center gap-2" style={{ backgroundColor: ev.color }} title={`${formatTime(ev.start)} – ${formatTime(ev.end)} ${name}`}>
                                 <span className="font-medium shrink-0">{formatTime(ev.start)} – {formatTime(ev.end)}</span>
@@ -839,8 +842,11 @@ export default function SchedulePage() {
                             const endMinEv = ev.end.getHours() * 60 + ev.end.getMinutes();
                             const topPx = ((startMinEv - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                             const heightPx = ((endMinEv - startMinEv) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                            const approvedLeave = ev.enrollment.leave_requests?.find((r) => r.lesson_index === ev.lessonIndex && r.status === 'approved');
-                            const name = approvedLeave ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}` : ev.enrollment.class.name;
+                            const approvedLeave = findLeaveRequestForEnrollment(ev.enrollment, ev.lessonIndex);
+                            const name =
+                              approvedLeave?.status === 'approved'
+                                ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}`
+                                : ev.enrollment.class.name;
                             return (
                               <button key={`${ev.enrollment.id}-${ev.lessonIndex}`} type="button" onClick={() => setDayDetailModalDate(new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate()))} className="absolute left-0.5 right-0.5 text-left rounded overflow-hidden text-white text-xs p-1" style={{ top: topPx + 2, height: Math.max(heightPx - 4, 24), backgroundColor: ev.color }} title={`${formatTime(ev.start)} ${name}`}>
                                 <span className="truncate block">{formatTime(ev.start)}</span>
@@ -884,8 +890,11 @@ export default function SchedulePage() {
                         const endMinEv = ev.end.getHours() * 60 + ev.end.getMinutes();
                         const topPx = ((startMinEv - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                         const heightPx = ((endMinEv - startMinEv) / 60) * TIME_GRID_ROW_HEIGHT_PX;
-                        const approvedLeave = ev.enrollment.leave_requests?.find((r) => r.lesson_index === ev.lessonIndex && r.status === 'approved');
-                        const name = approvedLeave ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}` : ev.enrollment.class.name;
+                        const approvedLeave = findLeaveRequestForEnrollment(ev.enrollment, ev.lessonIndex);
+                        const name =
+                          approvedLeave?.status === 'approved'
+                            ? `${ev.enrollment.class.name} ${approvedLeave.leave_type === 'sick' ? t('notifications.leaveTypeSick') : t('notifications.leaveTypePersonal')}`
+                            : ev.enrollment.class.name;
                         return (
                           <button key={`${ev.enrollment.id}-${ev.lessonIndex}`} type="button" onClick={() => setDayDetailModalDate(new Date(ev.start.getFullYear(), ev.start.getMonth(), ev.start.getDate()))} className="absolute left-2 right-2 text-left rounded-lg overflow-hidden shadow-sm border border-gray-200 p-2" style={{ top: topPx + 4, height: Math.max(heightPx - 8, 40), backgroundColor: ev.color, color: '#fff' }} title={`${formatTime(ev.start)} – ${formatTime(ev.end)} ${name}`}>
                             <div className="font-semibold truncate">{name}</div>

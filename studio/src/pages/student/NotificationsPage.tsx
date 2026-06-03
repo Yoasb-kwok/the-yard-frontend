@@ -13,7 +13,8 @@ import {
   type StudentRequestRow,
 } from '../../lib/studentNotifications';
 import type { TrialApplicationItem } from '../../lib/studentTrialApplications';
-import type { EnrolledClass } from '../../lib/studentEnrollments';
+import { type EnrolledClass } from '../../lib/studentEnrollments';
+import { fetchStudentUpcomingClasses } from '../../lib/studentUpcomingClasses';
 import {
   Bell,
   BookOpen,
@@ -62,6 +63,7 @@ export default function NotificationsPage() {
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
   const primaryProfileId = profiles?.[0]?.id;
   const isMasterView = !!primaryProfileId && profile?.id === primaryProfileId;
+  const singleProfileAccount = (profiles?.length ?? 0) <= 1;
 
   const studentDisplayName = profile?.full_name || profiles?.[0]?.full_name || '';
 
@@ -114,7 +116,7 @@ export default function NotificationsPage() {
       api
         .get<{ data?: TrialApplicationItem[] }>('/student/trial-applications')
         .catch(() => ({ success: false, data: [] })),
-      api.get<{ data?: EnrolledClass[] }>('/student/upcoming-classes').catch(() => ({ success: false, data: [] })),
+      fetchStudentUpcomingClasses(profile?.id, { singleProfileAccount }).catch(() => []),
       api.get<StudentRequestRow[]>('/student/application-requests').catch(() => ({ success: false, data: [] })),
     ])
       .then(([notifRes, trialRes, classesRes, requestsRes]) => {
@@ -145,12 +147,8 @@ export default function NotificationsPage() {
         }
         setTrials(trialList);
 
-        let classList = Array.isArray(classesRes.data) ? classesRes.data : [];
-        if (profile?.id && classList.length > 0) {
-          const scoped = classList.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
-          if (scoped.length > 0) classList = scoped;
-        }
-        setEnrollments(classList);
+        const classList = Array.isArray(classesRes) ? classesRes : [];
+        setEnrollments(isMasterView ? [] : classList);
 
         let reqData = Array.isArray(requestsRes.data) ? requestsRes.data : [];
         if (!isMasterView && profile?.id && reqData.length > 0) {

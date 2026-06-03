@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, calculateDiscount } from '../../lib/utils';
 import { ShoppingCart, Check } from 'lucide-react';
 import { api } from '../../lib/api';
@@ -65,6 +66,7 @@ function pickLocalized(
 export default function ShopPage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const [packagesSource, setPackagesSource] = useState<TokenPackage[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [couponCode, setCouponCode] = useState('');
@@ -258,7 +260,9 @@ export default function ShopPage() {
       }
       setSubmitting(true);
       try {
-        const { url } = await createCheckoutSession(cart[0].package.id);
+        const { url } = await createCheckoutSession(cart[0].package.id, {
+          studentProfileId: profile?.id,
+        });
         window.location.href = url;
       } catch (e) {
         alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));

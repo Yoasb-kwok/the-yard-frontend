@@ -2,21 +2,21 @@ import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
-import { useHolidays } from '../lib/useHolidays';
-import { api } from '../lib/api';
 import { formatDateTimeRange } from '../lib/utils';
 import { getLocationInfo } from '../lib/locationInfo';
 import {
-  getEnrolledLessonSlotCount,
-  getLessonDatesForEnrollment,
+  buildLessonDatesByEnrollmentId,
+  groupEnrollmentsByCourse,
   type EnrolledClass,
+  type GroupedCourseEnrollment,
 } from '../lib/studentEnrollments';
+import { fetchStudentUpcomingClasses } from '../lib/studentUpcomingClasses';
 import { MapPin } from 'lucide-react';
 
 export default function StudentSidebarSchedule() {
-  const { profile } = useAuth();
+  const { profile, profiles } = useAuth();
+  const singleProfileAccount = (profiles?.length ?? 0) <= 1;
   const { t, i18n } = useTranslation();
-  const { holidayDatesSet } = useHolidays();
   const [enrollments, setEnrollments] = useState<EnrolledClass[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,27 +34,25 @@ export default function StudentSidebarSchedule() {
       return;
     }
     setLoading(true);
-    api
-      .get<{ data?: EnrolledClass[] }>('/student/upcoming-classes')
-      .then((res: { data?: EnrolledClass[] }) => {
-        const data = res?.data;
-        let list = Array.isArray(data) ? data : [];
-        if (profile?.id && list.length > 0) {
-          list = list.filter((e) => (e.profile_id || e.user_id || '') === profile.id);
-        }
+    fetchStudentUpcomingClasses(profile.id, { singleProfileAccount })
+      .then((list) => {
         const sorted = [...list].sort(
-          (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime()
+          (a, b) => new Date(a.class.start_time).getTime() - new Date(b.class.start_time).getTime(),
         );
         setEnrollments(sorted);
       })
       .catch(() => setEnrollments([]))
       .finally(() => setLoading(false));
-  }, [profile?.id, profile?.full_name]);
+  }, [profile?.id, profile?.full_name, singleProfileAccount]);
 
-  /** Lesson dates per enrollment (skip holidays). */
+  const lessonDatesByEnrollmentId = useMemo(
+    () => buildLessonDatesByEnrollmentId(enrollments),
+    [enrollments],
+  );
+
   const lessonDatesByEnrollment = useMemo(() => {
-    return enrollments.map((e) => getLessonDatesForEnrollment(e, holidayDatesSet));
-  }, [enrollments, holidayDatesSet]);
+    return enrollments.map((e) => lessonDatesByEnrollmentId.get(e.id) ?? []);
+  }, [enrollments, lessonDatesByEnrollmentId]);
 
   /** 下一堂：soonest future lesson across all enrollments */
   const nextLesson = useMemo(() => {
@@ -74,19 +72,39 @@ export default function StudentSidebarSchedule() {
     return earliest;
   }, [enrollments, lessonDatesByEnrollment]);
 
-  /** For 接下來所有課程: each enrollment with its next upcoming lesson date (or first lesson if all past) */
-  const upcomingPerEnrollment = useMemo(() => {
+  const enrollmentIndexById = useMemo(() => {
+    const m = new Map<string, number>();
+    enrollments.forEach((e, i) => m.set(e.id, i));
+    return m;
+  }, [enrollments]);
+
+  const courseGroups = useMemo(() => groupEnrollmentsByCourse(enrollments), [enrollments]);
+
+  /** 接下來所有課程：同 program 合併為一列，顯示最近一堂 */
+  const upcomingPerCourse = useMemo(() => {
     const now = Date.now();
-    return enrollments.map((e, idx) => {
-      const dates = lessonDatesByEnrollment[idx] ?? [];
-      const nextDate = dates.find((d) => d.getTime() > now) ?? dates[dates.length - 1] ?? new Date(e.class.start_time);
-      const classStart = new Date(e.class.start_time);
-      const classEnd = new Date(e.class.end_time);
-      const durationMs = classEnd.getTime() - classStart.getTime();
-      const endDate = new Date(nextDate.getTime() + durationMs);
-      return { enrollment: e, nextDate, endDate };
-    });
-  }, [enrollments, lessonDatesByEnrollment]);
+    return courseGroups
+      .map((group) => {
+        let best: { enrollment: EnrolledClass; nextDate: Date; endDate: Date } | null = null;
+        for (const e of group.enrollments) {
+          const idx = enrollmentIndexById.get(e.id);
+          if (idx == null) continue;
+          const dates = lessonDatesByEnrollment[idx] ?? [];
+          const nextDate =
+            dates.find((d) => d.getTime() > now) ?? dates[dates.length - 1] ?? new Date(e.class.start_time);
+          const classStart = new Date(e.class.start_time);
+          const classEnd = new Date(e.class.end_time);
+          const durationMs = classEnd.getTime() - classStart.getTime();
+          const endDate = new Date(nextDate.getTime() + durationMs);
+          if (!best || nextDate.getTime() < best.nextDate.getTime()) {
+            best = { enrollment: e, nextDate, endDate };
+          }
+        }
+        if (!best) return null;
+        return { group, ...best };
+      })
+      .filter((row): row is { group: GroupedCourseEnrollment; enrollment: EnrolledClass; nextDate: Date; endDate: Date } => row != null);
+  }, [courseGroups, enrollmentIndexById, lessonDatesByEnrollment]);
 
   const formatTime = (d: Date) =>
     d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -137,25 +155,21 @@ export default function StudentSidebarSchedule() {
       <p className="px-3 mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">
         {t('schedule.sidebarAllUpcoming', '接下來所有課程')}
       </p>
-      {upcomingPerEnrollment.length === 0 ? (
+      {upcomingPerCourse.length === 0 ? (
         <p className="px-3 text-sm text-gray-500">{t('schedule.noUpcomingClasses')}</p>
       ) : (
         <ul className="space-y-3 px-3 pb-4">
-          {upcomingPerEnrollment.map(({ enrollment: e, nextDate, endDate }) => {
-            const loc = getLocationInfo(e.class.location);
-            const total = getEnrolledLessonSlotCount(e);
-            const attended = e.attended_lessons ?? 0;
+          {upcomingPerCourse.map(({ group, enrollment: e, nextDate, endDate }) => {
+            const loc = getLocationInfo(group.location ?? e.class.location);
+            const title = group.programCode ? `${group.name} (${group.programCode})` : group.name;
             return (
-              <li key={e.id}>
+              <li key={group.key}>
                 <Link
                   to="/schedule"
                   className="block rounded-lg border border-gray-200 bg-white p-3 text-sm hover:border-primary/30 hover:bg-primary-lighter/20 transition-colors"
                 >
-                  <p className="font-semibold text-gray-900">
-                    {e.class.name}
-                    {e.class.program_code ? ` ${e.class.program_code}` : ''}
-                  </p>
-                  <p className="text-gray-600 mt-0.5">{e.class.instructor}</p>
+                  <p className="font-semibold text-gray-900">{title}</p>
+                  <p className="text-gray-600 mt-0.5">{group.instructor}</p>
                   <p className="text-gray-500 text-xs mt-1">
                     {formatDateTimeRange(nextDate, endDate, locale)}
                   </p>
@@ -176,7 +190,9 @@ export default function StudentSidebarSchedule() {
                     </p>
                   )}
                   <p className="text-primary font-medium text-xs mt-1.5">
-                    {t('schedule.learningProgress', { current: attended, total })}
+                    {t('schedule.learningProgress', { current: group.attendedLessons, total: group.bookedLessons })}
+                    {' · '}
+                    {t('dashboard.lessonsLeft', { count: group.remainingLessons })}
                   </p>
                 </Link>
               </li>

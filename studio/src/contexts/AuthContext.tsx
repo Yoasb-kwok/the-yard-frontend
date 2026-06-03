@@ -375,7 +375,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           has_joined_courses: data.has_joined_courses,
           level: data.level,
         },
-        user.id,
         {
           parents_name: main.parents_name,
           contact_number: main.contact_number ?? main.mobile,

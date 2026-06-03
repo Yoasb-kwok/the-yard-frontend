@@ -13,18 +13,26 @@ import {
   type TokenUsageItem,
   type UserToken,
 } from '../../lib/studentTokens';
-import { getEnrolledLessonSlotCount, type EnrolledClass } from '../../lib/studentEnrollments';
+import { filterUserTokensByProfile, withStudentProfileQuery } from '../../lib/studentProfileScope';
+import {
+  filterEnrollmentsForActiveProfile,
+  groupEnrollmentsByCourse,
+  type EnrolledClass,
+} from '../../lib/studentEnrollments';
 
 interface StudentTokenBalanceSectionProps {
   profileId?: string;
   profileName?: string;
   upcomingClasses?: EnrolledClass[];
+  /** Match SchedulePage: allow legacy rows without profile_id when only one family profile. */
+  singleProfileAccount?: boolean;
 }
 
 export default function StudentTokenBalanceSection({
   profileId,
   profileName,
   upcomingClasses = [],
+  singleProfileAccount = false,
 }: StudentTokenBalanceSectionProps) {
   const { t, i18n } = useTranslation();
   const [tokens, setTokens] = useState<UserToken[]>([]);
@@ -51,8 +59,12 @@ export default function StudentTokenBalanceSection({
       }
       try {
         let tokensData = normalizeUserTokens(
-          await api.get('/student/tokens').catch(() => api.get('/user-tokens')).catch(() => ({ data: [] }))
+          await api
+            .get('/student/tokens', withStudentProfileQuery(undefined, profileId))
+            .catch(() => api.get('/user-tokens', withStudentProfileQuery(undefined, profileId)))
+            .catch(() => ({ data: [] })),
         );
+        tokensData = filterUserTokensByProfile(tokensData, profileId) as UserToken[];
         if (tokensData.length === 0) {
           const ordersRes = await api.get('/orders/me').catch(() => ({ data: [] }));
           tokensData = tokensFromPaidOrders(ordersRes);
@@ -112,8 +124,10 @@ export default function StudentTokenBalanceSection({
       : null;
 
   const profileClasses = profileId
-    ? upcomingClasses.filter((e) => (e.profile_id || e.user_id || '') === profileId)
+    ? filterEnrollmentsForActiveProfile(upcomingClasses, profileId, { singleProfileAccount })
     : upcomingClasses;
+
+  const coursesGrouped = groupEnrollmentsByCourse(profileClasses);
 
   if (loading) {
     return (
@@ -209,25 +223,40 @@ export default function StudentTokenBalanceSection({
               ))}
             </ul>
           )}
-          {profileClasses.length > 0 && (
+          {coursesGrouped.length > 0 && (
             <div className="mt-4 pt-4 border-t border-gray-100">
               <h3 className="text-sm font-medium text-gray-700 mb-2">{t('dashboard.lessonsLeftTitle')}</h3>
               <ul className="space-y-1.5 text-sm">
-                {profileClasses.map((e) => {
-                    const booked = getEnrolledLessonSlotCount(e);
-                    const left = booked - (e.attended_lessons ?? e.lessons_used ?? 0);
-                    const studentName = e.user_name ?? profileName ?? t('dashboard.child');
-                    return (
-                      <li key={e.id} className="flex justify-between items-center gap-2">
-                        <span className="text-gray-700 truncate" title={`${studentName} · ${e.class.name}`}>
-                          {studentName} · {e.class.name}
+                {coursesGrouped.map((course) => {
+                  const label = course.programCode
+                    ? `${course.name} (${course.programCode})`
+                    : course.name;
+                  const left = course.remainingLessons;
+                  return (
+                    <li key={course.key} className="flex justify-between items-start gap-2">
+                      <span className="text-gray-700 min-w-0">
+                        <span className="block truncate font-medium" title={label}>
+                          {label}
                         </span>
-                        <span className={left <= 2 ? 'text-amber-600 font-medium flex-shrink-0' : 'text-gray-600 flex-shrink-0'}>
-                          {t('dashboard.lessonsLeft', { count: left })}
-                        </span>
-                      </li>
-                    );
-                  })}
+                        {course.enrollments.length > 1 && (
+                          <span className="text-xs text-gray-500">
+                            {t('dashboard.lessonsLeftProgress', {
+                              current: course.attendedLessons,
+                              total: course.bookedLessons,
+                            })}
+                          </span>
+                        )}
+                      </span>
+                      <span
+                        className={
+                          left <= 2 ? 'text-amber-600 font-medium flex-shrink-0' : 'text-gray-600 flex-shrink-0'
+                        }
+                      >
+                        {t('dashboard.lessonsLeft', { count: left })}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

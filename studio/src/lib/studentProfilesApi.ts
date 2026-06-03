@@ -1,4 +1,4 @@
-import { api, type ApiResponse } from './api';
+import { api, ApiError, type ApiResponse } from './api';
 import type { AgeTag, CourseLevel } from '../contexts/AuthContext';
 
 /** Temporary id for unsaved student rows in admin edit modal. */
@@ -95,13 +95,35 @@ export async function createAdminStudentProfile(
   return api.post<unknown>(`admin/users/${userId}/student-profiles`, body);
 }
 
+/**
+ * Parent/student portal: add a family member under the logged-in account.
+ * Production: POST /api/student/profiles (Bearer student/parent token).
+ * POST /api/profiles without admin JWT returns 403 — do not use for dashboard add-member.
+ */
 export async function createStudentProfile(
   data: CreateStudentProfileFields,
-  userId: string,
   parentDefaults?: StudentProfileParentDefaults,
 ): Promise<ApiResponse<unknown>> {
-  const body = buildCreateStudentProfileBody(data, { userId, parentDefaults });
-  return api.post<unknown>('profiles', body);
+  const body = buildCreateStudentProfileBody(data, { parentDefaults });
+  const endpoints = ['student/profiles', 'profiles/me/student-profiles'] as const;
+
+  let lastError: unknown;
+  for (const endpoint of endpoints) {
+    try {
+      const res = await api.post<unknown>(endpoint, body);
+      if (res.success !== false) return res;
+      lastError = new Error(res.msg || res.message || 'Failed to add family member');
+    } catch (err) {
+      lastError = err;
+      if (err instanceof ApiError && (err.status === 404 || err.status === 403 || err.status === 405)) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (lastError instanceof Error) throw lastError;
+  throw new Error('Failed to add family member');
 }
 
 export function extractProfileFromCreateResponse(res: ApiResponse<unknown>): Record<string, unknown> | null {

@@ -38,6 +38,12 @@ export interface AdminStudentProfile {
   age_tag: AgeTag | null;
   mobile: string | null;
   id_card_last4: string | null;
+  /** Per-student wallet (when backend scopes user_tokens by profile). */
+  remaining_tokens?: number;
+  assigned_tokens?: number;
+  total_tokens?: number;
+  token_expiry_date?: string | null;
+  user_tokens?: unknown;
 }
 
 export interface AdminUserFamily {
@@ -88,6 +94,10 @@ function mapStudentProfile(
         )
       : null);
 
+  const remainingRaw = Number(raw.remaining_tokens ?? raw.unassigned_tokens ?? raw.remainingTokens ?? NaN);
+  const assignedRaw = Number(raw.assigned_tokens ?? raw.assignedTokens ?? NaN);
+  const totalRaw = Number(raw.total_tokens ?? raw.totalTokens ?? NaN);
+
   return {
     id: String(raw.id ?? userFallback?.id ?? ''),
     full_name: toOptStr(raw.full_name) ?? toOptStr(raw.name) ?? toOptStr(userFallback?.full_name) ?? toOptStr(userFallback?.name) ?? '',
@@ -102,6 +112,12 @@ function mapStudentProfile(
     age_tag: normalizeAgeTag(raw.age_tag ?? raw.age_group ?? raw.ageTag),
     mobile: toOptStr(raw.mobile ?? raw.contact_number),
     id_card_last4: idLast,
+    remaining_tokens: Number.isFinite(remainingRaw) && remainingRaw >= 0 ? remainingRaw : undefined,
+    assigned_tokens: Number.isFinite(assignedRaw) && assignedRaw >= 0 ? assignedRaw : undefined,
+    total_tokens: Number.isFinite(totalRaw) && totalRaw >= 0 ? totalRaw : undefined,
+    token_expiry_date:
+      toOptStr(raw.token_expiry_date ?? raw.tokenExpiryDate ?? raw.earliest_token_expiry) ?? null,
+    user_tokens: raw.user_tokens ?? raw.userTokens,
   };
 }
 

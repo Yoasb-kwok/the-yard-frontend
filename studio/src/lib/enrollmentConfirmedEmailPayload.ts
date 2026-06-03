@@ -63,6 +63,23 @@ export function buildEnrollmentLessonEmailRows(input: {
   return getEnrollmentLessonSlots(input).map((slot) => lessonSlotToEmailRow(slot, input.locale));
 }
 
+/** One email row per scheduled class row (multi-lesson full-course batch). */
+export function buildEnrollmentLessonEmailRowsFromClassSchedule(
+  lessons: Array<{ start_time: string; end_time: string }>,
+  locale: string,
+): EnrollmentLessonEmailRow[] {
+  return lessons.map((row, index) => {
+    const startIso = row.start_time;
+    const endIso = row.end_time || row.start_time;
+    return {
+      lesson_index: index + 1,
+      start_time: startIso,
+      end_time: endIso,
+      date_time_formatted: formatDateTimeRange(startIso, endIso, locale),
+    };
+  });
+}
+
 export function buildEnrollmentConfirmedEmailExtras(
   ctx: EnrollmentConfirmedEmailContext & { language: string },
 ): EnrollmentConfirmedEmailExtras {

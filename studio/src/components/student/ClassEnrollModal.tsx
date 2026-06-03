@@ -3,16 +3,24 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Coins, AlertCircle, Loader2, X } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   getEnrollmentCostLabel,
-  getEnrollmentTokenCost,
-  getLessonsForScope,
   type EnrollmentScope,
 } from '../../lib/classEnrollmentTokens';
+import {
+  buildEnrollmentRequestBody,
+  parseLessonClassIds,
+  getFullCourseEnrollmentCounts,
+  getLessonEnrollmentUiStatus,
+  getSeriesFetchRange,
+  getSingleLessonEnrollmentCost,
+  mapApiClassToCourseLesson,
+  type CourseLessonRow,
+} from '../../lib/courseLessonEnrollment';
 import { getTotalRemainingTokens, hasEnoughTokens, normalizeUserTokens, type UserToken } from '../../lib/studentTokens';
-import { getEnrollmentLessonSlots } from '../../lib/studentEnrollments';
-import { useHolidays } from '../../lib/useHolidays';
-import { formatDate, formatDateTimeRange, isClassOccurrencePast } from '../../lib/utils';
+import { filterUserTokensByProfile, withStudentProfileQuery } from '../../lib/studentProfileScope';
+import { formatDateTimeRange, formatProgramCodeDisplay } from '../../lib/utils';
 
 export interface ClassEnrollLesson {
   id: string;
@@ -24,6 +32,8 @@ export interface ClassEnrollLesson {
   program_code?: string;
   total_lessons?: number;
   token_cost?: number;
+  capacity?: number;
+  enrolled_count?: number;
 }
 
 interface ClassEnrollModalProps {
@@ -35,45 +45,89 @@ interface ClassEnrollModalProps {
 
 export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }: ClassEnrollModalProps) {
   const { t, i18n } = useTranslation();
-  const { holidayDatesSet } = useHolidays();
+  const { profile } = useAuth();
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [loadingTokens, setLoadingTokens] = useState(false);
+  const [seriesLessons, setSeriesLessons] = useState<CourseLessonRow[]>([]);
+  const [seriesLoading, setSeriesLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
 
-  const totalLessons = Math.max(1, Number(lesson?.total_lessons) || 8);
-  const enrollmentScope: EnrollmentScope = totalLessons > 1 ? 'full_course' : 'single_lesson';
+  const anchorRow = useMemo((): CourseLessonRow | null => {
+    if (!lesson) return null;
+    return mapApiClassToCourseLesson({
+      id: lesson.id,
+      name: lesson.name,
+      instructor: lesson.instructor,
+      start_time: lesson.start_time,
+      end_time: lesson.end_time,
+      program_code: lesson.program_code,
+      total_lessons: lesson.total_lessons,
+      token_cost: lesson.token_cost,
+      capacity: lesson.capacity ?? 0,
+      enrolled_count: lesson.enrolled_count ?? 0,
+      is_cancelled: false,
+      location: lesson.location,
+    });
+  }, [lesson]);
 
-  const lessonCount = useMemo(
-    () => getLessonsForScope(enrollmentScope, totalLessons),
-    [enrollmentScope, totalLessons],
+  const totalLessonsInSeries = Math.max(
+    1,
+    Number(lesson?.total_lessons) || 0,
+    seriesLessons.length,
   );
+  const isFullCourseSeries = totalLessonsInSeries > 1;
+  const enrollmentScope: EnrollmentScope = isFullCourseSeries ? 'full_course' : 'single_lesson';
 
-  const tokenCost = useMemo(
-    () =>
-      getEnrollmentTokenCost({
-        lessonCount,
-        tokenCostPerLesson: lesson?.token_cost,
-      }),
-    [lessonCount, lesson?.token_cost],
-  );
+  const enrollmentCounts = useMemo(() => {
+    if (!anchorRow) {
+      return {
+        bookable: [] as CourseLessonRow[],
+        lessonCount: 1,
+        tokensRequired: 1,
+        lessonClassIds: [] as string[],
+        skippedPast: 0,
+        skippedFull: 0,
+        seriesTotal: 1,
+      };
+    }
+    const pool = seriesLessons.length > 0 ? seriesLessons : [anchorRow];
+    if (!isFullCourseSeries) {
+      const cost = getSingleLessonEnrollmentCost(anchorRow);
+      return {
+        bookable: pool.filter((l) => l.id === anchorRow.id),
+        lessonCount: 1,
+        tokensRequired: cost,
+        lessonClassIds: [anchorRow.id],
+        skippedPast: 0,
+        skippedFull: 0,
+        seriesTotal: 1,
+      };
+    }
+    return getFullCourseEnrollmentCounts(anchorRow, pool);
+  }, [anchorRow, seriesLessons, isFullCourseSeries]);
+
+  const { lessonCount, tokensRequired, lessonClassIds, skippedPast, skippedFull, bookable } =
+    enrollmentCounts;
 
   const balance = useMemo(() => getTotalRemainingTokens(tokens), [tokens]);
   const hasPurchasedTokens = balance > 0;
-  const sufficientTokens = useMemo(() => hasEnoughTokens(tokens, tokenCost), [tokens, tokenCost]);
-  const tokenShortfall = Math.max(0, tokenCost - balance);
+  const sufficientTokens = useMemo(() => hasEnoughTokens(tokens, tokensRequired), [tokens, tokensRequired]);
+  const tokenShortfall = Math.max(0, tokensRequired - balance);
+  const canSubmit = bookable.length > 0 && tokensRequired > 0;
 
-  const lessonSlots = useMemo(() => {
-    if (!lesson) return [];
-    return getEnrollmentLessonSlots({
-      start_time: lesson.start_time,
-      end_time: lesson.end_time,
-      lessonCount,
-      holidayDatesSet,
-    });
-  }, [lesson, lessonCount, holidayDatesSet]);
+  const seriesDisplay = useMemo(() => {
+    if (!anchorRow) return [];
+    const pool = seriesLessons.length > 0 ? seriesLessons : [anchorRow];
+    const bookableIds = new Set(bookable.map((l) => l.id));
+    return pool.map((row) => ({
+      row,
+      status: getLessonEnrollmentUiStatus(row, { assignedClassIds: new Set() }),
+      included: bookableIds.has(row.id),
+    }));
+  }, [anchorRow, seriesLessons, bookable]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -82,12 +136,15 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
     }
     let cancelled = false;
     setLoadingTokens(true);
+    const profileId = profile?.id;
     api
-      .get('/student/tokens')
-      .catch(() => api.get('/user-tokens'))
+      .get('/student/tokens', withStudentProfileQuery(undefined, profileId))
+      .catch(() => api.get('/user-tokens', withStudentProfileQuery(undefined, profileId)))
       .then((res) => {
         if (cancelled) return;
-        setTokens(normalizeUserTokens(res));
+        const normalized = normalizeUserTokens(res);
+        const scoped = filterUserTokensByProfile(normalized, profileId);
+        setTokens(Array.isArray(scoped) ? (scoped as UserToken[]) : normalized);
       })
       .catch(() => {
         if (!cancelled) setTokens([]);
@@ -98,28 +155,71 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, profile?.id]);
 
-  if (!isOpen || !lesson) return null;
+  useEffect(() => {
+    if (!isOpen || !lesson?.program_code?.trim()) {
+      setSeriesLessons([]);
+      return;
+    }
+    let cancelled = false;
+    setSeriesLoading(true);
+    const code = lesson.program_code.trim();
+    const range = getSeriesFetchRange();
+    api
+      .get<Record<string, unknown>[]>('/classes', {
+        from: range.from,
+        to: range.to,
+        program_code: code,
+        class_code: code,
+      })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = res.success && Array.isArray(res.data) ? res.data : [];
+        const mapped = rows
+          .map((row) => mapApiClassToCourseLesson(row))
+          .filter((r) => r.id && (r.class_code || '').trim().toLowerCase() === code.toLowerCase());
+        setSeriesLessons(mapped.length > 0 ? mapped : anchorRow ? [anchorRow] : []);
+      })
+      .catch(() => {
+        if (!cancelled) setSeriesLessons(anchorRow ? [anchorRow] : []);
+      })
+      .finally(() => {
+        if (!cancelled) setSeriesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, lesson?.program_code, lesson?.id, anchorRow]);
 
-  const lessonEnded = isClassOccurrencePast(lesson.end_time);
+  if (!isOpen || !lesson || !anchorRow) return null;
 
   async function handleConfirm() {
-    if (!lesson || submitting || lessonEnded) return;
+    if (!lesson || submitting || !canSubmit) return;
     if (!hasPurchasedTokens) {
       setError(t('enrollment.noTokensPurchased', '請先購買套票後再報名課程。'));
       return;
     }
     setSubmitting(true);
     setError(null);
+    const anchorId = bookable[0]?.id ?? lesson.id;
     try {
-      await api.post('/class-enrollment-requests', {
-        class_id: lesson.id,
-        classId: lesson.id,
-        lesson_count: lessonCount,
-        enrollment_scope: enrollmentScope,
-        tokens_required: tokenCost,
+      const body = buildEnrollmentRequestBody({
+        classId: anchorId,
+        lessonCount,
+        enrollmentScope,
+        tokensRequired,
+        lessonClassIds: isFullCourseSeries ? lessonClassIds : undefined,
+        studentProfileId: profile?.id,
       });
+      const res = await api.post<Record<string, unknown>>('/class-enrollment-requests', body);
+      const payload = (res.data ?? res) as Record<string, unknown>;
+      const confirmedIds = parseLessonClassIds(
+        payload.lesson_class_ids ?? payload.lessonClassIds ?? payload.data,
+      );
+      if (isFullCourseSeries && confirmedIds.length > 0 && confirmedIds.length !== lessonClassIds.length) {
+        console.info('[enrollment] lesson_class_ids from API:', confirmedIds);
+      }
       window.alert(t('enrollment.successPending', '報名申請已提交，管理員確認後將為您分配代幣。'));
       onEnrolled?.();
       onClose();
@@ -136,16 +236,30 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
     }
   }
 
+  function statusLabel(status: string, included: boolean): string | null {
+    if (status === 'past') return t('enrollment.lessonStatusPast');
+    if (status === 'full') return t('enrollment.lessonStatusFull');
+    if (status === 'cancelled') return t('enrollment.lessonStatusCancelled');
+    if (included) return t('enrollment.lessonStatusIncluded');
+    return null;
+  }
+
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-4">
       <button type="button" className="absolute inset-0 bg-black/50" aria-label={t('common.close')} onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4">
+      <div className="relative w-full max-w-md bg-white rounded-xl shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold text-gray-900">{t('enrollment.title', '報名課程')}</h2>
           <button type="button" onClick={onClose} className="p-1 rounded-md text-gray-500 hover:bg-gray-100">
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {profile?.full_name && (
+          <p className="text-sm text-gray-600">
+            {t('enrollment.enrollingAs', { name: profile.full_name })}
+          </p>
+        )}
 
         <div className="text-sm text-gray-700 space-y-1">
           <p className="font-medium text-gray-900">{lesson.name}</p>
@@ -155,43 +269,64 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
 
         <div className="rounded-lg border border-primary/25 bg-primary-lighter/40 p-3">
           <h3 className="text-sm font-medium text-gray-900 mb-2">
-            {t('enrollment.lessonScheduleTitle', { count: lessonCount })}
+            {isFullCourseSeries
+              ? t('enrollment.lessonScheduleTitleRemaining', { count: lessonCount, total: totalLessonsInSeries })
+              : t('enrollment.lessonScheduleTitle', { count: lessonCount })}
           </h3>
-          <p className="text-xs text-gray-600 mb-2">{t('enrollment.lessonScheduleHint')}</p>
-          <ul className="space-y-2.5 max-h-52 overflow-y-auto">
-            {lessonSlots.map((slot) => (
-              <li key={slot.lessonIndex} className="flex gap-2.5 text-sm">
-                <span className="shrink-0 font-medium text-primary min-w-[4.5rem]">
-                  {t('calendar.lessonXOfY', { current: slot.lessonIndex, total: lessonCount })}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-gray-900 font-medium">
-                    {formatDateTimeRange(slot.start.toISOString(), slot.end.toISOString(), getLocale())}
-                  </p>
-                  {slot.originalDateStr && (
-                    <p className="text-xs text-amber-800 mt-0.5">
-                      {t('calendar.postponedFromHoliday', {
-                        date: formatDate(slot.originalDateStr, getLocale()),
-                      })}
-                    </p>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+          <p className="text-xs text-gray-600 mb-2">{t('enrollment.lessonScheduleHintRemaining')}</p>
+          {seriesLoading ? (
+            <div className="flex justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <ul className="space-y-2.5 max-h-52 overflow-y-auto">
+              {seriesDisplay.map(({ row, status, included }) => {
+                const badge = statusLabel(status, included);
+                return (
+                  <li key={row.id} className="flex gap-2.5 text-sm">
+                    <span className="shrink-0 font-medium text-primary min-w-[4.5rem]">
+                      {formatProgramCodeDisplay(row.class_code, row.lesson_number) ||
+                        t('admin.tokenAssignment.lessonRow')}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-gray-900 ${included ? 'font-medium' : 'text-gray-500'}`}>
+                        {formatDateTimeRange(row.start_time, row.end_time, getLocale())}
+                      </p>
+                      {badge && (
+                        <p
+                          className={`text-xs mt-0.5 ${
+                            included ? 'text-green-800' : 'text-amber-800'
+                          }`}
+                        >
+                          {badge}
+                        </p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {isFullCourseSeries && (skippedPast > 0 || skippedFull > 0) && (
+            <p className="text-xs text-amber-800 mt-2">
+              {t('enrollment.skippedLessonsSummary', { past: skippedPast, full: skippedFull })}
+            </p>
+          )}
         </div>
 
-        {lessonEnded && (
+        {!canSubmit && !seriesLoading && (
           <p className="text-sm text-gray-700 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
-            {t('calendar.lessonPastNoEnroll')}
+            {skippedFull > 0 && bookable.length === 0
+              ? t('enrollment.allLessonsFull')
+              : t('enrollment.noBookableLessons')}
           </p>
         )}
 
-        {totalLessons > 1 && !lessonEnded && (
+        {isFullCourseSeries && canSubmit && (
           <p className="text-sm text-gray-700 bg-primary-lighter/30 border border-primary/20 rounded-lg px-3 py-2">
-            {t('enrollment.fullCourseOnly', {
-              count: totalLessons,
-              defaultValue: '報名將包含全期 {{count}} 堂',
+            {t('enrollment.fullCourseRemaining', {
+              count: lessonCount,
+              tokens: tokensRequired,
             })}
           </p>
         )}
@@ -204,7 +339,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
               <span className="font-semibold text-gray-900">
                 {getEnrollmentCostLabel(lessonCount, lesson.token_cost, t)}
               </span>
-              {!loadingTokens && !sufficientTokens && (
+              {!loadingTokens && !sufficientTokens && canSubmit && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                   {hasPurchasedTokens
@@ -226,7 +361,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex flex-col sm:flex-row gap-2 pt-2">
-          {lessonEnded ? (
+          {!canSubmit && !seriesLoading ? (
             <button
               type="button"
               onClick={onClose}
@@ -247,6 +382,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
                   location: lesson.location,
                   program_code: lesson.program_code ?? '',
                 },
+                studentProfileId: profile?.id,
               }}
               className="flex-1 inline-flex justify-center items-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-dark"
             >
@@ -255,7 +391,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
           ) : (
             <button
               type="button"
-              disabled={submitting || loadingTokens || !hasPurchasedTokens}
+              disabled={submitting || loadingTokens || !hasPurchasedTokens || !canSubmit}
               onClick={handleConfirm}
               className="flex-1 inline-flex justify-center items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-dark disabled:opacity-50"
             >
