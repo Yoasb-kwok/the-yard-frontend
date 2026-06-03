@@ -1,4 +1,5 @@
 import { api } from './api';
+import { readWalletFromRecord, type WalletSnapshot } from './walletBalance';
 
 export interface UserToken {
   id: string;
@@ -25,6 +26,51 @@ interface OrderTokenLike {
   payment_status?: string;
   token_count?: number;
   created_at?: string;
+}
+
+function unwrapApiRoot(payload: unknown): Record<string, unknown> {
+  if (!payload || typeof payload !== 'object') return {};
+  const root = payload as Record<string, unknown>;
+  const data = root.data;
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    return data as Record<string, unknown>;
+  }
+  return root;
+}
+
+/** Parse GET /student/tokens — prefer `wallet.remaining_tokens` over batch sums. */
+export function parseStudentTokensResponse(payload: unknown): {
+  tokens: UserToken[];
+  wallet: WalletSnapshot | null;
+} {
+  const root = unwrapApiRoot(payload);
+  const wallet = readWalletFromRecord(root);
+  const batchSource = root.tokens ?? root.user_tokens ?? root.userTokens ?? payload;
+  return {
+    tokens: normalizeUserTokens(batchSource),
+    wallet,
+  };
+}
+
+export function resolveStudentRemainingBalance(
+  tokens: UserToken[],
+  wallet: WalletSnapshot | null | undefined,
+): number {
+  if (wallet != null && Number.isFinite(wallet.remaining_tokens)) {
+    return wallet.remaining_tokens;
+  }
+  return getTotalRemainingTokens(tokens);
+}
+
+/** True when API failed or returned no wallet and no token batches. */
+export function isStudentTokensUnavailable(
+  tokens: UserToken[],
+  wallet: WalletSnapshot | null | undefined,
+  requestFailed: boolean,
+): boolean {
+  if (requestFailed) return true;
+  if (wallet != null) return false;
+  return tokens.length === 0;
 }
 
 export function normalizeUserTokens(payload: unknown): UserToken[] {

@@ -457,6 +457,7 @@
     "title": "Dashboard",
     "titleFor": "{{name}}'s Dashboard",
     "tokenBalance": "Token Balance",
+    "tokenBalanceLoadFailed": "Could not load token balance. Please refresh or try again later.",
     "availableTokens": "Available tokens",
     "upcomingClasses": "This Week's Lessons",
     "allUpcomingLessons": "All Upcoming Lessons",

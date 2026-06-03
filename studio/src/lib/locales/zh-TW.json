@@ -457,6 +457,7 @@
     "title": "儀表板",
     "titleFor": "{{name}}的儀表板",
     "tokenBalance": "代幣餘額",
+    "tokenBalanceLoadFailed": "無法載入代幣餘額，請重新整理或稍後再試。",
     "availableTokens": "可用代幣",
     "upcomingClasses": "本週課程",
     "allUpcomingLessons": "所有即將到來的課程",

@@ -6,7 +6,6 @@ import AdminUserStudentsTable from './AdminUserStudentsTable';
 interface AdminUserFamilyPanelProps {
   family: AdminUserFamily;
   hasTrialApplication?: boolean;
-  remainingTokens?: number;
   tokenExpiryDate?: string | null;
   onViewTrials?: () => void;
 }
@@ -14,7 +13,6 @@ interface AdminUserFamilyPanelProps {
 export default function AdminUserFamilyPanel({
   family,
   hasTrialApplication,
-  remainingTokens,
   tokenExpiryDate,
   onViewTrials,
 }: AdminUserFamilyPanelProps) {
@@ -73,7 +71,6 @@ export default function AdminUserFamilyPanel({
         <AdminUserStudentsTable
           students={students}
           hasTrialApplication={hasTrialApplication}
-          remainingTokens={remainingTokens}
           tokenExpiryDate={tokenExpiryDate}
           onViewTrials={onViewTrials}
         />

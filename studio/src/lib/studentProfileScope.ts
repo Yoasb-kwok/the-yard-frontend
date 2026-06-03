@@ -29,13 +29,12 @@ export function withStudentProfileQuery(
   };
 }
 
-export function filterUserTokensByProfile(raw: unknown, profileId: string | null | undefined): unknown {
+export function filterUserTokensByProfile<T>(raw: T, profileId: string | null | undefined): T {
   const id = profileId?.trim();
   if (!id || !Array.isArray(raw)) return raw;
-  const filtered = raw.filter((item) => {
+  return raw.filter((item) => {
     const row = item as Record<string, unknown>;
     const rowProfile = pickStudentProfileId(row);
     return !rowProfile || rowProfile === id;
-  });
-  return filtered.length > 0 ? filtered : raw;
+  }) as T;
 }

@@ -7,12 +7,13 @@ import { formatDate, isExpiringSoon } from '../../lib/utils';
 import {
   fetchTokenUsageHistory,
   formatTokenUsageLabel,
-  getTotalRemainingTokens,
-  normalizeUserTokens,
-  tokensFromPaidOrders,
+  isStudentTokensUnavailable,
+  parseStudentTokensResponse,
+  resolveStudentRemainingBalance,
   type TokenUsageItem,
   type UserToken,
 } from '../../lib/studentTokens';
+import type { WalletSnapshot } from '../../lib/walletBalance';
 import { filterUserTokensByProfile, withStudentProfileQuery } from '../../lib/studentProfileScope';
 import {
   filterEnrollmentsForActiveProfile,
@@ -36,8 +37,10 @@ export default function StudentTokenBalanceSection({
 }: StudentTokenBalanceSectionProps) {
   const { t, i18n } = useTranslation();
   const [tokens, setTokens] = useState<UserToken[]>([]);
+  const [wallet, setWallet] = useState<WalletSnapshot | null>(null);
   const [usage, setUsage] = useState<TokenUsageItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tokensLoadFailed, setTokensLoadFailed] = useState(false);
   const [usageLoading, setUsageLoading] = useState(true);
 
   const getLocale = (): string => {
@@ -58,20 +61,38 @@ export default function StudentTokenBalanceSection({
         return;
       }
       try {
-        let tokensData = normalizeUserTokens(
-          await api
-            .get('/student/tokens', withStudentProfileQuery(undefined, profileId))
-            .catch(() => api.get('/user-tokens', withStudentProfileQuery(undefined, profileId)))
-            .catch(() => ({ data: [] })),
-        );
-        tokensData = filterUserTokensByProfile(tokensData, profileId) as UserToken[];
-        if (tokensData.length === 0) {
-          const ordersRes = await api.get('/orders/me').catch(() => ({ data: [] }));
-          tokensData = tokensFromPaidOrders(ordersRes);
+        let requestFailed = false;
+        const res = await api
+          .get('/student/tokens', withStudentProfileQuery(undefined, profileId))
+          .catch(async () => {
+            try {
+              return await api.get('/user-tokens', withStudentProfileQuery(undefined, profileId));
+            } catch {
+              requestFailed = true;
+              return null;
+            }
+          });
+        if (res == null) {
+          if (!cancelled) {
+            setTokens([]);
+            setWallet(null);
+            setTokensLoadFailed(true);
+          }
+          return;
         }
-        if (!cancelled) setTokens(tokensData);
+        const parsed = parseStudentTokensResponse(res);
+        const tokensData = filterUserTokensByProfile(parsed.tokens, profileId) as UserToken[];
+        if (!cancelled) {
+          setTokens(tokensData);
+          setWallet(parsed.wallet);
+          setTokensLoadFailed(isStudentTokensUnavailable(tokensData, parsed.wallet, requestFailed));
+        }
       } catch {
-        if (!cancelled) setTokens([]);
+        if (!cancelled) {
+          setTokens([]);
+          setWallet(null);
+          setTokensLoadFailed(true);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -113,7 +134,7 @@ export default function StudentTokenBalanceSection({
     };
   }, [profileId, t]);
 
-  const totalTokens = getTotalRemainingTokens(tokens);
+  const totalTokens = resolveStudentRemainingBalance(tokens, wallet);
   const expiringTokens = tokens.filter((tok) => isExpiringSoon(tok.expiry_date));
   const earliestExpiryDate =
     tokens.length > 0
@@ -134,6 +155,17 @@ export default function StudentTokenBalanceSection({
       <div className="bg-white rounded-lg shadow-md p-4 md:p-6 animate-pulse">
         <div className="h-6 w-32 bg-gray-200 rounded mb-4" />
         <div className="h-10 w-20 bg-gray-200 rounded" />
+      </div>
+    );
+  }
+
+  if (tokensLoadFailed) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <div className="flex items-start gap-3 text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-4">
+          <AlertCircle className="h-6 w-6 flex-shrink-0 mt-0.5" />
+          <p className="text-sm">{t('dashboard.tokenBalanceLoadFailed')}</p>
+        </div>
       </div>
     );
   }

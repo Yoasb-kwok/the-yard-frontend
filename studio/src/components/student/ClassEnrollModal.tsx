@@ -18,7 +18,12 @@ import {
   mapApiClassToCourseLesson,
   type CourseLessonRow,
 } from '../../lib/courseLessonEnrollment';
-import { getTotalRemainingTokens, hasEnoughTokens, normalizeUserTokens, type UserToken } from '../../lib/studentTokens';
+import {
+  parseStudentTokensResponse,
+  resolveStudentRemainingBalance,
+  type UserToken,
+} from '../../lib/studentTokens';
+import type { WalletSnapshot } from '../../lib/walletBalance';
 import { filterUserTokensByProfile, withStudentProfileQuery } from '../../lib/studentProfileScope';
 import { formatDateTimeRange, formatProgramCodeDisplay } from '../../lib/utils';
 
@@ -47,6 +52,7 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
   const { t, i18n } = useTranslation();
   const { profile } = useAuth();
   const [tokens, setTokens] = useState<UserToken[]>([]);
+  const [tokenWallet, setTokenWallet] = useState<WalletSnapshot | null>(null);
   const [loadingTokens, setLoadingTokens] = useState(false);
   const [seriesLessons, setSeriesLessons] = useState<CourseLessonRow[]>([]);
   const [seriesLoading, setSeriesLoading] = useState(false);
@@ -112,9 +118,15 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
   const { lessonCount, tokensRequired, lessonClassIds, skippedPast, skippedFull, bookable } =
     enrollmentCounts;
 
-  const balance = useMemo(() => getTotalRemainingTokens(tokens), [tokens]);
+  const balance = useMemo(
+    () => resolveStudentRemainingBalance(tokens, tokenWallet),
+    [tokens, tokenWallet],
+  );
   const hasPurchasedTokens = balance > 0;
-  const sufficientTokens = useMemo(() => hasEnoughTokens(tokens, tokensRequired), [tokens, tokensRequired]);
+  const sufficientTokens = useMemo(
+    () => balance >= tokensRequired,
+    [balance, tokensRequired],
+  );
   const tokenShortfall = Math.max(0, tokensRequired - balance);
   const canSubmit = bookable.length > 0 && tokensRequired > 0;
 
@@ -142,12 +154,16 @@ export default function ClassEnrollModal({ isOpen, lesson, onClose, onEnrolled }
       .catch(() => api.get('/user-tokens', withStudentProfileQuery(undefined, profileId)))
       .then((res) => {
         if (cancelled) return;
-        const normalized = normalizeUserTokens(res);
-        const scoped = filterUserTokensByProfile(normalized, profileId);
-        setTokens(Array.isArray(scoped) ? (scoped as UserToken[]) : normalized);
+        const parsed = parseStudentTokensResponse(res);
+        const scoped = filterUserTokensByProfile(parsed.tokens, profileId) as UserToken[];
+        setTokens(scoped);
+        setTokenWallet(parsed.wallet);
       })
       .catch(() => {
-        if (!cancelled) setTokens([]);
+        if (!cancelled) {
+          setTokens([]);
+          setTokenWallet(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingTokens(false);

@@ -773,7 +773,6 @@ export default function UsersPage() {
                   </tr>
                 ) : (
                 paginatedUsers.flatMap((user) => {
-                  const totalTokens = user.user_tokens.reduce((sum, tok) => sum + tok.remaining_tokens, 0);
                   const parentName = getParentName(user);
                   const isExpanded = expandedUserId === user.id;
                   const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
@@ -883,7 +882,6 @@ export default function UsersPage() {
                             <AdminUserStudentsTable
                               students={user.family.students}
                               hasTrialApplication={user.has_trial_application}
-                              remainingTokens={totalTokens}
                               tokenExpiryDate={earliestExpiry}
                               onViewTrials={() => navigate('/admin/trial-applications')}
                               onAssignTokens={(profileId) =>

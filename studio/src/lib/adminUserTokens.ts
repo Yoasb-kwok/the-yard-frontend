@@ -1,8 +1,11 @@
 /**
  * Admin token balance helpers — align with backend:
- * - unassigned = sum of valid remaining_tokens in user_tokens (wallet)
- * - assigned = tokens_charged on class enrollments (ground truth)
+ * - Prefer profiles[].wallet_remaining_tokens or user.wallet (canonical)
+ * - Fallback: sum valid remaining_tokens in user_tokens batches
+ * - assigned = wallet.assigned_tokens or tokens_charged on enrollments
  */
+
+import { findProfileWallet, readWalletFromRecord } from './walletBalance';
 
 export type AdminUserTokenBalance = {
   /** Tokens still in wallet (can assign to new classes). */
@@ -124,11 +127,62 @@ export function enrollmentHasTokensAssigned(row: Record<string, unknown>): boole
   return status === 'enrolled' || status === 'attended' || status === 'absent' || status === 'sick_leave';
 }
 
+function balanceFromWallet(
+  wallet: { remaining_tokens: number; assigned_tokens?: number; total_tokens?: number },
+  enrollmentRows: unknown,
+  profileId: string | null | undefined,
+  userRow: Record<string, unknown>,
+): AdminUserTokenBalance {
+  const remaining = wallet.remaining_tokens;
+  const enrollmentList = Array.isArray(enrollmentRows)
+    ? profileId
+      ? (enrollmentRows as Record<string, unknown>[]).filter((row) => {
+          const rowProfile =
+            typeof row.student_profile_id === 'string'
+              ? row.student_profile_id
+              : typeof row.profile_id === 'string'
+                ? row.profile_id
+                : null;
+          return !rowProfile || rowProfile === profileId;
+        })
+      : enrollmentRows
+    : enrollmentRows;
+  const assignedFromEnrollments = sumEnrollmentTokensCharged(enrollmentList ?? []);
+  let assigned =
+    wallet.assigned_tokens != null && Number.isFinite(wallet.assigned_tokens)
+      ? wallet.assigned_tokens
+      : assignedFromEnrollments;
+  if (assigned === 0) {
+    const fromUser = readAssignedTokenCount(userRow);
+    const purchasedHint = Math.max(
+      wallet.total_tokens ?? 0,
+      remaining + assignedFromEnrollments,
+    );
+    if (fromUser > 0 && fromUser <= purchasedHint - remaining) {
+      assigned = fromUser;
+    }
+  }
+  const purchased = Math.max(
+    remaining + assigned,
+    wallet.total_tokens ?? 0,
+    remaining + assignedFromEnrollments,
+  );
+  return { remaining, assigned, purchased };
+}
+
 export function getAdminUserTokenBalance(
   userRow: Record<string, unknown>,
   enrollmentRows?: unknown,
   profileId?: string | null,
 ): AdminUserTokenBalance {
+  const pid = profileId?.trim() || null;
+  const profileWallet = pid ? findProfileWallet(userRow, pid) : null;
+  const userWallet = pid ? null : readWalletFromRecord(userRow);
+  const wallet = profileWallet ?? userWallet;
+  if (wallet) {
+    return balanceFromWallet(wallet, enrollmentRows, pid, userRow);
+  }
+
   const remaining = sumValidRemainingUserTokens(userRow.user_tokens, profileId);
   const enrollmentList = Array.isArray(enrollmentRows)
     ? profileId

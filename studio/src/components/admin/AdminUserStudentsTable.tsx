@@ -11,7 +11,6 @@ import {
 export interface AdminUserStudentsTableProps {
   students: AdminStudentProfile[];
   hasTrialApplication?: boolean;
-  remainingTokens?: number;
   /** 帳戶層級：最早到期且仍有餘額的代幣批次 */
   tokenExpiryDate?: string | null;
   onViewTrials?: () => void;
@@ -23,7 +22,6 @@ export interface AdminUserStudentsTableProps {
 export default function AdminUserStudentsTable({
   students,
   hasTrialApplication = false,
-  remainingTokens = 0,
   tokenExpiryDate = null,
   onViewTrials,
   onAssignTokens,
@@ -171,7 +169,11 @@ export default function AdminUserStudentsTable({
               <td className="px-3 py-2 text-gray-700 font-mono text-center">{s.id_card_last4 || '—'}</td>
               <td className="px-3 py-2">{trialCell}</td>
               <td className="px-3 py-2 text-gray-700 text-center tabular-nums">
-                {s.remaining_tokens != null ? s.remaining_tokens : index === 0 ? remainingTokens : '—'}
+                {s.wallet_remaining_tokens != null
+                  ? s.wallet_remaining_tokens
+                  : s.remaining_tokens != null
+                    ? s.remaining_tokens
+                    : '—'}
               </td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums">
                 {s.token_expiry_date

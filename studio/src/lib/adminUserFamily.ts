@@ -10,6 +10,7 @@ import {
   normalizeSex,
   readProfilesArray,
 } from './adminUserFields';
+import { readWalletFromRecord } from './walletBalance';
 
 export type FamilyProfileKind = 'parent' | 'student';
 
@@ -38,6 +39,8 @@ export interface AdminStudentProfile {
   age_tag: AgeTag | null;
   mobile: string | null;
   id_card_last4: string | null;
+  /** Per-student unassigned wallet (backend `wallet_remaining_tokens`). */
+  wallet_remaining_tokens?: number;
   /** Per-student wallet (when backend scopes user_tokens by profile). */
   remaining_tokens?: number;
   assigned_tokens?: number;
@@ -94,9 +97,32 @@ function mapStudentProfile(
         )
       : null);
 
-  const remainingRaw = Number(raw.remaining_tokens ?? raw.unassigned_tokens ?? raw.remainingTokens ?? NaN);
-  const assignedRaw = Number(raw.assigned_tokens ?? raw.assignedTokens ?? NaN);
-  const totalRaw = Number(raw.total_tokens ?? raw.totalTokens ?? NaN);
+  const wallet = readWalletFromRecord(raw);
+  const remainingRaw = Number(
+    wallet?.remaining_tokens ??
+      raw.wallet_remaining_tokens ??
+      raw.walletRemainingTokens ??
+      raw.remaining_tokens ??
+      raw.unassigned_tokens ??
+      raw.remainingTokens ??
+      NaN,
+  );
+  const assignedRaw = Number(
+    wallet?.assigned_tokens ??
+      raw.wallet_assigned_tokens ??
+      raw.walletAssignedTokens ??
+      raw.assigned_tokens ??
+      raw.assignedTokens ??
+      NaN,
+  );
+  const totalRaw = Number(
+    wallet?.total_tokens ??
+      raw.wallet_total_tokens ??
+      raw.walletTotalTokens ??
+      raw.total_tokens ??
+      raw.totalTokens ??
+      NaN,
+  );
 
   return {
     id: String(raw.id ?? userFallback?.id ?? ''),
@@ -112,6 +138,8 @@ function mapStudentProfile(
     age_tag: normalizeAgeTag(raw.age_tag ?? raw.age_group ?? raw.ageTag),
     mobile: toOptStr(raw.mobile ?? raw.contact_number),
     id_card_last4: idLast,
+    wallet_remaining_tokens:
+      Number.isFinite(remainingRaw) && remainingRaw >= 0 ? remainingRaw : undefined,
     remaining_tokens: Number.isFinite(remainingRaw) && remainingRaw >= 0 ? remainingRaw : undefined,
     assigned_tokens: Number.isFinite(assignedRaw) && assignedRaw >= 0 ? assignedRaw : undefined,
     total_tokens: Number.isFinite(totalRaw) && totalRaw >= 0 ? totalRaw : undefined,
