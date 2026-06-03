@@ -7,6 +7,7 @@ import { Plus, Edit, Trash2, User, Upload, X, ChevronDown, ChevronRight, BookOpe
 import { TableSortButton } from '../../components/TableSortButton';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile, saveInstructorProfile, type InstructorProfile } from '../../lib/instructorProfiles';
+import { instructorProfileFromApiRow, instructorProfileToApiBody } from '../../lib/instructorApi';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 
 interface Instructor {
@@ -135,6 +136,17 @@ export default function InstructorsPage() {
       const response = await api.get<Instructor[]>('/admin/instructors');
       if (response.success && Array.isArray(response.data)) {
         setInstructors(response.data);
+        for (const row of response.data) {
+          const rec = row as Record<string, unknown>;
+          const name = String(rec.name ?? '').trim();
+          if (!name) continue;
+          const fromApi = instructorProfileFromApiRow(rec, name);
+          const hasContent =
+            Boolean(fromApi.intro?.trim()) ||
+            (fromApi.awards?.length ?? 0) > 0 ||
+            (fromApi.years_dancing ?? 0) > 0;
+          if (hasContent) saveInstructorProfile(name, fromApi);
+        }
       } else {
         setInstructors([]);
       }
@@ -406,10 +418,10 @@ export default function InstructorsPage() {
     try {
       if (editingInstructor) {
         // Update existing instructor
-        const response = await api.patch(`/admin/instructors/${editingInstructor.id}`, {
-          name: form.name,
-          profile_image_url: form.profile_image_url || null,
-        });
+        const response = await api.patch(
+          `/admin/instructors/${editingInstructor.id}`,
+          instructorProfileToApiBody(formToProfile(), form),
+        );
 
         if (response.success && response.data) {
           await loadInstructors();
@@ -419,10 +431,10 @@ export default function InstructorsPage() {
           throw new Error(response.msg || 'Failed to update instructor');
         }
       } else {
-        const response = await api.post('/admin/instructors', {
-          name: form.name,
-          profile_image_url: form.profile_image_url || null,
-        });
+        const response = await api.post(
+          '/admin/instructors',
+          instructorProfileToApiBody(formToProfile(), form),
+        );
 
         if (response.success && response.data) {
           await loadInstructors();

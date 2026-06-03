@@ -1935,7 +1935,9 @@
   },
   "instructors": {
     "title": "导师介绍",
-    "subtitle": "认识我们的导师团队，每位均有丰富教学与演出经验。"
+    "subtitle": "认识我们的导师团队，每位均有丰富教学与演出经验。",
+    "loadFailed": "无法载入导师资料，请稍后再试。",
+    "empty": "暂无导师资料。"
   },
   "promotions": {
     "currentOffers": "当前适用优惠",

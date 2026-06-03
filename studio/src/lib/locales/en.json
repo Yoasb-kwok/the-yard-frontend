@@ -1953,7 +1953,9 @@
   },
   "instructors": {
     "title": "Our Instructors",
-    "subtitle": "Meet our teaching team. Each instructor has extensive teaching and performance experience."
+    "subtitle": "Meet our teaching team. Each instructor has extensive teaching and performance experience.",
+    "loadFailed": "Could not load instructors. Please try again later.",
+    "empty": "No instructors to display yet."
   },
   "promotions": {
     "currentOffers": "Current Offers",

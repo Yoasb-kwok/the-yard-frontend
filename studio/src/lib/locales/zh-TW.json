@@ -1956,7 +1956,9 @@
   },
   "instructors": {
     "title": "導師介紹",
-    "subtitle": "認識我們的導師團隊，每位均具豐富教學與演出經驗。"
+    "subtitle": "認識我們的導師團隊，每位均具豐富教學與演出經驗。",
+    "loadFailed": "無法載入導師資料，請稍後再試。",
+    "empty": "暫無導師資料。"
   },
   "promotions": {
     "currentOffers": "當前適用優惠",
