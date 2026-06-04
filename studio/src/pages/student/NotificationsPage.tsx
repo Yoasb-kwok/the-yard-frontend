@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
@@ -52,6 +52,7 @@ function NotificationIcon({ item }: { item: NotificationItem }) {
 
 export default function NotificationsPage() {
   const { profile, profiles } = useAuth();
+  const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const [apiNotifications, setApiNotifications] = useState<ReturnType<typeof normalizeApiNotification>[]>([]);
   const [trials, setTrials] = useState<TrialApplicationItem[]>([]);
@@ -62,8 +63,10 @@ export default function NotificationsPage() {
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
   const primaryProfileId = profiles?.[0]?.id;
+  const hasMultipleProfiles = (profiles?.length ?? 0) > 1;
   const isMasterView = !!primaryProfileId && profile?.id === primaryProfileId;
-  const singleProfileAccount = (profiles?.length ?? 0) <= 1;
+  const singleProfileAccount = !hasMultipleProfiles;
+  const masterNotificationsBlocked = hasMultipleProfiles && isMasterView;
 
   const studentDisplayName = profile?.full_name || profiles?.[0]?.full_name || '';
 
@@ -98,6 +101,13 @@ export default function NotificationsPage() {
   ];
 
   useEffect(() => {
+    if (masterNotificationsBlocked) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [masterNotificationsBlocked, navigate]);
+
+  useEffect(() => {
+    if (masterNotificationsBlocked) return;
     let cancelled = false;
     const token = localStorage.getItem('token');
     if (!token) {
@@ -173,7 +183,9 @@ export default function NotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [isMasterView, profile?.id, profile?.full_name]);
+  }, [isMasterView, masterNotificationsBlocked, profile?.id, profile?.full_name, singleProfileAccount]);
+
+  if (masterNotificationsBlocked) return null;
 
   return (
     <Layout>

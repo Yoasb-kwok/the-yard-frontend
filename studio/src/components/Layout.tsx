@@ -67,9 +67,10 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [userMenuOpen]);
 
-  // Student: 主帳戶區（儀表板、訊息中心）；子女帳戶區（課程表、我的資料、購買記錄）+ 最新通知
+  // Student: 主帳戶區（儀表板）；子女帳戶區（訊息中心、課程表、我的資料、購買記錄）+ 最新通知
   const primaryProfileId = profiles[0]?.id ?? null;
   const isMasterAccountView = !!primaryProfileId && activeProfileId === primaryProfileId;
+  const hideMasterNotifications = isMasterAccountView && hasMultipleProfiles;
   const isOnDashboardSection = location.pathname === '/dashboard';
 
   const resetToMasterProfile = () => {
@@ -89,12 +90,11 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [location.pathname, isAdmin, primaryProfileId, switchProfile]);
 
-  const studentNavItemsDashboard = [
-    { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
-    { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
-  ];
+  const studentNavItemsDashboard = [{ path: '/dashboard', icon: Home, label: t('nav.dashboard') }];
   const studentNavItemsScheduleProfile = [
-    { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
+    ...(hideMasterNotifications
+      ? []
+      : [{ path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') }]),
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
     { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },
     { path: '/payment-history', icon: Receipt, label: t('nav.purchaseHistory') },

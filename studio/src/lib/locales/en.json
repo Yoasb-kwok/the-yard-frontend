@@ -678,7 +678,7 @@
     "receiptSendFailed": "Failed to send receipt email. Please try again later.",
     "actions": "Actions",
     "receiptTitle": "Payment Receipt",
-    "receiptPrintHint": "You can print this page (Ctrl+P / Cmd+P) and choose \"Save as PDF\"."
+    "receiptPrintHint": "Press Ctrl+P (Mac: Cmd+P) to print or save as PDF. Disable \"Headers and footers\" to avoid date, URL, or other text at the top."
   },
   "profile": {
     "title": "Profile",

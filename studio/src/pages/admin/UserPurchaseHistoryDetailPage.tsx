@@ -4,7 +4,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
-import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, X, Printer } from 'lucide-react';
+import {
+  buildPurchaseReceiptHtml,
+  getPurchaseReceiptLine,
+  openReceiptHtml,
+} from '../../lib/receiptHtml';
+import { ArrowLeft, Receipt, CheckCircle, Clock, XCircle, Search, Filter, X } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
 interface Purchase {
@@ -101,7 +106,6 @@ export default function UserPurchaseHistoryDetailPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedPurchase, setSelectedPurchase] = useState<Purchase | null>(null);
 
   useEffect(() => {
     if (userId) {
@@ -199,99 +203,49 @@ export default function UserPurchaseHistoryDetailPage() {
     }
   };
 
-  const handlePrintReceipt = () => {
-    // Create a new window with just the receipt content
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    
-    const receiptContent = document.getElementById('receipt-content');
-    if (!receiptContent) return;
-    
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Receipt - ${selectedPurchase?.order_id}</title>
-          <style>
-            * {
-              margin: 0;
-              padding: 0;
-              box-sizing: border-box;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-              padding: 20px;
-              color: #111827;
-              background: white;
-            }
-            .receipt-container {
-              max-width: 800px;
-              margin: 0 auto;
-              background: white;
-            }
-            h1 { font-size: 2rem; font-weight: bold; margin-bottom: 0.5rem; }
-            h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
-            h3 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.75rem; }
-            .text-center { text-align: center; }
-            .mb-8 { margin-bottom: 2rem; }
-            .mb-6 { margin-bottom: 1.5rem; }
-            .mb-3 { margin-bottom: 0.75rem; }
-            .mb-2 { margin-bottom: 0.5rem; }
-            .mb-1 { margin-bottom: 0.25rem; }
-            .mt-8 { margin-top: 2rem; }
-            .mt-2 { margin-top: 0.5rem; }
-            .pt-6 { padding-top: 1.5rem; }
-            .pb-6 { padding-bottom: 1.5rem; }
-            .p-8 { padding: 2rem; }
-            .border-b { border-bottom: 1px solid #e5e7eb; }
-            .border-t { border-top: 1px solid #e5e7eb; }
-            .grid { display: grid; }
-            .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            .gap-4 { gap: 1rem; }
-            .space-y-3 > * + * { margin-top: 0.75rem; }
-            .space-y-2 > * + * { margin-top: 0.5rem; }
-            .flex { display: flex; }
-            .justify-between { justify-content: space-between; }
-            .text-sm { font-size: 0.875rem; }
-            .text-base { font-size: 1rem; }
-            .text-lg { font-size: 1.125rem; }
-            .text-2xl { font-size: 1.5rem; }
-            .text-3xl { font-size: 1.875rem; }
-            .font-medium { font-weight: 500; }
-            .font-semibold { font-weight: 600; }
-            .font-bold { font-weight: 700; }
-            .text-gray-500 { color: #6b7280; }
-            .text-gray-600 { color: #4b5563; }
-            .text-gray-700 { color: #374151; }
-            .text-gray-900 { color: #111827; }
-            .text-red-600 { color: #dc2626; }
-            .text-green-600 { color: #16a34a; }
-            @media print {
-              @page {
-                margin: 0.5in;
-              }
-              body {
-                padding: 0;
-              }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="receipt-container">
-            ${receiptContent.innerHTML}
-          </div>
-        </body>
-      </html>
-    `);
-    
-    printWindow.document.close();
-    printWindow.focus();
-    
-    // Wait for content to load, then print
-    setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
-    }, 250);
+  const receiptLabels = {
+    orderId: t('paymentHistory.orderId'),
+    date: t('paymentHistory.date'),
+    description: t('paymentHistory.description'),
+    paymentMethod: t('paymentHistory.paymentMethod'),
+    amount: t('paymentHistory.amount'),
+    status: t('paymentHistory.status'),
+  };
+
+  const buildReceiptHtmlForPurchase = (purchase: Purchase) => {
+    const { description, quantity } = getPurchaseReceiptLine({
+      packageName: purchase.package_name,
+      packageId: purchase.package_id,
+      tokenCount: purchase.token_count,
+      packageQuantity: purchase.quantity,
+      translate: (key, opts) => t(key, opts),
+      tokensLabel: t('tokenPackage.tokens'),
+    });
+    const receiptDate = formatDateTime(purchase.paid_at ?? purchase.created_at, getLocale());
+    const notes = purchase.coupon_code
+      ? `${t('admin.purchaseHistory.coupon')}: ${purchase.coupon_code}`
+      : '-';
+
+    return buildPurchaseReceiptHtml({
+      orderId: purchase.order_id,
+      date: receiptDate,
+      description,
+      paymentMethod: getPaymentMethodLabel(purchase.payment_method),
+      totalFormatted: formatCurrency(purchase.total),
+      status: getStatusLabel(purchase.payment_status),
+      billedTo: purchase.user_name,
+      quantity,
+      unitPrice: formatCurrency(purchase.total),
+      discountFormatted: purchase.discount > 0 ? formatCurrency(purchase.discount) : undefined,
+      notes,
+      receiptTitle: t('paymentHistory.receiptTitle'),
+      printHint: t('paymentHistory.receiptPrintHint'),
+      labels: receiptLabels,
+    });
+  };
+
+  const handleViewReceipt = (purchase: Purchase) => {
+    openReceiptHtml(buildReceiptHtmlForPurchase(purchase));
   };
 
   const filteredPurchases = purchases.filter(purchase => {
@@ -454,7 +408,7 @@ export default function UserPurchaseHistoryDetailPage() {
                             {purchase.payment_status === 'paid' && (
                               <>
                                 <button
-                                  onClick={() => setSelectedPurchase(purchase)}
+                                  onClick={() => handleViewReceipt(purchase)}
                                   className="p-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
                                   title={t('admin.purchaseHistory.receipt')}
                                   aria-label={t('admin.purchaseHistory.receipt')}
@@ -515,7 +469,7 @@ export default function UserPurchaseHistoryDetailPage() {
                       {purchase.payment_status === 'paid' && (
                         <div className="flex items-center gap-2 pt-2 border-t">
                           <button
-                            onClick={() => setSelectedPurchase(purchase)}
+                            onClick={() => handleViewReceipt(purchase)}
                             className="p-2 bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
                             title={t('admin.purchaseHistory.receipt')}
                             aria-label={t('admin.purchaseHistory.receipt')}
@@ -540,165 +494,6 @@ export default function UserPurchaseHistoryDetailPage() {
           )}
         </div>
       </div>
-
-      {/* Receipt Modal */}
-      {selectedPurchase && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 print:hidden">
-          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto print:max-h-none print:shadow-none">
-            {/* Receipt Content - Printable */}
-            <div id="receipt-content" className="p-8 print:p-6">
-              {/* Company Header */}
-              <div className="text-center mb-8 border-b border-gray-200 pb-6">
-                <h1 className="text-3xl font-bold text-gray-900 mb-2">Yard</h1>
-                <p className="text-gray-600 mb-1">Dance Academy</p>
-                <p className="text-sm text-gray-500 mb-2">
-                  {i18n.language === 'en' ? t('contact.addressEN') : t('contact.addressTC')}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {t('contact.email')}: info@theyard.com.hk
-                </p>
-              </div>
-
-              {/* Receipt Title */}
-              <div className="mb-6">
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">
-                  {t('admin.purchaseHistory.receipt')}
-                </h2>
-                <p className="text-sm text-gray-500">
-                  {t('admin.purchaseHistory.receiptNumber')}: {selectedPurchase.order_id}
-                </p>
-              </div>
-
-              {/* Customer Information */}
-              <div className="mb-6 pb-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  {t('admin.purchaseHistory.customerInfo')}
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">{t('admin.purchaseHistory.customerName')}:</span>
-                    <span className="ml-2 font-medium text-gray-900">{selectedPurchase.user_name}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">{t('admin.purchaseHistory.contactNumber')}:</span>
-                    <span className="ml-2 font-medium text-gray-900">{formatMobileForDisplay(selectedPurchase.user_mobile, '-')}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Purchase Details */}
-              <div className="mb-6 pb-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  {t('admin.purchaseHistory.purchaseDetails')}
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{t('admin.purchaseHistory.package')}:</span>
-                    <span className="font-medium text-gray-900">{selectedPurchase.package_name}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{t('admin.purchaseHistory.quantity')}:</span>
-                    <span className="font-medium text-gray-900">{selectedPurchase.quantity}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{t('admin.purchaseHistory.tokens')}:</span>
-                    <span className="font-medium text-gray-900">
-                      {selectedPurchase.token_count * selectedPurchase.quantity} {t('tokenPackage.tokens')}
-                    </span>
-                  </div>
-                  {selectedPurchase.coupon_code && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">{t('admin.purchaseHistory.coupon')}:</span>
-                      <span className="font-medium text-gray-900">{selectedPurchase.coupon_code}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Payment Summary */}
-              <div className="mb-6 pb-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  {t('admin.purchaseHistory.paymentSummary')}
-                </h3>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">{t('admin.purchaseHistory.subtotal')}:</span>
-                    <span className="text-gray-900">{formatCurrency(selectedPurchase.subtotal)}</span>
-                  </div>
-                  {selectedPurchase.discount > 0 && (
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">{t('admin.purchaseHistory.discount')}:</span>
-                      <span className="text-red-600">-{formatCurrency(selectedPurchase.discount)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-base font-semibold pt-2 border-t border-gray-200">
-                    <span className="text-gray-900">{t('admin.purchaseHistory.total')}:</span>
-                    <span className="text-gray-900">{formatCurrency(selectedPurchase.total)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Payment Information */}
-              <div className="mb-6 pb-6 border-b border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3">
-                  {t('admin.purchaseHistory.paymentInfo')}
-                </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">{t('admin.purchaseHistory.paymentMethod')}:</span>
-                    <span className="ml-2 font-medium text-gray-900">
-                      {getPaymentMethodLabel(selectedPurchase.payment_method)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">{t('admin.purchaseHistory.paymentStatus')}:</span>
-                    <span className="ml-2 font-medium text-green-600">
-                      {getStatusLabel(selectedPurchase.payment_status)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">{t('admin.purchaseHistory.purchaseDate')}:</span>
-                    <span className="ml-2 font-medium text-gray-900">
-                      {formatDateTime(selectedPurchase.created_at, getLocale())}
-                    </span>
-                  </div>
-                  {selectedPurchase.paid_at && (
-                    <div>
-                      <span className="text-gray-600">{t('admin.purchaseHistory.paidAt')}:</span>
-                      <span className="ml-2 font-medium text-gray-900">
-                        {formatDateTime(selectedPurchase.paid_at, getLocale())}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="text-center text-sm text-gray-500 mt-8 pt-6 border-t border-gray-200">
-                <p>{t('admin.purchaseHistory.receiptFooter')}</p>
-                <p className="mt-2">{t('admin.purchaseHistory.thankYou')}</p>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="sticky bottom-0 bg-white border-t border-gray-200 px-8 py-4 flex justify-end gap-3 print:hidden">
-              <button
-                onClick={() => setSelectedPurchase(null)}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
-              >
-                {t('common.close')}
-              </button>
-              <button
-                onClick={handlePrintReceipt}
-                className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors flex items-center gap-2"
-              >
-                <Printer className="h-4 w-4" />
-                {t('admin.purchaseHistory.print')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </Layout>
   );
 }

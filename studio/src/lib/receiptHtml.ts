@@ -54,7 +54,7 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
   const { labels: dataLabels, ...rest } = data ?? {};
   const d: ReceiptData = {
     receiptTitle: 'Payment Receipt',
-    printHint: 'You can print this page (Ctrl+P / Cmd+P) and choose "Save as PDF".',
+    printHint: 'Press Ctrl+P (Mac: Cmd+P) to print or save as PDF. Disable "Headers and footers" to avoid extra text at the top.',
     brandName: 'The Yard',
     logoSrc: resolveDefaultLogoSrc(),
     ...rest,
@@ -184,13 +184,18 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
       margin-bottom: 12px;
     }
     .summary-right .line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
       border-bottom: 1px solid #1f1f1f;
       font-size: 15px;
       font-weight: 700;
       line-height: 1.35;
+      padding: 2px 0;
     }
     .summary-right .line span {
-      float: right;
+      flex-shrink: 0;
     }
     .summary-right .total {
       margin-top: 6px;
@@ -241,22 +246,222 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
       margin: 4px 0 0;
       padding-left: 16px;
     }
+    .addr-sub {
+      font-weight: 700;
+    }
+    .print-shell {
+      width: 100%;
+    }
+    .print-hint {
+      max-width: 720px;
+      margin: 16px auto 0;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #4b5563;
+      text-align: center;
+      background: #e5e7eb;
+      border-radius: 6px;
+    }
+    /* 螢幕與列印共用：強制輸出背景色與邊框色 */
+    html {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
     @media print {
-      body { padding: 0; background: #fff; }
-      .receipt { width: 100%; border-width: 2px; }
+      html, body {
+        width: 210mm;
+        height: 297mm;
+        margin: 0 !important;
+        padding: 0 !important;
+        background: #fff !important;
+        overflow: hidden;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      .print-hint {
+        display: none !important;
+      }
+      .print-shell {
+        width: 210mm;
+        height: 297mm;
+        padding: 5mm;
+        margin: 0;
+        overflow: hidden;
+        display: block;
+        box-sizing: border-box;
+      }
+      .receipt {
+        width: 100% !important;
+        max-width: none !important;
+        height: 100% !important;
+        min-height: 287mm !important;
+        max-height: 287mm !important;
+        margin: 0 !important;
+        border: 2px solid #1f1f1f !important;
+        background: #fff !important;
+        box-shadow: none !important;
+        transform: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        page-break-inside: avoid;
+        break-inside: avoid;
+        overflow: hidden;
+      }
+      .header {
+        flex: 0 0 auto;
+        grid-template-columns: 32mm 1fr;
+        border-bottom: 2px solid #1f1f1f !important;
+      }
+      .logo-box {
+        border-right: 2px solid #1f1f1f !important;
+        padding: 5mm 4mm;
+      }
+      .logo-box img {
+        max-height: 28mm;
+        width: auto;
+      }
+      .header-main {
+        padding: 4mm 5mm 3mm;
+      }
+      .school-name {
+        font-size: 18px;
+      }
+      .school-sub {
+        font-size: 28px;
+        margin: 2mm 0 3mm;
+      }
+      .addr-main,
+      .addr-sub {
+        font-size: 12px;
+        line-height: 1.3;
+      }
+      .block {
+        flex: 0 0 auto;
+        padding: 5mm 6mm;
+        border-bottom: 2px solid #1f1f1f !important;
+      }
+      .row {
+        font-size: 14px;
+        margin-bottom: 3mm;
+      }
+      .table-wrap {
+        flex: 0 0 auto;
+        padding: 6mm 6mm 5mm;
+      }
+      table.items th,
+      table.items td {
+        border: 1px solid #1f1f1f !important;
+        padding: 3mm 2mm;
+        font-size: 12px;
+        height: auto;
+        min-height: 10mm;
+      }
+      table.items th {
+        background: #0f0f0f !important;
+        color: #fff !important;
+        font-size: 11px;
+        min-height: 11mm;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+      table.items tbody tr.empty-row {
+        display: none !important;
+      }
+      .summary-grid {
+        margin-top: 5mm;
+        gap: 6mm;
+        grid-template-columns: 1fr 52mm;
+      }
+      .meta-left .meta-row {
+        font-size: 13px;
+        margin-bottom: 3.5mm;
+      }
+      .summary-right .line {
+        font-size: 13px;
+        padding: 1.5mm 0;
+      }
+      .summary-right .total {
+        font-size: 16px;
+        margin-top: 2mm;
+      }
+      .foot {
+        flex: 1 1 auto;
+        display: flex !important;
+        flex-direction: column !important;
+        padding: 5mm 6mm 6mm !important;
+        min-height: 0 !important;
+      }
+      .foot-extra {
+        flex: 1;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        min-height: 100%;
+      }
+      .sign {
+        font-size: 11px;
+        margin-bottom: 0;
+      }
+      .contact {
+        font-size: 11px;
+        line-height: 1.35;
+        margin-bottom: 0;
+      }
+      .director {
+        font-size: 10.5px;
+        line-height: 1.3;
+        margin-bottom: 0;
+      }
+      .director-name {
+        font-size: 12px;
+      }
+      .director-title {
+        font-size: 10px;
+      }
+      .terms {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        margin-top: 4mm;
+        padding-top: 4mm;
+        font-size: 9.5px;
+        line-height: 1.28;
+        border-top: 1px solid #1f1f1f !important;
+      }
+      .terms ul {
+        flex: 1;
+        margin: 2mm 0 0;
+        padding-left: 4.5mm;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+      .terms li {
+        margin-bottom: 0;
+      }
+      .terms-ver {
+        font-size: 9px;
+        margin-top: 3mm;
+        flex-shrink: 0;
+      }
     }
   </style>
 </head>
 <body>
+  <div class="print-shell">
   <div class="receipt">
     <div class="header">
       <div class="logo-box">
-        <img src="${escapeHtml(d.logoSrc || '')}" alt="${escapeHtml(d.brandName)} logo" />
+        <img src="${escapeHtml(d.logoSrc || '')}" alt="${escapeHtml(d.brandName)} logo" width="112" height="96" decoding="sync" />
       </div>
       <div class="header-main">
         <p class="school-name">YAYAKIDS 兒童舞蹈學校</p>
         <p class="school-sub">OFFICIAL RECEIPT</p>
-        <p class="addr">總校：新蒲崗六合街21號ARTISAN LAB 7樓全層<br/>7/F, TRIUM LAB, 21 LUK HOP STREET, SAN PO KONG</p>
+        <p class="addr"><span class="addr-main">總校：新蒲崗六合街21號ARTISAN LAB 7樓全層</span><br/><span class="addr-sub">7/F, TRIUM LAB, 21 LUK HOP STREET, SAN PO KONG</span></p>
       </div>
     </div>
     <div class="block">
@@ -283,8 +488,8 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
             <td class="c-discount">${escapeHtml(discount)}</td>
             <td class="c-total">${escapeHtml(d.amount)}</td>
           </tr>
-          <tr><td></td><td></td><td></td><td></td><td></td></tr>
-          <tr><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr class="empty-row"><td></td><td></td><td></td><td></td><td></td></tr>
         </tbody>
       </table>
       <div class="summary-grid">
@@ -301,6 +506,7 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
       </div>
     </div>
     <div class="foot">
+      <div class="foot-extra">
       <div class="sign">(SIGNATURE / STAMP)</div>
       <div class="contact">
         Contact Information:<br/>
@@ -321,10 +527,25 @@ export function buildReceiptHtml(data: Partial<ReceiptData> & Pick<ReceiptData, 
           <li>Parents must ensure that the student is in good health and fit for dance activities.</li>
           <li>The school reserves the right to take photographs and videos during classes/events for promotional and educational purposes.</li>
         </ul>
-        <div style="text-align:right;">(VER 2026.05)</div>
+        <div class="terms-ver" style="text-align:right;">(VER 2026.05)</div>
+      </div>
       </div>
     </div>
   </div>
+  </div>
+  <p class="print-hint">${escapeHtml(d.printHint)}</p>
+  <script>
+    (function () {
+      function markReady() {
+        document.documentElement.setAttribute('data-receipt-ready', 'true');
+      }
+      if (document.readyState === 'complete') {
+        markReady();
+      } else {
+        window.addEventListener('load', markReady, { once: true });
+      }
+    })();
+  </script>
 </body>
 </html>`;
 }
@@ -338,6 +559,77 @@ function escapeHtml(s: string): string {
     "'": '&#39;',
   };
   return String(s).replace(/[&<>"']/g, (c) => map[c] ?? c);
+}
+
+export interface PurchaseReceiptOptions {
+  orderId: string;
+  date: string;
+  description: string;
+  paymentMethod: string;
+  totalFormatted: string;
+  status: string;
+  billedTo: string;
+  quantity: string;
+  unitPrice?: string;
+  discountFormatted?: string;
+  notes?: string;
+  receiptTitle: string;
+  printHint: string;
+  labels: ReceiptData['labels'];
+  brandName?: string;
+}
+
+/** 與學生購買紀錄相同的收據 HTML（YAYAKIDS OFFICIAL RECEIPT 版型） */
+export function buildPurchaseReceiptHtml(options: PurchaseReceiptOptions): string {
+  return buildReceiptHtml({
+    orderId: options.orderId,
+    date: options.date,
+    description: options.description,
+    paymentMethod: options.paymentMethod,
+    amount: options.totalFormatted,
+    status: options.status,
+    billedTo: options.billedTo,
+    quantity: options.quantity,
+    unitPrice: options.unitPrice ?? options.totalFormatted,
+    discount: options.discountFormatted,
+    notes: options.notes,
+    receiptTitle: options.receiptTitle,
+    labels: options.labels,
+    printHint: options.printHint,
+    brandName: options.brandName ?? 'The Yard',
+  });
+}
+
+export function getPurchaseReceiptLine(params: {
+  packageName: string;
+  packageId?: string;
+  tokenCount?: number;
+  packageQuantity?: number;
+  translate?: (key: string, opts?: { defaultValue?: string }) => string;
+  tokensLabel?: string;
+}): { description: string; quantity: string } {
+  const packageQuantity = params.packageQuantity ?? 1;
+  const tokensPerPackage = params.tokenCount ?? 0;
+  const totalTokens = tokensPerPackage > 0 ? tokensPerPackage * packageQuantity : packageQuantity;
+  const tokensLabel = params.tokensLabel ?? 'tokens';
+  let packageName = params.packageName;
+  if (params.packageId && params.translate) {
+    packageName = params.translate(`tokenPackage.packages.${params.packageId}.name`, {
+      defaultValue: params.packageName,
+    });
+  }
+  const description =
+    tokensPerPackage > 0 ? `${packageName} - ${totalTokens} ${tokensLabel}` : packageName;
+  const quantity = tokensPerPackage > 0 ? String(totalTokens) : String(packageQuantity);
+  return { description, quantity };
+}
+
+/** 在新分頁開啟收據 HTML（可列印 / 另存 PDF） */
+export function openReceiptHtml(html: string): void {
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener,noreferrer');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** 觸發下載 HTML 收據為 .html 檔案 */

@@ -677,7 +677,7 @@
     "receiptSendFailed": "未能发送收据电邮，请稍后再试",
     "actions": "操作",
     "receiptTitle": "付款收据",
-    "receiptPrintHint": "你可在此页按 Ctrl+P（Mac：Cmd+P）打印，并选择「另存为 PDF」。"
+    "receiptPrintHint": "你可在此页按 Ctrl+P（Mac：Cmd+P）打印或另存 PDF。打印时请取消「页眉及页脚」，以免顶部出现日期、网址等额外文字。"
   },
   "profile": {
     "title": "个人资料",

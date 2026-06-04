@@ -9,7 +9,7 @@ import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { pickEnrollmentProfileId, type EnrolledClass } from '../../lib/studentEnrollments';
 import { fetchStudentUpcomingClasses } from '../../lib/studentUpcomingClasses';
-import { Home, User, ChevronRight, Plus, KeyRound, Mail, Phone, Bell, Users, Calendar } from 'lucide-react';
+import { Home, User, ChevronRight, Plus, KeyRound, Mail, Phone, Users, Calendar } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import AccountSecurityCard from '../../components/AccountSecurityCard';
 
@@ -302,14 +302,6 @@ export default function DashboardPage() {
               <div className="rounded-xl border border-gray-200 p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">{t('dashboard.quickLinks', '快捷入口')}</h3>
                 <nav className="space-y-1">
-                  <Link
-                    to="/notifications"
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Bell className="h-4 w-4 text-gray-400" />
-                    {t('nav.notifications', '訊息中心')}
-                    <ChevronRight className="h-4 w-4 ml-auto text-gray-300" />
-                  </Link>
                   {profiles && profiles.length > 0 && (
                     <button
                       type="button"

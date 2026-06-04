@@ -3,7 +3,7 @@ import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { formatCurrency, formatDateTime } from '../../lib/utils';
-import { buildReceiptHtml, downloadReceiptHtml } from '../../lib/receiptHtml';
+import { buildReceiptHtml, downloadReceiptHtml, openReceiptHtml } from '../../lib/receiptHtml';
 import { api } from '../../lib/api';
 import { getAppPublicOrigin } from '../../lib/appOrigin';
 import { Receipt, CheckCircle, Clock, XCircle, Download, Mail, Loader2 } from 'lucide-react';
@@ -152,10 +152,7 @@ export default function PaymentHistoryPage() {
       printHint: t('paymentHistory.receiptPrintHint'),
       brandName: 'The Yard',
     });
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    openReceiptHtml(html);
   };
 
   const handleReceiptEmail = async (payment: Payment) => {
