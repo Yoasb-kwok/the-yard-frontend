@@ -28,7 +28,7 @@ export default function AdminInstructorPerformancePage() {
 
   useEffect(() => {
     const monthParam = reportMonth ? `&month=${encodeURIComponent(reportMonth)}` : '';
-    api.get<InstructorPerformanceData>(`/admin/instructor-performance?demo=1${monthParam}`)
+    api.get<InstructorPerformanceData>(`/admin/instructor-performance${monthParam}`)
       .then((res: any) => {
         if (res?.success && res?.data != null) {
           setData(normalizeInstructorPerformancePayload(res.data));

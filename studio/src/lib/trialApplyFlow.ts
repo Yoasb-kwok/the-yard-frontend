@@ -40,6 +40,10 @@
  *   - 新帳號 → 只顯示「密碼已寄到 email」，不再把密碼 render 在畫面上。
  *   - 已有帳號 → 請用原本密碼登入查看試堂狀態。
  *
+ * Admin 確認試堂（PATCH /admin/trial-applications/:id，status → confirmed）：
+ *   前端附 `sendConfirmationEmail` + 聯絡電話、課程日期時間、分店等欄位；
+ *   後端寄 `trial_application_confirmed` 給申請人。見 TRIAL_SIGNUP_EMAIL_SPEC.md §12。
+ *
  * 詳細後端規格見 `studio/docs/TRIAL_SIGNUP_EMAIL_SPEC.md`。
  */
 

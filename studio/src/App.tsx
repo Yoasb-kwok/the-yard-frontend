@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
-import DemoBanner from './components/DemoBanner';
 
 import HomePage from './pages/public/HomePage';
 import AboutPage from './pages/public/AboutPage';
@@ -40,6 +39,7 @@ import AdminClassHealthPage from './pages/admin/AdminClassHealthPage';
 import AdminInstructorPerformancePage from './pages/admin/AdminInstructorPerformancePage';
 import AdminAttendanceAnomalyPage from './pages/admin/AdminAttendanceAnomalyPage';
 import PendingApplicationsPage from './pages/admin/PendingApplicationsPage';
+import PendingEnrollmentRequestsPage from './pages/admin/PendingEnrollmentRequestsPage';
 import UsersPage from './pages/admin/UsersPage';
 import ClassesPage from './pages/admin/ClassesPage';
 import ClassAttendancePage from './pages/admin/ClassAttendancePage';
@@ -218,6 +218,14 @@ function App() {
             element={
               <ProtectedRoute requireAdmin>
                 <PendingApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/enrollment-requests"
+            element={
+              <ProtectedRoute requireAdmin>
+                <PendingEnrollmentRequestsPage />
               </ProtectedRoute>
             }
           />
@@ -432,7 +440,6 @@ function App() {
 
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
-        <DemoBanner />
       </AuthProvider>
     </BrowserRouter>
   );

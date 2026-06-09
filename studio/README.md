@@ -144,10 +144,11 @@ Use these values for your current domains:
 - **Backend health check**: `https://theyardapis.01tech.work/api/health`
 - **Backend CORS env var on EC2**: `CORS_ORIGIN=https://theyard.01tech.work`
 - **Optional additional frontend domains**: comma-separate in `CORS_ORIGIN`
-- **Stripe frontend base URL on backend**: `APP_PUBLIC_URL=https://theyard.01tech.work`
-- **Optional explicit Stripe redirects**:
-  - `STRIPE_SUCCESS_URL=https://theyard.01tech.work/payment/success?session_id={CHECKOUT_SESSION_ID}`
-  - `STRIPE_CANCEL_URL=https://theyard.01tech.work/payment/cancel`
+- **Stripe return URLs**: The frontend sends `return_origin`, `success_url`, and `cancel_url` on each `POST /payment/checkout-session` from `window.location.origin` (localhost / Vercel / custom domain). The backend should pass those into Stripe Checkout Session creation. Env fallbacks only when the client omits them:
+  - `APP_PUBLIC_URL=https://theyard.01tech.work`
+  - `STRIPE_SUCCESS_URL=.../payment/success?session_id={CHECKOUT_SESSION_ID}`
+  - `STRIPE_CANCEL_URL=.../payment/cancel`
+- **Optional frontend override**: `VITE_APP_PUBLIC_URL` (rare; proxy edge cases)
 
 After changing backend env vars, restart your backend service and re-test from the frontend Network tab.
 

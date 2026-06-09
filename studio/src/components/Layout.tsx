@@ -42,12 +42,14 @@ export default function Layout({ children }: LayoutProps) {
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Reset main scroll position on route change (main is its own scroll container).
+  // Reset main scroll position on route change for student/public flows.
+  // Admin pages should preserve scroll position when switching via left sidebar.
   useEffect(() => {
+    if (isAdmin) return;
     if (mainRef.current) {
       mainRef.current.scrollTo({ top: 0, left: 0, behavior: 'auto' });
     }
-  }, [location.pathname]);
+  }, [isAdmin, location.pathname]);
 
   // Close user menu when clicking outside
   useEffect(() => {
@@ -65,22 +67,34 @@ export default function Layout({ children }: LayoutProps) {
     }
   }, [userMenuOpen]);
 
-  // Student: 主帳戶區（儀表板、訊息中心）；子女帳戶區（課程表、我的資料、購買記錄）+ 最新通知
+  // Student: 主帳戶區（儀表板）；子女帳戶區（訊息中心、課程表、我的資料、購買記錄）+ 最新通知
   const primaryProfileId = profiles[0]?.id ?? null;
   const isMasterAccountView = !!primaryProfileId && activeProfileId === primaryProfileId;
-  const isOnDashboardSection =
-    location.pathname === '/dashboard' || location.pathname === '/notifications';
+  const hideMasterNotifications = isMasterAccountView && hasMultipleProfiles;
+  const isOnDashboardSection = location.pathname === '/dashboard';
 
   const resetToMasterProfile = () => {
     if (!isAdmin && primaryProfileId) switchProfile(primaryProfileId);
   };
-  const studentNavItemsDashboard = isMasterAccountView
-    ? [
-        { path: '/dashboard', icon: Home, label: t('nav.dashboard') },
-        { path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') },
-      ]
-    : [{ path: '/dashboard', icon: Home, label: t('nav.dashboard') }];
+
+  // 儀表板＝主帳戶視圖；僅在「路由進入」/dashboard 時切回第一位 profile。
+  // 不可監聽 activeProfileId，否則在儀表板點子女（switchProfile + navigate）會被立即改回第一位。
+  const prevPathnameRef = useRef(location.pathname);
+  useEffect(() => {
+    const prev = prevPathnameRef.current;
+    prevPathnameRef.current = location.pathname;
+    if (isAdmin) return;
+    const enteredDashboard = location.pathname === '/dashboard' && prev !== '/dashboard';
+    if (enteredDashboard && primaryProfileId) {
+      switchProfile(primaryProfileId);
+    }
+  }, [location.pathname, isAdmin, primaryProfileId, switchProfile]);
+
+  const studentNavItemsDashboard = [{ path: '/dashboard', icon: Home, label: t('nav.dashboard') }];
   const studentNavItemsScheduleProfile = [
+    ...(hideMasterNotifications
+      ? []
+      : [{ path: '/notifications', icon: Bell, label: t('nav.notifications', '訊息中心') }]),
     { path: '/schedule', icon: Calendar, label: t('nav.schedule') },
     { path: '/profile', icon: User, label: t('nav.myInformation', 'My Information') },
     { path: '/payment-history', icon: Receipt, label: t('nav.purchaseHistory') },
@@ -104,6 +118,7 @@ export default function Layout({ children }: LayoutProps) {
       title: t('admin.manage.title', '學員與營運管理'),
       items: [
         { path: '/admin/pending-applications', icon: ListChecks, label: t('admin.dashboard.pendingApplications') },
+        { path: '/admin/enrollment-requests', icon: Package, label: t('admin.enrollmentRequests.title') },
         { path: '/admin/trial-applications', icon: BookOpen, label: t('admin.trialApplications.title') },
         { path: '/admin/users', icon: Users, label: t('admin.users.title') },
         { path: '/admin/purchase-history', icon: Receipt, label: t('admin.purchaseHistory.title') },
@@ -139,6 +154,7 @@ export default function Layout({ children }: LayoutProps) {
     if (!isAdmin) return 0;
     if (path === '/admin/pending-applications') return pendingCounts.pendingApplications;
     if (path === '/admin/trial-applications') return pendingCounts.pendingTrials;
+    if (path === '/admin/enrollment-requests') return pendingCounts.pendingEnrollmentRequests;
     return 0;
   };
 

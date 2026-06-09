@@ -1,13 +1,8 @@
 /**
  * API Client for Studio Management System
  * Handles all HTTP requests to the backend API.
- *
- * When `VITE_DEMO_MODE === 'true'` (or the runtime override is set), all
- * requests are short-circuited into the in-memory mock layer so the
- * frontend can be demoed without any backend.
  */
 
-import { handleDemoRequest, isDemoMode } from './mock';
 
 const DEFAULT_PROD_API_URL = 'https://theyardapis.01tech.work/api';
 const API_BASE_URL =
@@ -35,10 +30,24 @@ interface ApiResponse<T = any> {
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string, public code?: string) {
+  /** Extra fields from error JSON (e.g. current_status). */
+  data?: Record<string, unknown>;
+
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    data?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.data = data;
   }
+
+  status: number;
+  code?: string;
 }
 
 /**
@@ -55,25 +64,6 @@ async function request<T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
-  if (isDemoMode()) {
-    let body: unknown = undefined;
-    if (options.body && typeof options.body === 'string') {
-      try {
-        body = JSON.parse(options.body);
-      } catch {
-        body = options.body;
-      }
-    }
-    const result = (await handleDemoRequest(
-      options.method || 'GET',
-      endpoint,
-      body,
-    )) as ApiResponse<T>;
-    if (!result.success) {
-      throw new ApiError(400, result.msg || 'Demo request failed');
-    }
-    return result;
-  }
   const url = buildRequestUrl(endpoint);
   const token = getAuthToken();
 
@@ -130,7 +120,19 @@ async function request<T = any>(
           : (data.data && typeof (data.data as { code?: unknown }).code === 'string')
             ? ((data.data as { code: string }).code)
             : undefined;
-      throw new ApiError(response.status, errText, errCode);
+      const errPayload: Record<string, unknown> = {};
+      if (typeof data.current_status === 'string') {
+        errPayload.current_status = data.current_status;
+      }
+      if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+        Object.assign(errPayload, data.data as Record<string, unknown>);
+      }
+      throw new ApiError(
+        response.status,
+        errText,
+        errCode,
+        Object.keys(errPayload).length > 0 ? errPayload : undefined,
+      );
     }
 
     return data;

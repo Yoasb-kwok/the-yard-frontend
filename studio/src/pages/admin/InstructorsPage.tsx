@@ -7,6 +7,7 @@ import { Plus, Edit, Trash2, User, Upload, X, ChevronDown, ChevronRight, BookOpe
 import { TableSortButton } from '../../components/TableSortButton';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile, saveInstructorProfile, type InstructorProfile } from '../../lib/instructorProfiles';
+import { instructorProfileFromApiRow, instructorProfileToApiBody } from '../../lib/instructorApi';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 
 interface Instructor {
@@ -30,23 +31,69 @@ interface Class {
   location?: 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 }
 
-/** Fallback: 10 example teachers with 老師簡介 (see instructorProfiles). */
-const FALLBACK_INSTRUCTORS: Instructor[] = EXAMPLE_INSTRUCTOR_PROFILES.map((p, i) => ({
-  id: `inst_${i + 1}`,
-  name: p.name,
-  profile_image_url: null,
-  created_at: new Date().toISOString(),
-  upcoming_classes_count: 2 + (i % 3),
-}));
-const FALLBACK_CLASSES: Class[] = (() => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(14, 0, 0, 0);
-  return [
-    { id: 'cls_demo_1', name: 'Kids Ballet A', instructor: 'Amy Lee', start_time: d.toISOString(), end_time: new Date(d.getTime() + 3600000).toISOString(), capacity: 12, enrolled_count: 8, is_internal: false, is_cancelled: false, location: 'sanpokong' },
-    { id: 'cls_demo_2', name: 'Teen Hip Hop', instructor: 'Bob Chen', start_time: new Date(d.getTime() + 86400000).toISOString(), end_time: new Date(d.getTime() + 86400000 + 3600000).toISOString(), capacity: 15, enrolled_count: 10, is_internal: false, is_cancelled: false, location: 'causewaybay' },
-  ];
-})();
+type CompressImageOptions = {
+  maxWidth: number;
+  maxHeight: number;
+  maxBytes?: number;
+  onSuccess: (dataUrl: string) => void;
+  onFileTooLarge: () => void;
+  onTooLarge: () => void;
+  onError: () => void;
+};
+
+function compressImageFile(file: File, options: CompressImageOptions) {
+  const maxSize = options.maxBytes ?? 2 * 1024 * 1024;
+  if (file.size > maxSize) {
+    options.onFileTooLarge();
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onloadend = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > options.maxWidth) {
+          height = (height * options.maxWidth) / width;
+          width = options.maxWidth;
+        }
+      } else if (height > options.maxHeight) {
+        width = (width * options.maxHeight) / height;
+        height = options.maxHeight;
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        options.onError();
+        return;
+      }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const qualities = [0.7, 0.5, 0.4];
+      let dataUrl = '';
+      for (const q of qualities) {
+        dataUrl = canvas.toDataURL('image/jpeg', q);
+        if (dataUrl.length <= 45000) break;
+      }
+      if (dataUrl.length > 45000) {
+        options.onTooLarge();
+        return;
+      }
+      options.onSuccess(dataUrl);
+    };
+    img.onerror = () => options.onError();
+    img.src = reader.result as string;
+  };
+  reader.onerror = () => options.onError();
+  reader.readAsDataURL(file);
+}
 
 export default function InstructorsPage() {
   const { t, i18n } = useTranslation();
@@ -67,11 +114,13 @@ export default function InstructorsPage() {
     teaching_experience: 0,
     dance_school: '',
     background_image: '',
-    icon: '',
   });
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [useImageUrl, setUseImageUrl] = useState(false);
   const [imageUrlInput, setImageUrlInput] = useState('');
+  const [backgroundPreview, setBackgroundPreview] = useState<string | null>(null);
+  const [useBackgroundUrl, setUseBackgroundUrl] = useState(false);
+  const [backgroundUrlInput, setBackgroundUrlInput] = useState('');
   const [sortKey, setSortKey] = useState<string | null>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [expandedInstructorId, setExpandedInstructorId] = useState<string | null>(null);
@@ -84,15 +133,26 @@ export default function InstructorsPage() {
   async function loadInstructors() {
     try {
       setLoading(true);
-      const response = await api.get<Instructor[]>('/admin/instructors?demo=1').catch(() => ({ success: true, data: FALLBACK_INSTRUCTORS }));
-      if (response.success && response.data) {
+      const response = await api.get<Instructor[]>('/admin/instructors');
+      if (response.success && Array.isArray(response.data)) {
         setInstructors(response.data);
+        for (const row of response.data) {
+          const rec = row as Record<string, unknown>;
+          const name = String(rec.name ?? '').trim();
+          if (!name) continue;
+          const fromApi = instructorProfileFromApiRow(rec, name);
+          const hasContent =
+            Boolean(fromApi.intro?.trim()) ||
+            (fromApi.awards?.length ?? 0) > 0 ||
+            (fromApi.years_dancing ?? 0) > 0;
+          if (hasContent) saveInstructorProfile(name, fromApi);
+        }
       } else {
-        setInstructors(FALLBACK_INSTRUCTORS);
+        setInstructors([]);
       }
     } catch (error) {
       console.error('Error loading instructors:', error);
-      setInstructors(FALLBACK_INSTRUCTORS);
+      setInstructors([]);
     } finally {
       setLoading(false);
     }
@@ -100,8 +160,8 @@ export default function InstructorsPage() {
 
   async function loadClasses() {
     try {
-      const response = await api.get('/admin/classes?demo=1').catch(() => ({ success: true, data: FALLBACK_CLASSES }));
-      if (response.success && response.data) {
+      const response = await api.get('/admin/classes');
+      if (response.success && Array.isArray(response.data)) {
         const transformedClasses: Class[] = response.data.map((cls: any) => ({
           id: cls.id?.toString() ?? cls.id,
           name: cls.name,
@@ -116,11 +176,11 @@ export default function InstructorsPage() {
         }));
         setClasses(transformedClasses);
       } else {
-        setClasses(FALLBACK_CLASSES);
+        setClasses([]);
       }
     } catch (error) {
       console.error('Error loading classes:', error);
-      setClasses(FALLBACK_CLASSES);
+      setClasses([]);
     }
   }
 
@@ -198,8 +258,14 @@ export default function InstructorsPage() {
       dance_school: form.dance_school.trim(),
       avatar_url: form.profile_image_url?.trim() || undefined,
       background_image: form.background_image?.trim() || undefined,
-      icon: form.icon?.trim() || undefined,
     };
+  }
+
+  function resetBackgroundImageState(bgSource = '') {
+    const hasBgUrl = Boolean(bgSource && !bgSource.startsWith('data:'));
+    setBackgroundPreview(bgSource || null);
+    setUseBackgroundUrl(hasBgUrl);
+    setBackgroundUrlInput(hasBgUrl ? bgSource : '');
   }
 
   function openCreateModal() {
@@ -216,11 +282,11 @@ export default function InstructorsPage() {
       teaching_experience: 0,
       dance_school: '',
       background_image: '',
-      icon: '',
     });
     setImagePreview(null);
     setUseImageUrl(false);
     setImageUrlInput('');
+    resetBackgroundImageState('');
     setShowModal(true);
   }
 
@@ -241,11 +307,11 @@ export default function InstructorsPage() {
       teaching_experience: profile?.teaching_experience ?? 0,
       dance_school: profile?.dance_school ?? '',
       background_image: profile?.background_image ?? '',
-      icon: profile?.icon ?? '',
     });
     setImagePreview(avatarSource || null);
     setUseImageUrl(!!hasImageUrl);
     setImageUrlInput(hasImageUrl ? avatarSource : '');
+    resetBackgroundImageState(profile?.background_image ?? '');
     setShowModal(true);
   }
 
@@ -255,84 +321,61 @@ export default function InstructorsPage() {
     const resetInput = () => {
       if (inputEl) inputEl.value = '';
     };
-    if (file) {
-      // Check file size (max 2MB)
-      const maxSize = 2 * 1024 * 1024; // 2MB
-      if (file.size > maxSize) {
-        alert(t('admin.instructors.imageTooLarge') || 'Image is too large. Please use an image smaller than 2MB, or use an image URL instead.');
+    if (!file) return;
+
+    compressImageFile(file, {
+      maxWidth: 300,
+      maxHeight: 300,
+      onSuccess: (dataUrl) => {
+        setImagePreview(dataUrl);
+        setForm({ ...form, profile_image_url: dataUrl });
         resetInput();
-        return;
-      }
+      },
+      onFileTooLarge: () => {
+        alert(t('admin.instructors.imageTooLarge'));
+        resetInput();
+      },
+      onTooLarge: () => {
+        alert(t('admin.instructors.imageTooLargeForSheet'));
+        resetInput();
+      },
+      onError: () => {
+        alert(t('admin.instructors.imageLoadError'));
+        resetInput();
+      },
+    });
+  }
 
-      // Compress and resize image before converting to base64
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const img = new Image();
-        img.onload = () => {
-          // Create canvas to compress image
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 300;
-          const MAX_HEIGHT = 300;
-          let width = img.width;
-          let height = img.height;
+  function handleBackgroundImageChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const inputEl = e.currentTarget;
+    const file = inputEl.files?.[0];
+    const resetInput = () => {
+      if (inputEl) inputEl.value = '';
+    };
+    if (!file) return;
 
-          // Calculate new dimensions
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = (height * MAX_WIDTH) / width;
-              width = MAX_WIDTH;
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = (width * MAX_HEIGHT) / height;
-              height = MAX_HEIGHT;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          // Draw and compress
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // Convert to base64 with compression (quality 0.7 for smaller size)
-            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
-            
-            // Check if still too large for Google Sheets (50,000 char limit)
-            // Leave buffer (45,000 chars) to be safe
-            if (compressedBase64.length > 45000) {
-              // Try with even lower quality
-              const moreCompressed = canvas.toDataURL('image/jpeg', 0.5);
-              if (moreCompressed.length > 45000) {
-                // Try one more time with very low quality
-                const veryCompressed = canvas.toDataURL('image/jpeg', 0.4);
-                if (veryCompressed.length > 45000) {
-                  alert(t('admin.instructors.imageTooLargeForSheet') || 'Image is too large even after compression. Please use the "Use URL" option instead and paste an image URL, or use a smaller image file.');
-                  resetInput();
-                  return;
-                }
-                setImagePreview(veryCompressed);
-                setForm({ ...form, profile_image_url: veryCompressed });
-              } else {
-                setImagePreview(moreCompressed);
-                setForm({ ...form, profile_image_url: moreCompressed });
-              }
-            } else {
-              setImagePreview(compressedBase64);
-              setForm({ ...form, profile_image_url: compressedBase64 });
-            }
-          }
-        };
-        img.onerror = () => {
-          alert(t('admin.instructors.imageLoadError') || 'Failed to load image. Please try again.');
-          resetInput();
-        };
-        img.src = reader.result as string;
-      };
-      reader.readAsDataURL(file);
-    }
+    compressImageFile(file, {
+      maxWidth: 800,
+      maxHeight: 500,
+      maxBytes: 5 * 1024 * 1024,
+      onSuccess: (dataUrl) => {
+        setBackgroundPreview(dataUrl);
+        setForm({ ...form, background_image: dataUrl });
+        resetInput();
+      },
+      onFileTooLarge: () => {
+        alert(t('admin.instructors.backgroundImageTooLarge'));
+        resetInput();
+      },
+      onTooLarge: () => {
+        alert(t('admin.instructors.imageTooLargeForSheet'));
+        resetInput();
+      },
+      onError: () => {
+        alert(t('admin.instructors.imageLoadError'));
+        resetInput();
+      },
+    });
   }
 
   function handleImageUrlChange(url: string) {
@@ -352,16 +395,33 @@ export default function InstructorsPage() {
     setImageUrlInput('');
   }
 
+  function handleBackgroundUrlChange(url: string) {
+    setBackgroundUrlInput(url);
+    if (url.trim()) {
+      setBackgroundPreview(url);
+      setForm({ ...form, background_image: url });
+    } else {
+      setBackgroundPreview(null);
+      setForm({ ...form, background_image: '' });
+    }
+  }
+
+  function removeBackgroundImage() {
+    setBackgroundPreview(null);
+    setForm({ ...form, background_image: '' });
+    setBackgroundUrlInput('');
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     try {
       if (editingInstructor) {
         // Update existing instructor
-        const response = await api.patch(`/admin/instructors/${editingInstructor.id}`, {
-          name: form.name,
-          profile_image_url: form.profile_image_url || null,
-        });
+        const response = await api.patch(
+          `/admin/instructors/${editingInstructor.id}`,
+          instructorProfileToApiBody(formToProfile(), form),
+        );
 
         if (response.success && response.data) {
           await loadInstructors();
@@ -371,10 +431,10 @@ export default function InstructorsPage() {
           throw new Error(response.msg || 'Failed to update instructor');
         }
       } else {
-        const response = await api.post('/admin/instructors', {
-          name: form.name,
-          profile_image_url: form.profile_image_url || null,
-        });
+        const response = await api.post(
+          '/admin/instructors',
+          instructorProfileToApiBody(formToProfile(), form),
+        );
 
         if (response.success && response.data) {
           await loadInstructors();
@@ -395,9 +455,9 @@ export default function InstructorsPage() {
         teaching_experience: 0,
         dance_school: '',
         background_image: '',
-        icon: '',
       });
       setImagePreview(null);
+      resetBackgroundImageState('');
     } catch (error) {
       console.error('Error saving instructor:', error);
       alert(error instanceof Error ? error.message : 'Failed to save instructor');
@@ -584,7 +644,7 @@ export default function InstructorsPage() {
       {/* Create/Edit Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
               {editingInstructor ? t('admin.instructors.editInstructor') : t('admin.instructors.addInstructor')}
             </h2>
@@ -613,7 +673,7 @@ export default function InstructorsPage() {
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    {t('admin.instructors.uploadFile') || 'Upload File'}
+                    {t('admin.instructors.uploadFile')}
                   </button>
                   <button
                     type="button"
@@ -630,7 +690,7 @@ export default function InstructorsPage() {
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                     }`}
                   >
-                    {t('admin.instructors.useUrl') || 'Use URL'}
+                    {t('admin.instructors.useUrl')}
                   </button>
                 </div>
 
@@ -783,34 +843,100 @@ export default function InstructorsPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.backgroundImage')}</label>
-                  <input
-                    type="url"
-                    value={form.background_image}
-                    onChange={(e) => setForm({ ...form, background_image: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                    placeholder={t('admin.instructors.backgroundImagePlaceholder')}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">{t('admin.instructors.iconKey')}</label>
-                  <select
-                    value={form.icon}
-                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
-                  >
-                    <option value="">{t('admin.instructors.iconNone')}</option>
-                    <option value="ballet">ballet</option>
-                    <option value="hiphop">hiphop</option>
-                    <option value="baby">baby</option>
-                    <option value="jazz">jazz</option>
-                    <option value="chinese">chinese</option>
-                    <option value="latin">latin</option>
-                    <option value="kpop">kpop</option>
-                    <option value="classic-ballet">classic-ballet</option>
-                    <option value="breaking">breaking</option>
-                    <option value="classical">classical</option>
-                  </select>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    {t('admin.instructors.backgroundImage')}
+                  </label>
+                  <p className="text-xs text-gray-400 mb-2">{t('admin.instructors.backgroundImageHint')}</p>
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUseBackgroundUrl(false);
+                        if (useBackgroundUrl) {
+                          setBackgroundUrlInput('');
+                          setBackgroundPreview(null);
+                          setForm({ ...form, background_image: '' });
+                        }
+                      }}
+                      className={`px-3 py-1 text-sm rounded-md ${
+                        !useBackgroundUrl
+                          ? 'bg-primary text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t('admin.instructors.uploadFile')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUseBackgroundUrl(true);
+                        if (!useBackgroundUrl) {
+                          setForm({ ...form, background_image: '' });
+                          setBackgroundPreview(null);
+                        }
+                      }}
+                      className={`px-3 py-1 text-sm rounded-md ${
+                        useBackgroundUrl
+                          ? 'bg-primary text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {t('admin.instructors.useUrl')}
+                    </button>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="relative flex-shrink-0">
+                      {backgroundPreview ? (
+                        <div className="relative">
+                          <img
+                            src={backgroundPreview}
+                            alt=""
+                            className="w-32 h-20 rounded-md object-cover border border-gray-200"
+                            onError={() => {
+                              setBackgroundPreview(null);
+                              alert(t('admin.instructors.imageLoadError'));
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={removeBackgroundImage}
+                            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="w-32 h-20 rounded-md bg-gradient-to-br from-primary/20 to-primary/40 flex items-center justify-center border border-gray-200">
+                          <span className="text-xs text-gray-500">{t('admin.instructors.noBackground')}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {useBackgroundUrl ? (
+                        <input
+                          type="url"
+                          value={backgroundUrlInput}
+                          onChange={(e) => handleBackgroundUrlChange(e.target.value)}
+                          placeholder={t('admin.instructors.backgroundImagePlaceholder')}
+                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-sm"
+                        />
+                      ) : (
+                        <label className="cursor-pointer inline-block">
+                          <div className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 flex items-center text-sm">
+                            <Upload className="h-4 w-4 mr-2" />
+                            {t('admin.instructors.uploadBackgroundImage')}
+                          </div>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleBackgroundImageChange}
+                            className="hidden"
+                          />
+                        </label>
+                      )}
+                      <p className="text-xs text-gray-400 mt-2">{t('admin.instructors.backgroundImageSizeHint')}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -839,9 +965,9 @@ export default function InstructorsPage() {
                       teaching_experience: 0,
                       dance_school: '',
                       background_image: '',
-                      icon: '',
                     });
                     setImagePreview(null);
+                    resetBackgroundImageState('');
                   }}
                   className="px-4 py-2 text-gray-600 hover:text-gray-800"
                 >

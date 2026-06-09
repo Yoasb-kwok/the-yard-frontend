@@ -5,10 +5,12 @@ import PublicLayout from '../../components/PublicLayout';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency, calculateDiscount, formatDateTimeRange } from '../../lib/utils';
 import { ShoppingCart, Lock, Check, Calendar, MapPin } from 'lucide-react';
+import { api } from '../../lib/api';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
 import { createCheckoutSession } from '../../lib/paymentApi';
+import { getSitePageContentForLocale, loadSimpleSitePage } from '../../lib/sitePageContent';
 
 interface ClassData {
   id: string;
@@ -24,9 +26,31 @@ interface TokenPackage {
   id: number;
   name: string;
   description: string;
+  name_zh_tw?: string;
+  name_zh_cn?: string;
+  name_en?: string;
+  description_zh_tw?: string;
+  description_zh_cn?: string;
+  description_en?: string;
   token_count: number;
   price: number;
   validity_days: number;
+}
+
+function isCustomTokenPackage(pkg: TokenPackage): boolean {
+  const texts = [
+    pkg.name,
+    pkg.name_zh_tw,
+    pkg.name_zh_cn,
+    pkg.name_en,
+    pkg.description,
+    pkg.description_zh_tw,
+    pkg.description_zh_cn,
+    pkg.description_en,
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+  return texts.some((s) => s.includes('自訂套裝') || s.includes('自定义套装') || s.includes('custom'));
 }
 
 interface CartItem {
@@ -34,45 +58,27 @@ interface CartItem {
   quantity: number;
 }
 
-const MOCK_COUPONS: { [key: string]: { id: string; discount_type: 'percentage' | 'fixed'; discount_value: number } } = {
-  'WELCOME10': { id: '1', discount_type: 'percentage', discount_value: 10 },
-  'SAVE50': { id: '2', discount_type: 'fixed', discount_value: 50 },
-};
+type TermsMode = 'html' | 'legacy';
 
 // Student ID format: yayakid + digits (e.g. yayakid1). Valid codes get 10% off for testing.
 const REFERRAL_CODE_REGEX = /^yayakid\d+$/i;
 
-// Mock data - same as ShopPage
-const MOCK_PACKAGES: TokenPackage[] = [
-  {
-    id: 1,
-    name: 'Starter Pack',
-    description: 'Perfect for beginners',
-    token_count: 5,
-    price: 500,
-    validity_days: 30,
-  },
-  {
-    id: 2,
-    name: 'Regular Pack',
-    description: 'Great value for regular students',
-    token_count: 10,
-    price: 900,
-    validity_days: 60,
-  },
-  {
-    id: 3,
-    name: 'Premium Pack',
-    description: 'Best value for frequent visitors',
-    token_count: 20,
-    price: 1600,
-    validity_days: 90,
-  },
-];
+function pickLocalized(
+  lang: string,
+  zhTw?: string,
+  zhCn?: string,
+  en?: string,
+  fallback?: string,
+): string {
+  const normalized = lang.toLowerCase();
+  if (normalized.startsWith('zh-tw')) return zhTw || zhCn || en || fallback || '';
+  if (normalized.startsWith('zh-cn') || normalized.startsWith('zh-hans')) return zhCn || zhTw || en || fallback || '';
+  return en || zhTw || zhCn || fallback || '';
+}
 
 export default function TokenPackagePage() {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const classData = (location.state as { classData?: ClassData })?.classData;
@@ -85,14 +91,16 @@ export default function TokenPackagePage() {
     discount_type: 'percentage' | 'fixed';
     discount_value: number;
   } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'fps' | 'cash' | 'alipay' | 'wechatpay' | 'payme'>('credit_card');
+  const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'cash'>('credit_card');
   const [submitting, setSubmitting] = useState(false);
-  const [fpsIdOrPhone, setFpsIdOrPhone] = useState('');
   const [packagesSource, setPackagesSource] = useState<TokenPackage[]>([]);
-  const [customItemType, setCustomItemType] = useState<'token' | 'product'>('token');
-  const [customTokenCount, setCustomTokenCount] = useState('');
-  const [customProductName, setCustomProductName] = useState('');
-  const [customProductPrice, setCustomProductPrice] = useState('');
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsState, setTermsState] = useState<{ title: string; html: string; legacy: string; mode: TermsMode }>({
+    title: '',
+    html: '',
+    legacy: '',
+    mode: 'legacy',
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -102,18 +110,26 @@ export default function TokenPackagePage() {
         const rows = await fetchTokenPackages();
         if (!cancelled) {
           setPackagesSource(
-            rows.map((r) => ({
+            rows
+              .map((r) => ({
               id: r.id,
               name: r.name,
               description: r.description,
+              name_zh_tw: r.name_zh_tw,
+              name_zh_cn: r.name_zh_cn,
+              name_en: r.name_en,
+              description_zh_tw: r.description_zh_tw,
+              description_zh_cn: r.description_zh_cn,
+              description_en: r.description_en,
               token_count: r.token_count,
               price: r.price,
               validity_days: r.validity_days,
-            }))
+              }))
+              .filter((pkg) => !isCustomTokenPackage(pkg))
           );
         }
       } catch {
-        if (!cancelled) setPackagesSource(MOCK_PACKAGES);
+        if (!cancelled) setPackagesSource([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -123,13 +139,58 @@ export default function TokenPackagePage() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const saved = await loadSimpleSitePage('terms');
+        if (cancelled) return;
+        if (saved && (saved.title || saved.contentHtml)) {
+          const localizedHtml = getSitePageContentForLocale(saved.contentHtml || '', i18n.language);
+          setTermsState({
+            title: saved.title || t('terms.title'),
+            html: localizedHtml,
+            legacy: t('terms.content'),
+            mode: localizedHtml && localizedHtml.trim() !== '' ? 'html' : 'legacy',
+          });
+        } else {
+          setTermsState({
+            title: t('terms.title'),
+            html: '',
+            legacy: t('terms.content'),
+            mode: 'legacy',
+          });
+        }
+      } catch {
+        if (cancelled) return;
+        setTermsState({
+          title: t('terms.title'),
+          html: '',
+          legacy: t('terms.content'),
+          mode: 'legacy',
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [i18n.language, t]);
+
   // Get translated packages - use useMemo to recompute when language changes
   const packages = useMemo(() => {
     return packagesSource.map(pkg => {
       const nameKey = `tokenPackage.packages.${pkg.id}.name`;
       const descKey = `tokenPackage.packages.${pkg.id}.description`;
-      const translatedName = t(nameKey, { defaultValue: pkg.name });
-      const translatedDesc = t(descKey, { defaultValue: pkg.description });
+      const localizedName = pickLocalized(i18n.language, pkg.name_zh_tw, pkg.name_zh_cn, pkg.name_en, pkg.name);
+      const localizedDescription = pickLocalized(
+        i18n.language,
+        pkg.description_zh_tw,
+        pkg.description_zh_cn,
+        pkg.description_en,
+        pkg.description,
+      );
+      const translatedName = t(nameKey, { defaultValue: localizedName });
+      const translatedDesc = t(descKey, { defaultValue: localizedDescription });
       
       return {
         ...pkg,
@@ -166,63 +227,54 @@ export default function TokenPackagePage() {
     );
   }
 
-  function addCustomProductToCart() {
-    const parsedPrice = Number(customProductPrice);
-    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
-      alert(t('tokenPackage.customProductPriceInvalid', '請輸入有效價格'));
-      return;
-    }
-
-    let customName = t('tokenPackage.customProductTitle', '自訂套裝');
-    let customDescription = t('tokenPackage.customProductDescription', '自訂代幣套裝');
-    let tokenCount = 0;
-
-    if (customItemType === 'token') {
-      const parsedTokenCount = Number(customTokenCount);
-      if (!Number.isInteger(parsedTokenCount) || parsedTokenCount <= 0) {
-        alert(t('tokenPackage.customTokenCountInvalid', '請輸入有效代幣數量'));
-        return;
-      }
-      tokenCount = parsedTokenCount;
-      customName = t('tokenPackage.customTokenTitle', '自訂代幣套裝');
-      customDescription = `${tokenCount} ${t('tokenPackage.tokens')}`;
-    } else {
-      const trimmedName = customProductName.trim();
-      if (!trimmedName) {
-        alert(t('tokenPackage.customProductNameRequired', '請輸入自訂產品'));
-        return;
-      }
-      customName = trimmedName;
-      customDescription = t('tokenPackage.customNamedProductDescription', '自訂產品');
-    }
-
-    const customPackage: TokenPackage = {
-      id: -Date.now(),
-      name: customName,
-      description: customDescription,
-      token_count: tokenCount,
-      price: Math.round(parsedPrice),
-      validity_days: 0,
-    };
-
-    setCart((prev) => [...prev, { package: customPackage, quantity: 1 }]);
-    setCustomTokenCount('');
-    setCustomProductName('');
-    setCustomProductPrice('');
-  }
-
   async function applyCoupon() {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 300));
-    
-    const coupon = MOCK_COUPONS[couponCode.toUpperCase()];
-    if (!coupon) {
-      alert('Invalid coupon code');
+    const code = couponCode.trim();
+    if (!code) {
+      alert(t('shop.invalidCoupon'));
       return;
     }
-
-    setAppliedCoupon(coupon);
-    alert('Coupon applied successfully!');
+    const subtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
+    try {
+      const couponEndpoints = ['/coupons/validate', '/coupon/validate'];
+      let res:
+        | {
+            success: boolean;
+            data?: {
+              id: string;
+              code: string;
+              discount_type: 'percentage' | 'fixed';
+              discount_value: number;
+            };
+          }
+        | null = null;
+      let lastError: unknown = null;
+      for (const endpoint of couponEndpoints) {
+        try {
+          res = await api.post<{
+            id: string;
+            code: string;
+            discount_type: 'percentage' | 'fixed';
+            discount_value: number;
+          }>(endpoint, { code, subtotal });
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!res) throw lastError instanceof Error ? lastError : new Error(t('shop.invalidCoupon'));
+      if (!res.success || !res.data) {
+        alert(t('shop.invalidCoupon'));
+        return;
+      }
+      setAppliedCoupon({
+        id: String(res.data.id),
+        discount_type: res.data.discount_type,
+        discount_value: Number(res.data.discount_value),
+      });
+      alert(t('shop.couponAppliedSuccess'));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : t('shop.invalidCoupon'));
+    }
   }
 
   async function handleCheckout() {
@@ -230,18 +282,15 @@ export default function TokenPackagePage() {
 
     if (paymentMethod === 'credit_card') {
       const selectedItem = cart[0];
-      const hasCustomProduct = cart.some((item) => item.package.id < 0);
-      if (hasCustomProduct) {
-        alert(t('tokenPackage.customProductNoCardPayment', '自訂套裝暫不支援信用卡付款，請改用 FPS、PayMe、Alipay、WeChat Pay 或現金。'));
-        return;
-      }
       if (cart.length !== 1 || selectedItem.quantity !== 1) {
         alert(t('shop.stripeSinglePackageOnly'));
         return;
       }
       setSubmitting(true);
       try {
-        const { url } = await createCheckoutSession(selectedItem.package.id);
+        const { url } = await createCheckoutSession(selectedItem.package.id, {
+          studentProfileId: profile?.id,
+        });
         window.location.href = url;
       } catch (e) {
         alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));
@@ -250,10 +299,6 @@ export default function TokenPackagePage() {
       return;
     }
 
-    if (paymentMethod === 'fps' && !fpsIdOrPhone.trim()) {
-      alert(t('shop.fpsIdOrPhone') + ' ' + (t('common.error') || '請填寫'));
-      return;
-    }
     setSubmitting(true);
 
     // Simulate API call delay
@@ -264,7 +309,6 @@ export default function TokenPackagePage() {
     setAppliedCoupon(null);
     setCouponCode('');
     setReferralCode('');
-    setFpsIdOrPhone('');
     navigate('/dashboard');
     setSubmitting(false);
   }
@@ -405,94 +449,6 @@ export default function TokenPackagePage() {
                     </button>
                   </div>
                 ))}
-
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {t('tokenPackage.customProductTitle', '自訂套裝')}
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-4">
-                    {t('tokenPackage.customProductSubtitle', '可選擇自訂代幣或自訂產品，輸入價格後加入購物車。')}
-                  </p>
-
-                  <div className="space-y-3 mb-4">
-                    <div className="text-sm">
-                      <span className="text-gray-600">{t('common.type', '類型')}:</span>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setCustomItemType('token')}
-                          className={`py-2 px-3 rounded-md border transition-colors ${
-                            customItemType === 'token'
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-primary'
-                          }`}
-                        >
-                          {t('tokenPackage.customTokenOption', '自訂代幣')}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCustomItemType('product')}
-                          className={`py-2 px-3 rounded-md border transition-colors ${
-                            customItemType === 'product'
-                              ? 'bg-primary text-white border-primary'
-                              : 'bg-white text-gray-700 border-gray-300 hover:border-primary'
-                          }`}
-                        >
-                          {t('tokenPackage.customProductOption', '自訂產品')}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">
-                        {customItemType === 'token'
-                          ? `${t('tokenPackage.tokens')}:`
-                          : `${t('tokenPackage.customProductNameLabel', '產品')}:`}
-                      </span>
-                      <div className="w-40">
-                        {customItemType === 'token' ? (
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            value={customTokenCount}
-                            onChange={(e) => setCustomTokenCount(e.target.value)}
-                            placeholder={t('tokenPackage.customTokenCountPlaceholder', '代幣數量')}
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-left text-sm"
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={customProductName}
-                            onChange={(e) => setCustomProductName(e.target.value)}
-                            placeholder={t('tokenPackage.customProductNamePlaceholder', '產品')}
-                            className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-left text-sm"
-                          />
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">{t('tokenPackage.price')}:</span>
-                      <div className="w-40">
-                        <input
-                          type="number"
-                          min={1}
-                          step={1}
-                          value={customProductPrice}
-                          onChange={(e) => setCustomProductPrice(e.target.value)}
-                          placeholder={t('tokenPackage.customProductPricePlaceholder', '價格 (HKD)')}
-                          className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary text-left text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={addCustomProductToCart}
-                    className="w-full bg-primary text-white py-2 rounded-md hover:bg-primary-dark transition-colors"
-                  >
-                    {t('shop.addToCart')}
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -607,10 +563,6 @@ export default function TokenPackagePage() {
                         className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                       >
                         <option value="credit_card">{t('shop.creditCard')}</option>
-                        <option value="fps">{t('shop.fps')}</option>
-                        <option value="alipay">{t('shop.alipay')}</option>
-                        <option value="wechatpay">{t('shop.wechatpay')}</option>
-                        <option value="payme">{t('shop.payme')}</option>
                         <option value="cash">{t('shop.cash')}</option>
                       </select>
                     </div>
@@ -622,41 +574,21 @@ export default function TokenPackagePage() {
                         <p className="text-xs text-gray-500 mt-2">{t('shop.stripeSinglePackageOnly')}</p>
                       </div>
                     )}
-                    {paymentMethod === 'fps' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                        <div>
-                          <label className="block text-sm text-gray-700 mb-1">{t('shop.fpsIdOrPhone')}</label>
-                          <input
-                            type="text"
-                            placeholder={t('shop.fpsPlaceholder')}
-                            value={fpsIdOrPhone}
-                            onChange={(e) => setFpsIdOrPhone(e.target.value)}
-                            className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-primary"
-                          />
-                        </div>
-                        <p className="text-sm text-gray-600">{t('shop.fpsInstruction')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'alipay' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm text-gray-700">{t('shop.redirectToAlipay')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'wechatpay' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm text-gray-700">{t('shop.redirectToWechat')}</p>
-                      </div>
-                    )}
-                    {paymentMethod === 'payme' && (
-                      <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-sm text-gray-700">{t('shop.redirectToPayMe')}</p>
-                      </div>
-                    )}
                     {paymentMethod === 'cash' && (
                       <div className="mb-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
                         <p className="text-sm text-amber-800">{t('shop.payAtVenue')}</p>
                       </div>
                     )}
+
+                    <div className="mb-3 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="text-xs text-gray-500 hover:text-primary underline underline-offset-2"
+                      >
+                        {t('terms.title', '條款及細則')}
+                      </button>
+                    </div>
 
                     <button
                       onClick={handleCheckout}
@@ -707,6 +639,29 @@ export default function TokenPackagePage() {
           </div>
         )}
       </div>
+      {showTermsModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-lg shadow-xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b">
+              <h3 className="text-base font-semibold text-gray-900">{termsState.title || t('terms.title', '條款及細則')}</h3>
+              <button
+                type="button"
+                onClick={() => setShowTermsModal(false)}
+                className="text-sm text-gray-600 hover:text-gray-900"
+              >
+                {t('common.close', '關閉')}
+              </button>
+            </div>
+            <div className="px-5 py-4 overflow-y-auto text-sm text-gray-700">
+              {termsState.mode === 'html' ? (
+                <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: termsState.html }} />
+              ) : (
+                <div className="whitespace-pre-line">{termsState.legacy || t('terms.content', '')}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </PublicLayout>
   );
 }

@@ -17,14 +17,6 @@ export interface AuditLogEntry {
   created_at: string;
 }
 
-const DEMO_AUDIT_LOG: AuditLogEntry[] = [
-  { id: '1', actor: 'Admin User', actor_id: 'admin-001', action: 'refund_tokens', target_type: 'user', target_id: 'student-001', details: '退 1 代幣（病假不補堂）', created_at: new Date(Date.now() - 2 * 3600000).toISOString() },
-  { id: '2', actor: 'Admin User', actor_id: 'admin-001', action: 'attendance_change', target_type: 'enrollment', target_id: 'enr_1', details: '改為已出席', created_at: new Date(Date.now() - 5 * 3600000).toISOString() },
-  { id: '3', actor: 'Admin User', actor_id: 'admin-001', action: 'approve_application', target_type: 'application', details: '同意改期申請', created_at: new Date(Date.now() - 86400000).toISOString() },
-  { id: '4', actor: 'Admin User', actor_id: 'admin-001', action: 'reject_application', target_type: 'application', details: '拒絕病假申請', created_at: new Date(Date.now() - 2 * 86400000).toISOString() },
-  { id: '5', actor: 'Admin User', actor_id: 'admin-001', action: 'delete_user', target_type: 'user', target_id: 'old-student', details: '刪除測試帳號', created_at: new Date(Date.now() - 5 * 86400000).toISOString() },
-];
-
 const ACTION_KEYS: Record<string, string> = {
   refund_tokens: 'audit.refundTokens',
   attendance_change: 'audit.attendanceChange',
@@ -49,11 +41,11 @@ export default function AuditLogPage() {
   async function loadLog() {
     setLoading(true);
     try {
-      const res = await api.get<AuditLogEntry[]>('/admin/audit-log?demo=1').catch(() => ({ success: true, data: DEMO_AUDIT_LOG }));
-      const data = (res as any).data ?? res;
-      setEntries(Array.isArray(data) ? data : DEMO_AUDIT_LOG);
+      const res = await api.get<AuditLogEntry[]>('/admin/audit-log');
+      const data = (res as { data?: AuditLogEntry[] }).data;
+      setEntries(Array.isArray(data) ? data : []);
     } catch {
-      setEntries(DEMO_AUDIT_LOG);
+      setEntries([]);
     } finally {
       setLoading(false);
     }

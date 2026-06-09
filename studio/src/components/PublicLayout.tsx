@@ -143,7 +143,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                               onClick={() => {
                                 switchProfile(p.id);
                                 setUserMenuOpen(false);
-                                navigate('/dashboard');
+                                navigate('/schedule');
                               }}
                               className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm rounded ${
                                 p.id === activeProfileId ? 'bg-primary-lighter text-primary font-medium' : 'text-gray-700 hover:bg-gray-50'
@@ -242,7 +242,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
                               onClick={() => {
                                 switchProfile(p.id);
                                 setMobileMenuOpen(false);
-                                navigate('/dashboard');
+                                navigate('/schedule');
                               }}
                               className={`rounded-lg px-3 py-2 text-sm font-medium ${
                                 p.id === activeProfileId ? 'bg-primary text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'

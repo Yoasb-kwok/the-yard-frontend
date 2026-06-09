@@ -3,12 +3,18 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
+import { postAdminTokenRefund } from '../../lib/adminTokenRefund';
+import { useAuth } from '../../contexts/AuthContext';
 import { ClipboardList, Eye, X, FileText, Check, Ban, Filter, RefreshCw } from 'lucide-react';
 
 type Application = {
   id: string;
   rawType?: 'extension' | 'sick_leave';
   rawId?: string;
+  enrollmentId?: string;
+  userId?: string;
+  classId?: string;
+  classCode?: string;
   studentName: string;
   className: string;
   type: 'reschedule' | 'sickLeave';
@@ -39,6 +45,10 @@ function normaliseApplications(data: unknown): Application[] {
       leaveType: (a.leaveType === 'personal' || a.leave_type === 'personal' ? 'personal' : 'sick') as 'personal' | 'sick',
       reason: String(a.reason ?? ''),
       documentUrl: (a.documentUrl ?? a.document_url ?? null) as string | null,
+      enrollmentId: String(a.enrollmentId ?? a.enrollment_id ?? '').trim() || undefined,
+      userId: String(a.userId ?? a.user_id ?? '').trim() || undefined,
+      classId: String(a.classId ?? a.class_id ?? '').trim() || undefined,
+      classCode: String(a.classCode ?? a.class_code ?? '').trim() || undefined,
     }));
   }
   if (data && typeof data === 'object' && !Array.isArray(data)) {
@@ -56,6 +66,10 @@ function normaliseApplications(data: unknown): Application[] {
           leaveType: (r.leave_type === 'personal' || r.leaveType === 'personal' ? 'personal' : 'sick') as 'personal' | 'sick',
           reason: String(r.reason ?? ''),
           documentUrl: (r.document_url ?? r.documentUrl ?? null) as string | null,
+          enrollmentId: String(r.enrollment_id ?? r.enrollmentId ?? '').trim() || undefined,
+          userId: String(r.user_id ?? r.userId ?? '').trim() || undefined,
+          classId: String(r.class_id ?? r.classId ?? '').trim() || undefined,
+          classCode: String(r.class_code ?? r.classCode ?? '').trim() || undefined,
         });
       });
     }
@@ -71,6 +85,10 @@ function normaliseApplications(data: unknown): Application[] {
           type: 'reschedule',
           reason: String(r.reason ?? ''),
           documentUrl: null,
+          enrollmentId: String(r.enrollment_id ?? r.enrollmentId ?? '').trim() || undefined,
+          userId: String(r.user_id ?? r.userId ?? '').trim() || undefined,
+          classId: String(r.class_id ?? r.classId ?? '').trim() || undefined,
+          classCode: String(r.class_code ?? r.classCode ?? '').trim() || undefined,
         });
       });
     }
@@ -81,6 +99,7 @@ function normaliseApplications(data: unknown): Application[] {
 
 export default function PendingApplicationsPage() {
   const { t } = useTranslation();
+  const { profile } = useAuth();
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -156,12 +175,46 @@ export default function PendingApplicationsPage() {
       });
     }
   }
-  async function patchApplication(app: Application, status: 'approved' | 'rejected', rejectionReason?: string) {
-    if (app.rawType === 'extension' && app.rawId) {
-      await api.patch(`/admin/extension-requests/${app.rawId}`, { status, rejection_reason: rejectionReason ?? undefined });
-    } else if (app.rawType === 'sick_leave' && app.rawId) {
-      await api.patch(`/admin/sick-leave-requests/${app.rawId}`, { status, rejection_reason: rejectionReason ?? undefined });
+  async function patchApplication(
+    app: Application,
+    status: 'approved' | 'rejected',
+    options?: { rejectionReason?: string; approveWithRefund?: boolean },
+  ) {
+    const body: Record<string, unknown> = {
+      status,
+      rejection_reason: options?.rejectionReason ?? undefined,
+    };
+    if (status === 'approved' && options?.approveWithRefund) {
+      body.approve_with_refund = true;
+      body.refund_token = true;
+      body.no_makeup = true;
     }
+    if (app.rawType === 'extension' && app.rawId) {
+      await api.patch(`/admin/extension-requests/${app.rawId}`, body);
+    } else if (app.rawType === 'sick_leave' && app.rawId) {
+      await api.patch(`/admin/sick-leave-requests/${app.rawId}`, body);
+    }
+  }
+
+  async function refundTokenForApplication(app: Application) {
+    if (!app.enrollmentId || !app.userId) {
+      throw new Error(t('admin.dashboard.refundMissingEnrollment', '無法退代幣：缺少報名紀錄 ID，請確認後端 pending-applications 回傳 enrollment_id。'));
+    }
+    const remarks =
+      app.type === 'sickLeave'
+        ? t('admin.dashboard.refundRemarksSickLeave', '病假申請批准（不補堂）退 1 代幣')
+        : t('admin.dashboard.refundRemarksExtension', '改期申請批准（不補堂）退 1 代幣');
+    await postAdminTokenRefund({
+      enrollment_id: app.enrollmentId,
+      user_id: app.userId,
+      user_name: app.studentName,
+      class_id: app.classId,
+      class_name: app.className,
+      class_code: app.classCode,
+      tokens_refunded: 1,
+      remarks,
+      refunded_by: profile?.full_name ?? 'Admin',
+    });
   }
   function handleBulkApprove() {
     const toApprove = filteredApplications.filter((a) => selectedIds.has(a.id));
@@ -214,19 +267,25 @@ export default function PendingApplicationsPage() {
     setApproveWithRefund(false);
   }
 
-  function handleApprove(id: string, studentName: string, withRefund: boolean) {
+  async function handleApprove(id: string, studentName: string, withRefund: boolean) {
     const app = applications.find((a) => a.id === id);
     if (!app) return;
-    patchApplication(app, 'approved')
-      .then(() => {
-        setApplications((prev) => prev.filter((a) => a.id !== id));
-        closeModal();
-        if (withRefund) {
-          setSuccessMessage(t('admin.dashboard.applicationApprovedWithRefund', { name: studentName }));
-          setTimeout(() => setSuccessMessage(null), 5000);
-        }
-      })
-      .catch((err) => setApiError(err instanceof Error ? err.message : 'Request failed'));
+    try {
+      await patchApplication(app, 'approved', { approveWithRefund: withRefund });
+      if (withRefund) {
+        await refundTokenForApplication(app);
+      }
+      setApplications((prev) => prev.filter((a) => a.id !== id));
+      closeModal();
+      setSuccessMessage(
+        withRefund
+          ? t('admin.dashboard.applicationApprovedWithRefund', { name: studentName })
+          : t('admin.dashboard.applicationApproved', { name: studentName }, `已同意 {{name}} 的申請`),
+      );
+      setTimeout(() => setSuccessMessage(null), 5000);
+    } catch (err) {
+      setApiError(err instanceof Error ? err.message : 'Request failed');
+    }
   }
 
   function handleReject(id: string) {

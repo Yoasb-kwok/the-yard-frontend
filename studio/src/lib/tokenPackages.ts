@@ -4,6 +4,12 @@ export interface TokenPackageRow {
   id: number;
   name: string;
   description: string;
+  name_zh_tw?: string;
+  name_zh_cn?: string;
+  name_en?: string;
+  description_zh_tw?: string;
+  description_zh_cn?: string;
+  description_en?: string;
   token_count: number;
   price: number;
   validity_days: number;
@@ -13,6 +19,12 @@ export interface TokenPackageRow {
 export interface TokenPackageUpsertPayload {
   name: string;
   description: string;
+  name_zh_tw?: string;
+  name_zh_cn?: string;
+  name_en?: string;
+  description_zh_tw?: string;
+  description_zh_cn?: string;
+  description_en?: string;
   token_count: number;
   price: number;
   validity_days: number;
@@ -35,6 +47,12 @@ function normalizeRow(raw: Record<string, unknown>): TokenPackageRow | null {
     id,
     name: String(raw.name ?? ''),
     description: String(raw.description ?? ''),
+    name_zh_tw: raw.name_zh_tw != null ? String(raw.name_zh_tw) : undefined,
+    name_zh_cn: raw.name_zh_cn != null ? String(raw.name_zh_cn) : undefined,
+    name_en: raw.name_en != null ? String(raw.name_en) : undefined,
+    description_zh_tw: raw.description_zh_tw != null ? String(raw.description_zh_tw) : undefined,
+    description_zh_cn: raw.description_zh_cn != null ? String(raw.description_zh_cn) : undefined,
+    description_en: raw.description_en != null ? String(raw.description_en) : undefined,
     token_count: Number(raw.token_count ?? 0),
     price: Number(raw.price ?? 0),
     validity_days: Number(raw.validity_days ?? 0),

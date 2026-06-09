@@ -2,53 +2,41 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
-import { EXAMPLE_INSTRUCTOR_PROFILES, getInstructorProfile, type InstructorProfile } from '../../lib/instructorProfiles';
-import { api } from '../../lib/api';
-import { GraduationCap } from 'lucide-react';
+import { getInstructorProfile } from '../../lib/instructorProfiles';
+import { fetchPublicInstructors, type PublicInstructorRow } from '../../lib/instructorApi';
+import { GraduationCap, AlertCircle } from 'lucide-react';
 
-interface InstructorRow {
-  id: string;
-  name: string;
-  profile_image_url: string | null;
-}
-
-const FALLBACK_INSTRUCTORS: InstructorRow[] = EXAMPLE_INSTRUCTOR_PROFILES.map((profile, index) => ({
-  id: `fallback-${index + 1}`,
-  name: profile.name,
-  profile_image_url: profile.avatar_url ?? null,
-}));
-
-function buildFallbackProfile(name: string): InstructorProfile {
-  return {
-    name,
-    intro: '',
-    awards: [],
-    years_dancing: 0,
-    teaching_experience: 0,
-    dance_school: '',
-  };
+function resolveDisplayProfile(row: PublicInstructorRow) {
+  const fromApi = row.profile;
+  const hasApiContent =
+    Boolean(fromApi.intro?.trim()) ||
+    Boolean(fromApi.intro_zh_tw?.trim()) ||
+    Boolean(fromApi.intro_zh_cn?.trim()) ||
+    Boolean(fromApi.intro_en?.trim()) ||
+    (fromApi.awards?.length ?? 0) > 0 ||
+    (fromApi.years_dancing ?? 0) > 0 ||
+    (fromApi.teaching_experience ?? 0) > 0 ||
+    Boolean(fromApi.dance_school?.trim());
+  if (hasApiContent) return fromApi;
+  return getInstructorProfile(row.name) ?? fromApi;
 }
 
 export default function InstructorsPublicPage() {
   const { t } = useTranslation();
-  const [instructors, setInstructors] = useState<InstructorRow[]>([]);
+  const [instructors, setInstructors] = useState<PublicInstructorRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      try {
-        const response = await api.get<InstructorRow[]>('/admin/instructors?demo=1');
-        if (!cancelled && response.success && Array.isArray(response.data) && response.data.length > 0) {
-          setInstructors(response.data);
-        } else if (!cancelled) {
-          setInstructors(FALLBACK_INSTRUCTORS);
-        }
-      } catch {
-        if (!cancelled) setInstructors(FALLBACK_INSTRUCTORS);
-      } finally {
-        if (!cancelled) setLoading(false);
+      setLoadFailed(false);
+      const { instructors: list, loadFailed } = await fetchPublicInstructors();
+      if (!cancelled) {
+        setInstructors(list);
+        setLoadFailed(loadFailed);
+        setLoading(false);
       }
     })();
     return () => {
@@ -56,9 +44,10 @@ export default function InstructorsPublicPage() {
     };
   }, []);
 
-  const visibleInstructors = useMemo(() => {
-    return instructors.filter((instructor) => (instructor.name || '').trim().length > 0);
-  }, [instructors]);
+  const visibleInstructors = useMemo(
+    () => instructors.filter((instructor) => instructor.name.trim().length > 0),
+    [instructors],
+  );
 
   return (
     <PublicLayout>
@@ -80,15 +69,22 @@ export default function InstructorsPublicPage() {
             <div className="flex justify-center py-16">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
+          ) : loadFailed ? (
+            <div className="flex items-start gap-3 text-amber-900 bg-amber-50 border border-amber-200 rounded-lg p-5 max-w-lg mx-auto">
+              <AlertCircle className="h-6 w-6 flex-shrink-0 mt-0.5" />
+              <p className="text-sm">{t('instructors.loadFailed')}</p>
+            </div>
+          ) : visibleInstructors.length === 0 ? (
+            <p className="text-center text-gray-500 py-12">{t('instructors.empty')}</p>
           ) : (
             <div className="grid gap-8 sm:gap-10 md:grid-cols-2">
               {visibleInstructors.map((instructor) => {
-                const profile = getInstructorProfile(instructor.name) ?? buildFallbackProfile(instructor.name);
+                const profile = resolveDisplayProfile(instructor);
                 return (
                   <InstructorIntroCard
                     key={instructor.id || instructor.name}
                     instructorName={instructor.name}
-                    imageUrl={instructor.profile_image_url}
+                    imageUrl={instructor.profile_image_url ?? profile.avatar_url}
                     profile={profile}
                     featured
                   />

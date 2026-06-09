@@ -5,15 +5,21 @@ import PublicLayout from '../../components/PublicLayout';
 import { Calendar, ChevronLeft, ChevronRight, Clock, MapPin, Filter, X, Repeat, Info, Layers } from 'lucide-react';
 import { theme } from '../../lib/theme';
 import { useAuth } from '../../contexts/AuthContext';
-import { getAgeTagFromDateOfBirth, getDateStringFromStartTime, formatProgramCodeDisplay, getNextNonHolidayDateWithSet } from '../../lib/utils';
+import {
+  getAgeTagFromDateOfBirth,
+  getDateStringFromStartTime,
+  formatProgramCodeDisplay,
+  getNextNonHolidayDateWithSet,
+  isClassOccurrencePast,
+} from '../../lib/utils';
 import { useHolidays } from '../../lib/useHolidays';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { api } from '../../lib/api';
 import { CourseLevel, AgeTag } from '../../contexts/AuthContext';
-import { getFallbackCalendarLessons } from '../../lib/demoCourses';
 import { useModalA11y } from '../../lib/useModalA11y';
 import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
+import ClassEnrollModal, { type ClassEnrollLesson } from '../../components/student/ClassEnrollModal';
 
 interface Lesson {
   id: string;
@@ -32,8 +38,10 @@ interface Lesson {
   tag_values?: Record<string, string | null | undefined>;
   /** 0=Sun, 1=Mon, ..., 6=Sat. Recurring weekday for this class. */
   weekday: number;
-  /** Total lessons in the course (4, 8, or 16 – 每週一次). */
-  total_lessons: 4 | 8 | 16;
+  /** Total lessons in the course (from API `total_lessons`). */
+  total_lessons: number;
+  /** Tokens deducted per lesson when enrolling (default 1). */
+  token_cost?: number;
   /** 課程分類（日曆篩選用） */
   course_type?: 'regular' | 'summer' | 'short_term';
 }
@@ -112,7 +120,7 @@ export default function CalendarPage() {
   const viewParam = searchParams.get('view') as ViewType | null;
   const [view, setView] = useState<ViewType>(() => {
     if (viewParam && ['day', 'week', 'month'].includes(viewParam)) return viewParam;
-    return 'week';
+    return 'month';
   });
   const [currentDate, setCurrentDate] = useState(() => new Date());
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -121,6 +129,7 @@ export default function CalendarPage() {
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [showLessonModal, setShowLessonModal] = useState(false);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
   const [slotPicker, setSlotPicker] = useState<{ lessons: Lesson[]; timeLabel: string } | null>(null);
   const [calendarFilterMode, setCalendarFilterMode] = useState<'suggested' | 'all'>('suggested');
   const [filterLevel, setFilterLevel] = useState<string | null>(null);
@@ -197,6 +206,13 @@ export default function CalendarPage() {
   const isLessonSuggested = (lesson: Lesson): boolean =>
     !isStudent || ((!profile?.level || lesson.level === profile.level) && (!profileAgeTag || lesson.age_tag === profileAgeTag));
 
+  const isLessonPast = (lesson: Lesson): boolean => isClassOccurrencePast(lesson.end_time);
+
+  const pastLessonTileStyle = (past: boolean, locationColors: { lighter: string; primary: string }) =>
+    past
+      ? { backgroundColor: '#f3f4f6', borderLeft: '4px solid #9ca3af' }
+      : { backgroundColor: locationColors.lighter, borderLeft: `4px solid ${locationColors.primary}` };
+
   /** Each lesson with display date: if original date is a holiday, show on next week same day (順延). */
   const lessonsWithDisplay = useMemo(() => {
     const set = holidayDatesSet;
@@ -229,8 +245,11 @@ export default function CalendarPage() {
       setView('day');
       setSearchParams({ view: 'day' }, { replace: true });
     } else if (viewParam) {
-      setView('week');
-      setSearchParams({ view: 'week' }, { replace: true });
+      setView('month');
+      setSearchParams({ view: 'month' }, { replace: true });
+    } else {
+      setView('month');
+      setSearchParams({ view: 'month' }, { replace: true });
     }
   }, [searchParams, setSearchParams]);
 
@@ -243,23 +262,25 @@ export default function CalendarPage() {
       const response = await api.get<any[]>('/classes', { from: range.from, to: range.to });
       const rows = Array.isArray(response?.data) ? response.data : [];
       if (!response?.success) {
-        setLessons(getFallbackCalendarLessons(currentDate));
+        setLessons([]);
         return;
       }
       const programTotalLessons: Record<string, number> = {};
       for (const row of rows) {
         const code = (row.program_code || '').toString().trim() || 'default';
-        const num = row.lesson_number != null ? Number(row.lesson_number) : 1;
-        programTotalLessons[code] = Math.max(programTotalLessons[code] ?? 0, num);
+        const lessonNum = row.lesson_number != null ? Number(row.lesson_number) : 0;
+        const courseTotal = row.total_lessons != null ? Number(row.total_lessons) : 0;
+        programTotalLessons[code] = Math.max(programTotalLessons[code] ?? 0, lessonNum, courseTotal);
       }
-      const clampTotal = (n: number): 4 | 8 | 16 => (n >= 16 ? 16 : n >= 8 ? 8 : 4);
       const mapped: Lesson[] = rows
         .filter((row: any) => !(row.is_cancelled === 1 || row.is_cancelled === true))
         .map((cls: any) => {
           const startTime = cls.start_time instanceof Date ? cls.start_time : new Date(cls.start_time);
           const startTimeStr = typeof cls.start_time === 'string' ? cls.start_time : startTime.toISOString();
           const programCode = (cls.program_code || '').toString().trim();
-          const total = programTotalLessons[programCode || 'default'] ?? 8;
+          const apiTotal = cls.total_lessons != null ? Number(cls.total_lessons) : 0;
+          const programMax = programTotalLessons[programCode || 'default'] ?? 0;
+          const total = Math.max(1, apiTotal > 0 ? apiTotal : programMax > 0 ? programMax : 8);
           return {
             id: String(cls.id),
             name: cls.name || '',
@@ -275,14 +296,15 @@ export default function CalendarPage() {
             age_tag: cls.age_group || cls.age_tag || '9-12',
             tag_values: extractClassTagValues(cls),
             weekday: startTime.getDay(),
-            total_lessons: clampTotal(total) as 4 | 8 | 16,
+            total_lessons: total,
+            token_cost: cls.token_cost != null ? Number(cls.token_cost) : 1,
             course_type: normalizeCategoryCode(cls.tag_values?.category ?? cls.course_type),
           };
         });
-      setLessons(mapped.length > 0 ? mapped : getFallbackCalendarLessons(currentDate));
+      setLessons(mapped);
     } catch (error) {
       console.error('Error loading calendar classes:', error);
-      setLessons(getFallbackCalendarLessons(currentDate));
+      setLessons([]);
       const msg = error instanceof Error ? error.message : 'Failed to load classes';
       if (!msg.includes('Network') && !msg.includes('fetch')) {
         setLessonsError(msg);
@@ -658,37 +680,52 @@ export default function CalendarPage() {
                             const { lesson, _postponedFrom, startMinutes, endMinutes } = block.ev;
                             const locationColors = getLocationColors(lesson.location);
                             const suggested = isLessonSuggested(lesson);
+                            const past = isLessonPast(lesson);
                             const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                             const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                            const pastTitle = past ? ` · ${t('calendar.lessonPast')}` : '';
                             return (
                               <button
                                 key={lesson.id}
                                 type="button"
+                                disabled={past}
                                 onClick={() => handleLessonClick(lesson)}
-                                className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                                className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden transition-all ${
+                                  past
+                                    ? 'opacity-60 cursor-not-allowed grayscale'
+                                    : suggested
+                                      ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50'
+                                      : 'opacity-80'
+                                }`}
                                 style={{
                                   top: topPx + 2,
                                   height: Math.max(heightPx - 4, TIME_GRID_EVENT_MIN_HEIGHT_PX),
-                                  backgroundColor: locationColors.lighter,
-                                  borderLeft: `4px solid ${locationColors.primary}`,
+                                  ...pastLessonTileStyle(past, locationColors),
                                 }}
-                                title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                                title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}${pastTitle}`}
                               >
                                 <div className="p-1.5 h-full overflow-hidden flex flex-col justify-start gap-0.5">
-                                  <span className="text-sm font-semibold text-gray-900 truncate leading-tight">{lesson.name}</span>
-                                  <span className="text-xs text-gray-600 truncate">{formatTime(new Date(lesson.start_time))}</span>
+                                  <span className={`text-sm font-semibold truncate leading-tight ${past ? 'text-gray-500' : 'text-gray-900'}`}>{lesson.name}</span>
+                                  <span className={`text-xs truncate ${past ? 'text-gray-400' : 'text-gray-600'}`}>{formatTime(new Date(lesson.start_time))}</span>
                                 </div>
                               </button>
                             );
                           }
                           const topPx = ((block.startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                           const heightPx = ((block.endMinutes - block.startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                          const groupLessons = block.events.map((e) => e.lesson);
+                          const groupAllPast = groupLessons.every((l) => isLessonPast(l));
                           return (
                             <button
                               key={`group-${block.startMinutes}`}
                               type="button"
-                              onClick={() => setSlotPicker({ lessons: block.events.map((e) => e.lesson), timeLabel: block.timeLabel })}
-                              className="absolute left-0.5 right-0.5 flex items-center gap-2 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
+                              disabled={groupAllPast}
+                              onClick={() => openSlotPicker(groupLessons, block.timeLabel)}
+                              className={`absolute left-0.5 right-0.5 flex items-center gap-2 rounded overflow-hidden transition-all text-left ${
+                                groupAllPast
+                                  ? 'bg-gray-100 border-2 border-gray-300 opacity-60 cursor-not-allowed grayscale'
+                                  : 'bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50'
+                              }`}
                               style={{
                                 top: topPx + 2,
                                 height: Math.max(heightPx - 4, TIME_GRID_EVENT_MIN_HEIGHT_PX),
@@ -708,6 +745,7 @@ export default function CalendarPage() {
                       : dayEvents.map(({ lesson, _postponedFrom, startMinutes, endMinutes, columnIndex, totalColumns }) => {
                       const locationColors = getLocationColors(lesson.location);
                       const suggested = isLessonSuggested(lesson);
+                      const past = isLessonPast(lesson);
                       const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                       const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                       const leftPct = totalColumns > 0 ? (columnIndex / totalColumns) * 100 : 0;
@@ -715,25 +753,32 @@ export default function CalendarPage() {
                       const gap = 1;
                       const leftAdj = leftPct + (gap / totalColumns) * columnIndex;
                       const widthAdj = widthPct - gap;
+                      const pastTitle = past ? ` · ${t('calendar.lessonPast')}` : '';
                       return (
                         <button
                           key={lesson.id}
                           type="button"
+                          disabled={past}
                           onClick={() => handleLessonClick(lesson)}
-                          className={`absolute text-left rounded overflow-hidden transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50' : 'opacity-80'}`}
+                          className={`absolute text-left rounded overflow-hidden transition-all ${
+                            past
+                              ? 'opacity-60 cursor-not-allowed grayscale'
+                              : suggested
+                                ? 'hover:ring-2 hover:ring-offset-1 hover:ring-primary/50'
+                                : 'opacity-80'
+                          }`}
                           style={{
                             top: topPx + 2,
                             height: Math.max(heightPx - 4, TIME_GRID_EVENT_MIN_HEIGHT_PX),
                             left: totalColumns > 1 ? `calc(${leftAdj}% + 2px)` : 2,
                             width: totalColumns > 1 ? `calc(${widthAdj}% - 4px)` : 'calc(100% - 4px)',
-                            backgroundColor: locationColors.lighter,
-                            borderLeft: `4px solid ${locationColors.primary}`,
+                            ...pastLessonTileStyle(past, locationColors),
                           }}
-                          title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                          title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}${pastTitle}`}
                         >
                           <div className="p-1.5 h-full overflow-hidden flex flex-col justify-start gap-0.5">
-                            <span className="text-sm font-semibold text-gray-900 truncate leading-tight">{lesson.name}</span>
-                            <span className="text-xs text-gray-600 truncate">{formatTime(new Date(lesson.start_time))}</span>
+                            <span className={`text-sm font-semibold truncate leading-tight ${past ? 'text-gray-500' : 'text-gray-900'}`}>{lesson.name}</span>
+                            <span className={`text-xs truncate ${past ? 'text-gray-400' : 'text-gray-600'}`}>{formatTime(new Date(lesson.start_time))}</span>
                           </div>
                         </button>
                       );
@@ -750,8 +795,19 @@ export default function CalendarPage() {
   };
 
   const handleLessonClick = (lesson: Lesson) => {
+    if (isLessonPast(lesson)) return;
     setSelectedLesson(lesson);
     setShowLessonModal(true);
+  };
+
+  const openSlotPicker = (lessons: Lesson[], timeLabel: string) => {
+    const upcoming = lessons.filter((l) => !isLessonPast(l));
+    if (upcoming.length === 0) return;
+    if (upcoming.length === 1) {
+      handleLessonClick(upcoming[0]);
+      return;
+    }
+    setSlotPicker({ lessons: upcoming, timeLabel });
   };
 
   const renderThreeDayView = () => {
@@ -808,26 +864,41 @@ export default function CalendarPage() {
                   )}
                   {dayLessons.map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
-                    const levelTag = getLevelTag(lesson.level);
-                    const ageTag = getAgeTag(lesson.age_tag);
                     const suggested = isLessonSuggested(lesson);
+                    const past = isLessonPast(lesson);
                     return (
                       <div
                         key={lesson.id}
                         role="button"
-                        tabIndex={0}
-                        className={`mb-2 p-2 text-white rounded text-xs cursor-pointer transition-all truncate ${suggested ? 'hover:shadow-md' : 'opacity-70'}`}
+                        tabIndex={past ? -1 : 0}
+                        aria-disabled={past}
+                        className={`mb-2 p-2 rounded text-xs transition-all truncate ${
+                          past
+                            ? 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-70'
+                            : `text-white cursor-pointer ${suggested ? 'hover:shadow-md' : 'opacity-70'}`
+                        }`}
                         style={{
-                          backgroundColor: locationColors.primary,
+                          backgroundColor: past ? undefined : locationColors.primary,
                         }}
-                        onMouseEnter={suggested ? (e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.dark;
-                        } : undefined}
-                        onMouseLeave={suggested ? (e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.primary;
-                        } : undefined}
-                        onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                        title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                        onMouseEnter={
+                          !past && suggested
+                            ? (e) => {
+                                e.currentTarget.style.backgroundColor = locationColors.dark;
+                              }
+                            : undefined
+                        }
+                        onMouseLeave={
+                          !past && suggested
+                            ? (e) => {
+                                e.currentTarget.style.backgroundColor = locationColors.primary;
+                              }
+                            : undefined
+                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!past) handleLessonClick(lesson);
+                        }}
+                        title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}${past ? ` · ${t('calendar.lessonPast')}` : ''}`}
                       >
                         <div className="font-medium truncate">{lesson.name}</div>
                         <div className="text-white/90 text-[10px] mt-0.5">{formatTime(new Date(lesson.start_time))}</div>
@@ -924,20 +995,29 @@ export default function CalendarPage() {
                           const { lesson, _postponedFrom, startMinutes, endMinutes } = block.ev;
                           const locationColors = getLocationColors(lesson.location);
                           const suggested = isLessonSuggested(lesson);
+                          const past = isLessonPast(lesson);
                           const topPx = ((startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                           const heightPx = ((endMinutes - startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                           return (
                             <button
                               key={lesson.id}
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); handleLessonClick(lesson); }}
-                              className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden text-white text-xs p-1 transition-all ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-white/50' : 'opacity-80'}`}
+                              disabled={past}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLessonClick(lesson);
+                              }}
+                              className={`absolute left-0.5 right-0.5 text-left rounded overflow-hidden text-xs p-1 transition-all ${
+                                past
+                                  ? 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-70'
+                                  : `text-white ${suggested ? 'hover:ring-2 hover:ring-offset-1 hover:ring-white/50' : 'opacity-80'}`
+                              }`}
                               style={{
                                 top: topPx + 2,
                                 height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
-                                backgroundColor: locationColors.primary,
+                                backgroundColor: past ? undefined : locationColors.primary,
                               }}
-                              title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}`}
+                              title={`${lesson.name} · ${lesson.instructor} · ${formatTime(new Date(lesson.start_time))}${_postponedFrom ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}` : ''}${past ? ` · ${t('calendar.lessonPast')}` : ''}`}
                             >
                               <span className="truncate block">{formatTime(new Date(lesson.start_time))}</span>
                               <span className="truncate block font-medium">{lesson.name || (t('calendar.unnamedClass') || '課程')}</span>
@@ -946,15 +1026,22 @@ export default function CalendarPage() {
                         }
                         const topPx = ((block.startMinutes - startMin) / 60) * TIME_GRID_ROW_HEIGHT_PX;
                         const heightPx = ((block.endMinutes - block.startMinutes) / 60) * TIME_GRID_ROW_HEIGHT_PX;
+                        const groupLessons = block.events.map((ev) => ev.lesson);
+                        const groupAllPast = groupLessons.every((l) => isLessonPast(l));
                         return (
                           <button
                             key={`group-${day.toISOString()}-${block.startMinutes}`}
                             type="button"
+                            disabled={groupAllPast}
                             onClick={(e) => {
                               e.stopPropagation();
-                              setSlotPicker({ lessons: block.events.map((ev) => ev.lesson), timeLabel: block.timeLabel });
+                              openSlotPicker(groupLessons, block.timeLabel);
                             }}
-                            className="absolute left-0.5 right-0.5 flex items-center gap-1 rounded overflow-hidden transition-all bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50 text-left"
+                            className={`absolute left-0.5 right-0.5 flex items-center gap-1 rounded overflow-hidden transition-all text-left ${
+                              groupAllPast
+                                ? 'bg-gray-100 border-2 border-gray-300 opacity-60 cursor-not-allowed'
+                                : 'bg-primary-lighter border-2 border-primary/50 hover:ring-2 hover:ring-offset-1 hover:ring-primary/50'
+                            }`}
                             style={{
                               top: topPx + 2,
                               height: Math.max(heightPx - 4, WEEK_VIEW_EVENT_MIN_HEIGHT_PX),
@@ -1034,6 +1121,7 @@ export default function CalendarPage() {
                   {dayLessons.slice(0, 4).map(({ lesson, _postponedFrom }) => {
                     const locationColors = getLocationColors(lesson.location);
                     const suggested = isLessonSuggested(lesson);
+                    const past = isLessonPast(lesson);
                     const titleExtra = _postponedFrom
                       ? ` · ${t('calendar.postponedFromHoliday', { date: formatShortDate(_postponedFrom) })}`
                       : '';
@@ -1041,19 +1129,34 @@ export default function CalendarPage() {
                       <div
                         key={lesson.id}
                         role="button"
-                        tabIndex={0}
-                        className={`text-[10px] leading-tight py-0.5 px-1 rounded text-white min-w-0 break-words line-clamp-4 cursor-pointer transition-colors ${suggested ? '' : 'opacity-70'}`}
+                        tabIndex={past ? -1 : 0}
+                        aria-disabled={past}
+                        className={`text-[10px] leading-tight py-0.5 px-1 rounded min-w-0 break-words line-clamp-4 transition-colors ${
+                          past
+                            ? 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-70'
+                            : `text-white cursor-pointer ${suggested ? '' : 'opacity-70'}`
+                        }`}
                         style={{
-                          backgroundColor: locationColors.primary,
+                          backgroundColor: past ? undefined : locationColors.primary,
                         }}
-                        onMouseEnter={suggested ? (e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.dark;
-                        } : undefined}
-                        onMouseLeave={suggested ? (e) => {
-                          e.currentTarget.style.backgroundColor = locationColors.primary;
-                        } : undefined}
-                        onClick={() => handleLessonClick(lesson)}
-                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}${titleExtra}`}
+                        onMouseEnter={
+                          !past && suggested
+                            ? (e) => {
+                                e.currentTarget.style.backgroundColor = locationColors.dark;
+                              }
+                            : undefined
+                        }
+                        onMouseLeave={
+                          !past && suggested
+                            ? (e) => {
+                                e.currentTarget.style.backgroundColor = locationColors.primary;
+                              }
+                            : undefined
+                        }
+                        onClick={() => {
+                          if (!past) handleLessonClick(lesson);
+                        }}
+                        title={`${lesson.name} - ${lesson.instructor} - ${formatTime(new Date(lesson.start_time))}${titleExtra}${past ? ` · ${t('calendar.lessonPast')}` : ''}`}
                       >
                         {lesson.name}
                       </div>
@@ -1532,10 +1635,17 @@ export default function CalendarPage() {
 
                       {/* Book Trial / Enroll */}
                       <div className="space-y-3">
-                        {selectedLesson && !isLessonSuggested(selectedLesson) && isStudent && (
+                        {selectedLesson && isLessonPast(selectedLesson) && (
+                          <p className="text-sm text-gray-600 bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                            {t('calendar.lessonPastNoEnroll')}
+                          </p>
+                        )}
+                        {selectedLesson && !isLessonSuggested(selectedLesson) && isStudent && !isLessonPast(selectedLesson) && (
                           <p className="text-sm text-gray-500 py-2">{t('calendar.notSuggested')}</p>
                         )}
-                        {selectedLesson && (isStudent ? isLessonSuggested(selectedLesson) : true) && (
+                        {selectedLesson &&
+                          !isLessonPast(selectedLesson) &&
+                          (isStudent ? isLessonSuggested(selectedLesson) : true) && (
                           <>
                             <Link
                               to={{
@@ -1588,22 +1698,9 @@ export default function CalendarPage() {
                               {t('calendar.bookTrial')}
                             </Link>
                             {isStudent && (
-                              <Link
-                                to="/token-package"
-                                state={{
-                                  classData: {
-                                    id: selectedLesson.id,
-                                    name: selectedLesson.name,
-                                    instructor: selectedLesson.instructor,
-                                    start_time: selectedLesson.start_time,
-                                    end_time: selectedLesson.end_time,
-                                    location: selectedLesson.location,
-                                    program_code: selectedLesson.program_code,
-                                    level: selectedLesson.level,
-                                    age_tag: selectedLesson.age_tag,
-                                  }
-                                }}
-                                className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105 block"
+                              <button
+                                type="button"
+                                className="w-full text-white px-6 py-3 rounded-lg text-base font-bold transition-all duration-300 text-center shadow-md hover:shadow-lg transform hover:scale-105"
                                 style={{
                                   backgroundColor: locationColors.primary,
                                 }}
@@ -1613,10 +1710,13 @@ export default function CalendarPage() {
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.backgroundColor = locationColors.primary;
                                 }}
-                                onClick={() => setShowLessonModal(false)}
+                                onClick={() => {
+                                  setShowLessonModal(false);
+                                  setShowEnrollModal(true);
+                                }}
                               >
                                 {t('calendar.enroll')}
-                              </Link>
+                              </button>
                             )}
                           </>
                         )}
@@ -1669,18 +1769,25 @@ export default function CalendarPage() {
                 {slotPicker.lessons.map((lesson) => {
                   const locationColors = getLocationColors(lesson.location);
                   const suggested = isLessonSuggested(lesson);
+                  const past = isLessonPast(lesson);
                   const timeLabel = `${formatTime(new Date(lesson.start_time))} – ${formatTime(new Date(lesson.end_time))}`;
                   return (
                     <li key={lesson.id}>
                       <button
                         type="button"
+                        disabled={past}
                         onClick={() => {
+                          if (past) return;
                           setSlotPicker(null);
                           handleLessonClick(lesson);
                         }}
-                        className={`w-full text-left rounded-lg px-3 py-2 text-white text-sm flex items-center gap-2 transition-opacity ${suggested ? 'hover:opacity-90' : 'opacity-85 hover:opacity-90'}`}
-                        style={{ backgroundColor: locationColors.primary }}
-                        title={`${lesson.name} · ${lesson.instructor} · ${timeLabel}`}
+                        className={`w-full text-left rounded-lg px-3 py-2 text-sm flex items-center gap-2 transition-opacity ${
+                          past
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                            : `text-white ${suggested ? 'hover:opacity-90' : 'opacity-85 hover:opacity-90'}`
+                        }`}
+                        style={{ backgroundColor: past ? undefined : locationColors.primary }}
+                        title={`${lesson.name} · ${lesson.instructor} · ${timeLabel}${past ? ` · ${t('calendar.lessonPast')}` : ''}`}
                       >
                         <span className="font-medium shrink-0">{timeLabel}</span>
                         <span className="truncate font-medium">{lesson.name}</span>
@@ -1693,6 +1800,32 @@ export default function CalendarPage() {
           </div>
         </div>
       )}
+
+      <ClassEnrollModal
+        isOpen={showEnrollModal && !!selectedLesson}
+        lesson={
+          selectedLesson
+            ? ({
+                id: selectedLesson.id,
+                name: selectedLesson.name,
+                instructor: selectedLesson.instructor,
+                start_time: selectedLesson.start_time,
+                end_time: selectedLesson.end_time,
+                location: selectedLesson.location,
+                program_code: selectedLesson.program_code,
+                total_lessons: selectedLesson.total_lessons,
+                token_cost: selectedLesson.token_cost,
+                capacity: selectedLesson.capacity,
+                enrolled_count: selectedLesson.enrolled_count,
+              } satisfies ClassEnrollLesson)
+            : null
+        }
+        onClose={() => setShowEnrollModal(false)}
+        onEnrolled={() => {
+          setSelectedLesson(null);
+          void loadLessons();
+        }}
+      />
     </PublicLayout>
   );
 }

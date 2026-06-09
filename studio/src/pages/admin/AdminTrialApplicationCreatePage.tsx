@@ -20,8 +20,16 @@ export default function AdminTrialApplicationCreatePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [applicantName, setApplicantName] = useState('');
-  const [applicantPhone, setApplicantPhone] = useState('');
+  const [studentName, setStudentName] = useState('');
+  const [parentName, setParentName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [residentialDistrict, setResidentialDistrict] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
+  const [hasJoinedCourses, setHasJoinedCourses] = useState(false);
+  const [hasDanceExperience, setHasDanceExperience] = useState(false);
+  const [howDidYouHear, setHowDidYouHear] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [classLoadError, setClassLoadError] = useState<string | null>(null);
@@ -86,7 +94,7 @@ export default function AdminTrialApplicationCreatePage() {
     setLoadingClasses(true);
     setClassLoadError(null);
     try {
-      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
+      const endpoints = ['/admin/classes', '/classes'];
       let rows: any[] = [];
       for (const endpoint of endpoints) {
         try {
@@ -108,12 +116,31 @@ export default function AdminTrialApplicationCreatePage() {
           const programCode = String(row?.class_code ?? row?.program_code ?? row?.programCode ?? '').trim();
           return { id, name, startTime, location, programCode };
         })
-        .filter((row) => row.id && row.name && row.startTime);
+        .filter((row) => row.id && row.name && row.startTime)
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
       setClassOptions(mapped);
       if (mapped.length > 0 && !selectedClassId) {
-        setSelectedClassId(mapped[0].id);
-        setDetailClassId(mapped[0].id);
-        const firstDateObj = new Date(mapped[0].startTime);
+        const now = new Date();
+        const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+          now.getDate()
+        ).padStart(2, '0')}`;
+        const getDateKey = (iso: string) => {
+          const d = new Date(iso);
+          if (Number.isNaN(d.getTime())) return '';
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(
+            2,
+            '0'
+          )}`;
+        };
+
+        const todayRows = mapped.filter((row) => getDateKey(row.startTime) === todayKey);
+        const upcomingTodayRows = todayRows.filter((row) => new Date(row.startTime).getTime() >= now.getTime());
+        const upcomingRows = mapped.filter((row) => new Date(row.startTime).getTime() >= now.getTime());
+        const defaultClass = upcomingTodayRows[0] ?? todayRows[0] ?? upcomingRows[0] ?? mapped[0];
+
+        setSelectedClassId(defaultClass.id);
+        setDetailClassId(defaultClass.id);
+        const firstDateObj = new Date(defaultClass.startTime);
         if (!Number.isNaN(firstDateObj.getTime())) {
           setCalendarMonth(new Date(firstDateObj.getFullYear(), firstDateObj.getMonth(), 1));
         }
@@ -129,34 +156,73 @@ export default function AdminTrialApplicationCreatePage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    if (!applicantName.trim() || !applicantPhone.trim() || !selectedClass) {
+    if (
+      !studentName.trim() ||
+      !parentName.trim() ||
+      !contactPhone.trim() ||
+      !residentialDistrict.trim() ||
+      !birthDate.trim() ||
+      !gender.trim() ||
+      !selectedClass
+    ) {
       setError(
         t('admin.trialApplications.requiredHint', {
-          defaultValue: '請先填寫姓名、聯絡電話，並在課程表選擇課堂。',
+          defaultValue: '請先填寫學生姓名、家長姓名、居住地區、聯絡電話、出生日期、性別，並在課程表選擇課堂。',
         })
       );
       return;
     }
 
     const appliedAtIso = new Date().toISOString();
+    const normalizedPhone = contactPhone.trim();
+    const normalizedStudentName = studentName.trim();
+    const normalizedParentName = parentName.trim();
+    const normalizedDistrict = residentialDistrict.trim();
+    const normalizedBirthDate = birthDate.trim();
+    const normalizedGender = gender.trim();
+    const classId = String(selectedClass.id ?? '').trim();
+    const programCode = String(selectedClass.programCode ?? '').trim();
+    const numericClassId = /^\d+$/.test(classId) ? classId : undefined;
 
     const payload = {
-      applicant_name: applicantName.trim(),
-      full_name: applicantName.trim(),
-      student_name: applicantName.trim(),
-      applicant_phone: applicantPhone.trim(),
-      mobile: applicantPhone.trim(),
-      contact_number: applicantPhone.trim(),
+      fullName: normalizedStudentName,
+      applicant_name: normalizedStudentName,
+      full_name: normalizedStudentName,
+      student_name: normalizedStudentName,
+      studentName: normalizedStudentName,
+      parent_name: normalizedParentName,
+      parentName: normalizedParentName,
+      guardian_name: normalizedParentName,
+      guardianName: normalizedParentName,
+      applicant_phone: normalizedPhone,
+      mobile: normalizedPhone,
+      contact_number: normalizedPhone,
+      phone: normalizedPhone,
+      contact_phone: normalizedPhone,
+      district: normalizedDistrict,
+      residential_district: normalizedDistrict,
+      location_district: normalizedDistrict,
+      birth_date: normalizedBirthDate,
+      date_of_birth: normalizedBirthDate,
+      dob: normalizedBirthDate,
+      gender: normalizedGender,
+      sex: normalizedGender,
       trial_class: selectedClass.name,
       class_name: selectedClass.name,
       trialClassName: selectedClass.name,
       requested_trial_class_name: selectedClass.name,
-      class_id: selectedClass.id,
-      assigned_class_id: selectedClass.id,
-      course_code: selectedClass.programCode || null,
-      class_code: selectedClass.programCode || null,
-      program_code: selectedClass.programCode || null,
-      preferred_program: selectedClass.programCode || null,
+      // class identifiers (camelCase + snake_case) for backend compatibility
+      classId: classId || undefined,
+      class_id: classId || undefined,
+      apiClassRowId: classId || undefined,
+      api_class_row_id: classId || undefined,
+      assigned_class_id: classId || undefined,
+      programCode: programCode || undefined,
+      program_code: programCode || undefined,
+      class_code: programCode || undefined,
+      course_code: programCode || undefined,
+      preferred_program: programCode || undefined,
+      ...(numericClassId ? { courseId: numericClassId, course_id: numericClassId } : {}),
       branch: selectedClass.location || null,
       preferred_location: selectedClass.location || null,
       location: selectedClass.location || null,
@@ -167,6 +233,14 @@ export default function AdminTrialApplicationCreatePage() {
       applied_at: appliedAtIso,
       created_at: appliedAtIso,
       notes: '',
+      hasJoinedCourses,
+      has_joined_courses: hasJoinedCourses,
+      hasDanceExperience,
+      has_dance_experience: hasDanceExperience,
+      howDidYouHear: howDidYouHear || undefined,
+      how_did_you_hear: howDidYouHear || undefined,
+      promoCode: promoCode.trim() || undefined,
+      promo_code: promoCode.trim() || undefined,
     };
 
     setSaving(true);
@@ -259,20 +333,156 @@ export default function AdminTrialApplicationCreatePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="space-y-1">
-              <span className="text-sm font-medium text-gray-700">{t('admin.trialApplications.applicant', '姓名')} *</span>
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.studentName', '學生姓名')} *
+              </span>
               <input
-                value={applicantName}
-                onChange={(e) => setApplicantName(e.target.value)}
+                value={studentName}
+                onChange={(e) => setStudentName(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
               />
             </label>
 
             <label className="space-y-1">
-              <span className="text-sm font-medium text-gray-700">{t('admin.trialApplications.phone', '聯絡電話')} *</span>
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.parentName', '家長姓名')} *
+              </span>
               <input
-                value={applicantPhone}
-                onChange={(e) => setApplicantPhone(e.target.value)}
+                value={parentName}
+                onChange={(e) => setParentName(e.target.value)}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.residentialDistrict', '居住地區')} *
+              </span>
+              <input
+                value={residentialDistrict}
+                onChange={(e) => setResidentialDistrict(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.phone', '聯絡電話')} *
+              </span>
+              <input
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.birthDate', '出生日期')} *
+              </span>
+              <input
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              />
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('admin.trialApplications.gender', '性別')} *
+              </span>
+              <select
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              >
+                <option value="">{t('common.pleaseSelect', { defaultValue: '請選擇' })}</option>
+                <option value="female">{t('common.genderFemale', { defaultValue: '女' })}</option>
+                <option value="male">{t('common.genderMale', { defaultValue: '男' })}</option>
+                <option value="other">{t('common.genderOther', { defaultValue: '其他' })}</option>
+              </select>
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            <div>
+              <span className="text-sm font-medium text-gray-700">{t('trial.hasJoinedCourses')}</span>
+              <div className="mt-1 flex gap-4">
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasJoinedCourses"
+                    checked={hasJoinedCourses === true}
+                    onChange={() => setHasJoinedCourses(true)}
+                    className="mr-2"
+                  />
+                  {t('common.yes')}
+                </label>
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasJoinedCourses"
+                    checked={hasJoinedCourses === false}
+                    onChange={() => setHasJoinedCourses(false)}
+                    className="mr-2"
+                  />
+                  {t('common.no')}
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <span className="text-sm font-medium text-gray-700">{t('trial.hasDanceExperience')}</span>
+              <div className="mt-1 flex gap-4">
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasDanceExperience"
+                    checked={hasDanceExperience === true}
+                    onChange={() => setHasDanceExperience(true)}
+                    className="mr-2"
+                  />
+                  {t('common.yes')}
+                </label>
+                <label className="flex items-center text-sm text-gray-800">
+                  <input
+                    type="radio"
+                    name="hasDanceExperience"
+                    checked={hasDanceExperience === false}
+                    onChange={() => setHasDanceExperience(false)}
+                    className="mr-2"
+                  />
+                  {t('common.no')}
+                </label>
+              </div>
+            </div>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">{t('trial.howDidYouHear')}</span>
+              <select
+                value={howDidYouHear}
+                onChange={(e) => setHowDidYouHear(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+              >
+                <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
+                <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
+                <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
+                <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
+                <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
+                <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
+              </select>
+            </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-medium text-gray-700">
+                {t('trial.usedPromoCode', '使用了推廣碼')} ({t('common.optional')})
+              </span>
+              <input
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
               />
             </label>
           </div>

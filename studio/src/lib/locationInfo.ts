@@ -44,3 +44,27 @@ export function getLocationName(loc: LocationKey | string | null | undefined): s
   const info = getLocationInfo(loc);
   return info?.name ?? String(loc ?? '');
 }
+
+/** Calendar / schedule block colors — aligned with public calendar & admin classes. */
+export interface LocationColors {
+  primary: string;
+  dark: string;
+  light: string;
+  lighter: string;
+}
+
+const LOCATION_COLORS: Record<LocationKey, LocationColors> = {
+  sanpokong: { primary: '#10b981', dark: '#059669', light: '#34d399', lighter: '#d1fae5' },
+  causewaybay: { primary: '#a67c52', dark: '#8b6f47', light: '#c49b6a', lighter: '#f0e6d2' },
+  fotan: { primary: '#f97316', dark: '#ea580c', light: '#fb923c', lighter: '#ffedd5' },
+  sheungshui: { primary: '#3b82f6', dark: '#2563eb', light: '#60a5fa', lighter: '#dbeafe' },
+};
+
+export function getLocationColors(loc: LocationKey | string | null | undefined): LocationColors {
+  if (loc && loc in LOCATION_COLORS) return LOCATION_COLORS[loc as LocationKey];
+  return LOCATION_COLORS.sanpokong;
+}
+
+export function getLocationCalendarColor(loc: LocationKey | string | null | undefined): string {
+  return getLocationColors(loc).primary;
+}

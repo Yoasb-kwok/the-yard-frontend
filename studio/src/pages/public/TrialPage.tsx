@@ -57,10 +57,17 @@ type TrialFormDraft = {
   contactNumber: string;
   email: string;
   residentialDistrict: string;
-  hasJoinedCourses: boolean | null;
-  hasDanceExperience: boolean | null;
+  hasJoinedCourses: boolean;
+  hasDanceExperience: boolean;
   howDidYouHear: string;
   promoCode: string;
+};
+
+type TrialNameSuggestion = {
+  fullName: string;
+  parentsName?: string;
+  email?: string;
+  contactNumber?: string;
 };
 
 export default function TrialPage() {
@@ -81,8 +88,8 @@ export default function TrialPage() {
   const [contactNumber, setContactNumber] = useState('');
   const [email, setEmail] = useState('');
   const [residentialDistrict, setResidentialDistrict] = useState('');
-  const [hasJoinedCourses, setHasJoinedCourses] = useState<boolean | null>(null);
-  const [hasDanceExperience, setHasDanceExperience] = useState<boolean | null>(null);
+  const [hasJoinedCourses, setHasJoinedCourses] = useState(false);
+  const [hasDanceExperience, setHasDanceExperience] = useState(false);
   const [howDidYouHear, setHowDidYouHear] = useState('');
   const [promoCode, setPromoCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -101,8 +108,11 @@ export default function TrialPage() {
   const [error, setError] = useState('');
   const [wasLoggedIn, setWasLoggedIn] = useState(false);
   const [selectedTrialClass, setSelectedTrialClass] = useState<ClassData | null>(null);
+  const [nameSuggestions, setNameSuggestions] = useState<TrialNameSuggestion[]>([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
   /** 避免連續點「提交」或 Enter 重複送出兩次 POST。 */
   const trialSubmitLockRef = useRef(false);
+  const nameSuggestReqIdRef = useRef(0);
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { tagTypes, tagsByType, getTypeLabel } = useClassTags();
@@ -146,6 +156,13 @@ export default function TrialPage() {
   const getLocale = (): string => {
     const m: Record<string, string> = { en: 'en-US', 'zh-CN': 'zh-CN', 'zh-TW': 'zh-TW' };
     return m[i18n.language] ?? i18n.language ?? 'en-US';
+  };
+
+  const isTrialClassExpired = (cls?: Pick<ClassData, 'end_time'> | null): boolean => {
+    if (!cls?.end_time) return false;
+    const end = new Date(cls.end_time);
+    if (!Number.isFinite(end.getTime())) return false;
+    return end.getTime() < Date.now();
   };
 
   const dynamicTagRows = useMemo(() => {
@@ -203,10 +220,10 @@ export default function TrialPage() {
       if (typeof draft.contactNumber === 'string') setContactNumber(draft.contactNumber);
       if (typeof draft.email === 'string') setEmail(draft.email);
       if (typeof draft.residentialDistrict === 'string') setResidentialDistrict(draft.residentialDistrict);
-      if (draft.hasJoinedCourses === true || draft.hasJoinedCourses === false || draft.hasJoinedCourses === null) {
+      if (draft.hasJoinedCourses === true || draft.hasJoinedCourses === false) {
         setHasJoinedCourses(draft.hasJoinedCourses);
       }
-      if (draft.hasDanceExperience === true || draft.hasDanceExperience === false || draft.hasDanceExperience === null) {
+      if (draft.hasDanceExperience === true || draft.hasDanceExperience === false) {
         setHasDanceExperience(draft.hasDanceExperience);
       }
       if (typeof draft.howDidYouHear === 'string') setHowDidYouHear(draft.howDidYouHear);
@@ -227,12 +244,85 @@ export default function TrialPage() {
     });
   };
 
+  useEffect(() => {
+    if (isLoggedIn) {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+      return;
+    }
+    const keyword = fullName.trim();
+    if (keyword.length < 2) {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+      return;
+    }
+    const reqId = ++nameSuggestReqIdRef.current;
+    const timer = setTimeout(async () => {
+      const endpoints = [
+        '/trial-applications/name-suggestions',
+        '/trial-application/name-suggestions',
+        '/trial-applications/suggest-names',
+        '/profiles/name-suggestions',
+      ];
+      const extract = (raw: unknown): TrialNameSuggestion[] => {
+        const rows = Array.isArray(raw)
+          ? raw
+          : raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)
+          ? ((raw as { data: unknown[] }).data)
+          : [];
+        return rows
+          .map((r) => {
+            if (!r || typeof r !== 'object') return null;
+            const row = r as Record<string, unknown>;
+            const fullNameValue = String(row.full_name ?? row.fullName ?? row.name ?? '').trim();
+            if (!fullNameValue) return null;
+            return {
+              fullName: fullNameValue,
+              parentsName: row.parents_name != null ? String(row.parents_name) : row.parentsName != null ? String(row.parentsName) : undefined,
+              email: row.email != null ? String(row.email) : undefined,
+              contactNumber:
+                row.contact_number != null
+                  ? String(row.contact_number)
+                  : row.contactNumber != null
+                  ? String(row.contactNumber)
+                  : row.mobile != null
+                  ? String(row.mobile)
+                  : undefined,
+            } as TrialNameSuggestion;
+          })
+          .filter((x): x is TrialNameSuggestion => x != null);
+      };
+
+      let suggestions: TrialNameSuggestion[] = [];
+      for (const endpoint of endpoints) {
+        try {
+          const res = await api.get(endpoint, { q: keyword, keyword, search: keyword, limit: 8 });
+          suggestions = extract(res.data ?? res);
+          if (suggestions.length > 0) break;
+        } catch {
+          // try next endpoint
+        }
+      }
+      if (nameSuggestReqIdRef.current !== reqId) return;
+      const unique = Array.from(
+        new Map(suggestions.map((s) => [s.fullName.toLowerCase(), s])).values(),
+      ).slice(0, 8);
+      setNameSuggestions(unique);
+      setShowNameSuggestions(unique.length > 0);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [fullName, isLoggedIn]);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
     if (!effectiveClassData) {
       setError(t('trial.noClassSelected'));
+      return;
+    }
+    if (isTrialClassExpired(effectiveClassData)) {
+      setError(t('trial.classNotAvailable', '此試堂時段已過，請選擇其他課堂。'));
       return;
     }
 
@@ -246,6 +336,18 @@ export default function TrialPage() {
       setLoading(true);
       setWasLoggedIn(true);
       try {
+        const applicantName = (
+          profile.full_name ||
+          profile.parents_name ||
+          profile.nick_name ||
+          user.name ||
+          (user.email ? user.email.split('@')[0] : '') ||
+          ''
+        ).trim();
+        if (!applicantName) {
+          setError(t('trial.fullName') + ' ' + t('common.required'));
+          return;
+        }
         const fullContactNumber = profile.mobile || profile.contact_number || '';
         const payload = {
           ...trialApplyClassIdentifiers({
@@ -254,7 +356,7 @@ export default function TrialPage() {
             apiClassRowId: effectiveClassData.apiClassRowId,
           }),
           trialClassName: effectiveClassData.name,
-          fullName: (profile.full_name || user.name || user.email || '').trim(),
+          fullName: applicantName,
           email: (user.email || '').trim().toLowerCase(),
           contactNumber: fullContactNumber || undefined,
           countryCode: undefined,
@@ -265,7 +367,10 @@ export default function TrialPage() {
           sex: profile.sex !== undefined && profile.sex !== null ? profile.sex : undefined,
           parentsName: (profile.parents_name || '').trim() || undefined,
           residentialDistrict: (profile.residential_district || '').trim() || undefined,
-          hasJoinedCourses: profile.has_joined_courses !== undefined && profile.has_joined_courses !== null ? profile.has_joined_courses : undefined,
+          hasJoinedCourses,
+          hasDanceExperience,
+          howDidYouHear: howDidYouHear || undefined,
+          promoCode: promoCode.trim() || undefined,
           // Ask backend to send trial-application confirmation email on success.
           sendConfirmationEmail: true,
           confirmationEmailType: 'trial_application_submitted',
@@ -294,8 +399,6 @@ export default function TrialPage() {
       } catch (err: unknown) {
         if (err instanceof ApiError && err.status === 409 && err.code === 'TRIAL_LOGIN_REQUIRED') {
           handleTrialLoginRequired(effectiveClassData);
-        } else if (err instanceof ApiError && err.status === 409) {
-          setError(t('trial.emailAlreadyRegistered'));
         } else {
           const msg = err instanceof ApiError ? err.message : (err as Error)?.message || t('common.error');
           setError(msg);
@@ -344,8 +447,8 @@ export default function TrialPage() {
         sex: sex !== null ? sex : undefined,
         parentsName: parentsName.trim() || undefined,
         residentialDistrict: residentialDistrict || undefined,
-        hasJoinedCourses: hasJoinedCourses !== null ? hasJoinedCourses : undefined,
-        hasDanceExperience: hasDanceExperience !== null ? hasDanceExperience : undefined,
+        hasJoinedCourses,
+        hasDanceExperience,
         howDidYouHear: howDidYouHear || undefined,
         promoCode: promoCode.trim() || undefined,
         // Ask backend to send trial-application confirmation email on success.
@@ -387,10 +490,6 @@ export default function TrialPage() {
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 409 && err.code === 'TRIAL_LOGIN_REQUIRED') {
         handleTrialLoginRequired(effectiveClassData);
-        return;
-      }
-      if (err instanceof ApiError && err.status === 409) {
-        setError(t('trial.emailAlreadyRegistered'));
         return;
       }
       const msg = err instanceof ApiError ? err.message : (err as Error)?.message || t('common.error');
@@ -485,12 +584,19 @@ export default function TrialPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{t('trial.title')}</h1>
           <p className="text-gray-600 mb-8">{t('trial.chooseTrial')}</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {TRIAL_CLASS_OPTIONS.map((opt) => (
+            {TRIAL_CLASS_OPTIONS.map((opt) => {
+              const expired = isTrialClassExpired(opt);
+              return (
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => setSelectedTrialClass(opt)}
-                className="bg-white rounded-lg shadow-md border border-gray-200 p-5 text-left hover:border-primary hover:shadow-lg transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                onClick={() => !expired && setSelectedTrialClass(opt)}
+                disabled={expired}
+                className={`bg-white rounded-lg shadow-md border border-gray-200 p-5 text-left transition-all focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 ${
+                  expired
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:border-primary hover:shadow-lg'
+                }`}
               >
                 <p className="font-semibold text-gray-900 mb-1">{opt.name}</p>
                 <p className="text-sm text-gray-500 mb-2">{opt.instructor}</p>
@@ -506,8 +612,13 @@ export default function TrialPage() {
                   <span className="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800">{t(`calendar.level.${opt.level}`)}</span>
                   {opt.age_tag && <span className="text-xs px-2 py-0.5 rounded bg-teal-100 text-teal-800">{t(`calendar.ageTag.${opt.age_tag}`)}</span>}
                 </div>
+                {expired && (
+                  <p className="text-xs text-red-600 mt-2">
+                    {t('trial.classNotAvailable', '此試堂時段已過，請選擇其他課堂。')}
+                  </p>
+                )}
               </button>
-            ))}
+            )})}
           </div>
         </div>
       </PublicLayout>
@@ -686,17 +797,52 @@ export default function TrialPage() {
                       <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
                         {t('trial.fullName')} <span className="text-red-600">*</span>
                       </label>
-                      <input
-                        id="fullName"
-                        name="fullName"
-                        type="text"
-                        autoComplete="name"
-                        required
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        placeholder={t('trial.fullName')}
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                      />
+                      <div className="relative">
+                        <input
+                          id="fullName"
+                          name="fullName"
+                          type="text"
+                          autoComplete="name"
+                          required
+                          className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                          placeholder={t('trial.fullName')}
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          onFocus={() => {
+                            if (nameSuggestions.length > 0) setShowNameSuggestions(true);
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowNameSuggestions(false), 120);
+                          }}
+                        />
+                        {showNameSuggestions && nameSuggestions.length > 0 && (
+                          <div className="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-56 overflow-auto">
+                            {nameSuggestions.map((item) => (
+                              <button
+                                key={`${item.fullName}-${item.email || item.contactNumber || ''}`}
+                                type="button"
+                                className="w-full text-left px-3 py-2 hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                                onClick={() => {
+                                  setFullName(item.fullName);
+                                  if (!parentsName.trim() && item.parentsName) setParentsName(item.parentsName);
+                                  if (!email.trim() && item.email) setEmail(item.email);
+                                  if (!contactNumber.trim() && item.contactNumber) {
+                                    setContactNumber(item.contactNumber.replace(/^\+?\d{1,3}/, '').replace(/\D/g, ''));
+                                  }
+                                  setShowNameSuggestions(false);
+                                }}
+                              >
+                                <p className="text-sm font-medium text-gray-900">{item.fullName}</p>
+                                {(item.parentsName || item.email) && (
+                                  <p className="text-xs text-gray-500">
+                                    {item.parentsName || item.email}
+                                  </p>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div>
@@ -841,141 +987,105 @@ export default function TrialPage() {
                       </select>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.hasJoinedCourses')}
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="hasJoinedCourses"
-                            value="yes"
-                            checked={hasJoinedCourses === true}
-                            onChange={() => setHasJoinedCourses(true)}
-                            className="mr-2"
-                          />
-                          {t('common.yes')}
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="hasJoinedCourses"
-                            value="no"
-                            checked={hasJoinedCourses === false}
-                            onChange={() => setHasJoinedCourses(false)}
-                            className="mr-2"
-                          />
-                          {t('common.no')}
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.hasDanceExperience')}
-                      </label>
-                      <div className="flex gap-4">
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="hasDanceExperience"
-                            value="yes"
-                            checked={hasDanceExperience === true}
-                            onChange={() => setHasDanceExperience(true)}
-                            className="mr-2"
-                          />
-                          {t('common.yes')}
-                        </label>
-                        <label className="flex items-center">
-                          <input
-                            type="radio"
-                            name="hasDanceExperience"
-                            value="no"
-                            checked={hasDanceExperience === false}
-                            onChange={() => setHasDanceExperience(false)}
-                            className="mr-2"
-                          />
-                          {t('common.no')}
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="howDidYouHear" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.howDidYouHear')}
-                      </label>
-                      <select
-                        id="howDidYouHear"
-                        name="howDidYouHear"
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        value={howDidYouHear}
-                        onChange={(e) => setHowDidYouHear(e.target.value)}
-                      >
-                        <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
-                        <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
-                        <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
-                        <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
-                        <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
-                        <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label htmlFor="promoCode" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.usedPromoCode', '使用了推廣碼')} <span className="text-gray-400">({t('common.optional')})</span>
-                      </label>
-                      <input
-                        id="promoCode"
-                        name="promoCode"
-                        type="text"
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                      />
-                    </div>
                   </div>
                 )}
 
-                {/* 已登入用戶也可填寫來源／推廣碼 */}
-                {isLoggedIn && (
-                  <div className="rounded-md shadow-sm space-y-4">
-                    <div>
-                      <label htmlFor="howDidYouHearLoggedIn" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.howDidYouHear')}
+                <div className="rounded-md shadow-sm space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('trial.hasJoinedCourses')}
+                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="hasJoinedCourses"
+                          value="yes"
+                          checked={hasJoinedCourses === true}
+                          onChange={() => setHasJoinedCourses(true)}
+                          className="mr-2"
+                        />
+                        {t('common.yes')}
                       </label>
-                      <select
-                        id="howDidYouHearLoggedIn"
-                        name="howDidYouHear"
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        value={howDidYouHear}
-                        onChange={(e) => setHowDidYouHear(e.target.value)}
-                      >
-                        <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
-                        <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
-                        <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
-                        <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
-                        <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
-                        <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label htmlFor="promoCodeLoggedIn" className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('trial.usedPromoCode', '使用了推廣碼')} <span className="text-gray-400">({t('common.optional')})</span>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="hasJoinedCourses"
+                          value="no"
+                          checked={hasJoinedCourses === false}
+                          onChange={() => setHasJoinedCourses(false)}
+                          className="mr-2"
+                        />
+                        {t('common.no')}
                       </label>
-                      <input
-                        id="promoCodeLoggedIn"
-                        name="promoCode"
-                        type="text"
-                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
-                        placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
-                        value={promoCode}
-                        onChange={(e) => setPromoCode(e.target.value)}
-                      />
                     </div>
                   </div>
-                )}
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('trial.hasDanceExperience')}
+                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="hasDanceExperience"
+                          value="yes"
+                          checked={hasDanceExperience === true}
+                          onChange={() => setHasDanceExperience(true)}
+                          className="mr-2"
+                        />
+                        {t('common.yes')}
+                      </label>
+                      <label className="flex items-center">
+                        <input
+                          type="radio"
+                          name="hasDanceExperience"
+                          value="no"
+                          checked={hasDanceExperience === false}
+                          onChange={() => setHasDanceExperience(false)}
+                          className="mr-2"
+                        />
+                        {t('common.no')}
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="howDidYouHear" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('trial.howDidYouHear')}
+                    </label>
+                    <select
+                      id="howDidYouHear"
+                      name="howDidYouHear"
+                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                      value={howDidYouHear}
+                      onChange={(e) => setHowDidYouHear(e.target.value)}
+                    >
+                      <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
+                      <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
+                      <option value="instagram">{t('trial.howDidYouHearOptions.instagram')}</option>
+                      <option value="searchEngine">{t('trial.howDidYouHearOptions.searchEngine')}</option>
+                      <option value="theYardPromo">{t('trial.howDidYouHearOptions.theYardPromo')}</option>
+                      <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="promoCode" className="block text-sm font-medium text-gray-700 mb-1">
+                      {t('trial.usedPromoCode', '使用了推廣碼')} <span className="text-gray-400">({t('common.optional')})</span>
+                    </label>
+                    <input
+                      id="promoCode"
+                      name="promoCode"
+                      type="text"
+                      className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                      placeholder={t('trial.promoCodePlaceholder', '選填，方便統計推廣來源')}
+                      value={promoCode}
+                      onChange={(e) => setPromoCode(e.target.value)}
+                    />
+                  </div>
+                </div>
 
                 <div>
                   <button

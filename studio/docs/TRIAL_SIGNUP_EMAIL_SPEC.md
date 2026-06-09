@@ -391,3 +391,85 @@ ALTER TABLE trial_applications
 ---
 
 若任何 field name 需要調整（例：`accountCreated` → `isNewAccount`），請在這份文件留 comment，前端會用最少改動的方式跟上。
+
+---
+
+## 12. Admin 確認試堂 — 寄給申請人的 Email
+
+當 admin 在試堂管理頁將狀態改為 **已確認**（`confirmed`）並儲存時，前端會對  
+`PATCH /api/admin/trial-applications/:id` 附帶 `sendConfirmationEmail: true` 與下列欄位。  
+**後端必須在狀態由非 `confirmed` → `confirmed` 時寄信**，且 email 內文須包含申請人需要知道的完整試堂資料（不可只寫「已確認」）。
+
+### 12.1 Request（PATCH body 額外欄位）
+
+| 欄位 | 說明 |
+| --- | --- |
+| `sendConfirmationEmail` | `true` |
+| `confirmationEmailType` | `trial_application_confirmed` |
+| `language` | `zh-TW` \| `zh-CN` \| `en` |
+| `applicant_name` | 申請人姓名 |
+| `applicant_email` | 收件 email |
+| `applicant_phone` / `contact_number` | 聯絡電話（建議兩者擇一顯示即可） |
+| `trial_class` | 試堂／課程名稱 |
+| `course_code` | 課程代碼（如有） |
+| `preferred_datetime` / `class_datetime` | ISO 8601 課程日期時間 |
+| `class_datetime_formatted` | 已格式化的日期時間字串（依 `language`） |
+| `branch` | 分店 key（例 `sanpokong`） |
+| `branch_label` | 分店顯示名稱（例「新蒲崗」） |
+| `assigned_class_id` | 已分配班別 id（如有） |
+| `assigned_class_name` | 已分配班別名稱（如有） |
+
+後端亦可從 DB join `profiles`、`classes` 補齊；若 PATCH 已帶齊欄位，**優先使用 PATCH 值**（與 admin 畫面一致）。
+
+### 12.2 Email 必須包含的內容
+
+- 申請人姓名  
+- **聯絡電話**（確認信內可寫「我們記錄的聯絡電話：…」，方便申請人核對）  
+- **課程名稱**（`trial_class` 或 `assigned_class_name`）  
+- **課程日期及時間**（使用 `class_datetime_formatted`，或自行由 `class_datetime` 格式化）  
+- **分店**（使用 `branch_label`，或依 `branch` key 翻譯）  
+- 課程代碼（如有）  
+- 登入連結（查看試堂狀態）  
+- 簡短提醒：請準時到達、如需改期請聯絡中心  
+
+### 12.3 Subject / Body 範例（繁中）
+
+**Subject**：`【The Yard】試堂已確認 — {{trial_class}}`
+
+**Body（plain-text 範例）**：
+
+```
+你好 {{applicant_name}}，
+
+你的試堂申請已確認，詳情如下：
+
+  課程：{{trial_class}}
+  課程代碼：{{course_code}}
+  日期及時間：{{class_datetime_formatted}}
+  分店：{{branch_label}}
+  聯絡電話：{{applicant_phone}}
+
+請準時到達。如需改期或查詢，請聯絡我們或登入查看：
+  {{frontendOrigin}}/dashboard
+
+The Yard
+```
+
+### 12.4 Response
+
+建議在 PATCH 成功 response 加上：
+
+```json
+{
+  "success": true,
+  "data": { "...updated row..." },
+  "confirmationEmailSent": true
+}
+```
+
+寄信失敗時：`confirmationEmailSent: false`，狀態仍可更新，並在 `msg` 提示 admin。
+
+### 12.5 前端實作
+
+- `studio/src/pages/admin/TrialApplicationsPage.tsx` — 儲存時組 payload  
+- `studio/src/lib/trialConfirmedEmailPayload.ts` — 欄位組裝 helper  

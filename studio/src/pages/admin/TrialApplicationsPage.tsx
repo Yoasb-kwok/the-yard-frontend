@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
+import { buildTrialConfirmedEmailPatch } from '../../lib/trialConfirmedEmailPayload';
 import { api } from '../../lib/api';
-import { isDemoMode } from '../../lib/mock';
 import { BookOpen, ChevronDown, ChevronRight, Filter, Pencil, Plus } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
@@ -40,68 +40,6 @@ export interface TrialApplication {
   updated_at?: string;
   trial_date?: string;
 }
-
-const FALLBACK_TRIAL_APPLICATIONS: TrialApplication[] = [
-  {
-    id: 'trial_1',
-    applicant_name: '陳小明',
-    applicant_email: 'ming@example.com',
-    applicant_phone: '91234567',
-    trial_class: '兒童芭蕾試堂',
-    course_code: 'KB-A',
-    branch: 'sanpokong',
-    preferred_datetime: new Date(Date.now() + 3 * 86400000).toISOString(),
-    status: 'pending',
-    assigned_class_id: null,
-    assigned_class_name: null,
-    notes: '',
-    applied_at: new Date(Date.now() - 2 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'trial_2',
-    applicant_name: '李小花',
-    applicant_email: 'flower@example.com',
-    applicant_phone: '92345678',
-    trial_class: '兒童爵士試堂',
-    course_code: 'JAZZ',
-    branch: 'fotan',
-    preferred_datetime: new Date(Date.now() + 5 * 86400000).toISOString(),
-    status: 'confirmed',
-    assigned_class_id: 'cls_1',
-    assigned_class_name: '兒童爵士 A（週五 18:00）',
-    notes: '已致電確認時間',
-    applied_at: new Date(Date.now() - 5 * 86400000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: 'trial_3',
-    applicant_name: '王大明',
-    applicant_email: 'daming@example.com',
-    applicant_phone: '93456789',
-    trial_class: '幼兒律動試堂',
-    course_code: 'KIDS',
-    branch: 'sanpokong',
-    preferred_datetime: new Date(Date.now() + 7 * 86400000).toISOString(),
-    status: 'confirmed',
-    assigned_class_id: 'cls_2',
-    assigned_class_name: '幼兒律動（週六 10:00）',
-    applied_at: new Date(Date.now() - 1 * 86400000).toISOString(),
-  },
-  {
-    id: 'trial_4',
-    applicant_name: '張小美',
-    applicant_email: 'mei@example.com',
-    applicant_phone: '94567890',
-    trial_class: '兒童芭蕾試堂',
-    course_code: 'KB-A',
-    branch: 'causewaybay',
-    status: 'cancelled',
-    notes: '家長取消',
-    applied_at: new Date(Date.now() - 3 * 86400000).toISOString(),
-    trial_date: new Date(Date.now() + 2 * 86400000).toISOString(),
-  },
-];
 
 /** 用戶可選的三個狀態 */
 const SELECTABLE_STATUSES: TrialApplication['status'][] = ['pending', 'confirmed', 'cancelled'];
@@ -231,6 +169,7 @@ export default function TrialApplicationsPage() {
     Array<{ id: string; code: string; name: string; location: string }>
   >([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!openStatusMenuId) return;
@@ -381,17 +320,8 @@ export default function TrialApplicationsPage() {
       setEditStatus(initialStatus);
       setEditNotes(initialNotes);
     } catch {
-      const fallbackList = isDemoMode() ? FALLBACK_TRIAL_APPLICATIONS : [];
-      setApplications(fallbackList);
-      setLoadError(
-        isDemoMode()
-          ? null
-          : t('admin.trialApplications.loadError', '未能載入試堂申請，請檢查後端服務或稍後重試。')
-      );
-      fallbackList.forEach((a) => {
-        setEditStatus((prev) => ({ ...prev, [a.id]: toSelectableStatus(a.status) }));
-        setEditNotes((prev) => ({ ...prev, [a.id]: String(a.notes ?? '') }));
-      });
+      setApplications([]);
+      setLoadError(t('admin.trialApplications.loadError', '未能載入試堂申請，請檢查後端服務或稍後重試。'));
     } finally {
       setLoading(false);
     }
@@ -399,7 +329,7 @@ export default function TrialApplicationsPage() {
 
   async function loadClassCodeCandidates() {
     try {
-      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
+      const endpoints = ['/admin/classes', '/classes'];
       let rows: any[] = [];
       for (const endpoint of endpoints) {
         try {
@@ -489,6 +419,29 @@ export default function TrialApplicationsPage() {
 
     return '—';
   }
+
+  function resolveApplicationBranchKey(app: TrialApplication): string | null {
+    const direct = String(app.branch ?? '').trim();
+    if (direct) return direct;
+    const classId = app.assigned_class_id ?? app.class_id;
+    if (classId != null) {
+      const fromClass = classLocationById.get(String(classId));
+      if (fromClass) return fromClass;
+    }
+    const className = String(app.assigned_class_name ?? '').trim().toLowerCase();
+    if (className) {
+      const fromName = classLocationByName.get(className);
+      if (fromName) return fromName;
+    }
+    return null;
+  }
+
+  function getTrialClassDatetimeDisplay(app: TrialApplication): string {
+    const iso = app.preferred_datetime ?? app.trial_date;
+    if (!iso) return '—';
+    return formatDateTime(iso, getLocale());
+  }
+
   function getDistrictLabel(districtKey: string | null | undefined): string {
     const value = String(districtKey ?? '').trim();
     if (!value) return '—';
@@ -497,7 +450,7 @@ export default function TrialApplicationsPage() {
     return translated !== key ? translated : value;
   }
   function getBooleanLabel(value: boolean | null | undefined): string {
-    if (value == null) return '—';
+    if (value == null) return t('common.no', { defaultValue: '否' });
     return value ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' });
   }
 
@@ -521,14 +474,26 @@ export default function TrialApplicationsPage() {
   async function saveAllStatuses() {
     if (changedRowIds.length === 0 || savingStatuses) return;
     setSavingStatuses(true);
+    setSaveSuccessMessage(null);
     try {
       const updates = await Promise.all(
         changedRowIds.map(async (id) => {
           const app = applications.find((a) => a.id === id);
-          if (!app) return { id, row: null as TrialApplication | null };
+          if (!app) return { id, row: null as TrialApplication | null, statusChanged: false };
+          const previousStatus = toSelectableStatus(app.status);
           const status = toSelectableStatus(editStatus[id] ?? app.status);
           const notes = String(editNotes[id] ?? app.notes ?? '').trim();
-          const payload: { status: string; notes: string } = { status, notes };
+          const payload: Record<string, unknown> = { status, notes };
+          if (status === 'confirmed' && previousStatus !== 'confirmed') {
+            const emailExtras = buildTrialConfirmedEmailPatch(app, {
+              language: i18n.language || 'zh-TW',
+              branchKey: resolveApplicationBranchKey(app),
+              branchLabel: getDisplayBranch(app),
+              courseCode: getDisplayCourseCode(app),
+              classDatetimeFormatted: getTrialClassDatetimeDisplay(app),
+            });
+            if (emailExtras) Object.assign(payload, emailExtras);
+          }
           const res = await api.patch<Record<string, unknown>>(`/admin/trial-applications/${id}`, payload);
           if (!res.success) throw new Error(res.msg || 'Update failed');
           const serverRow = normalizeTrialApplicationRow(res.data);
@@ -540,7 +505,7 @@ export default function TrialApplicationsPage() {
               notes,
               updated_at: new Date().toISOString(),
             } as TrialApplication);
-          return { id, row };
+          return { id, row, statusChanged: previousStatus !== status };
         })
       );
 
@@ -562,6 +527,17 @@ export default function TrialApplicationsPage() {
       });
       setOpenStatusMenuId(null);
       setOpenNoteEditorId(null);
+      const statusChangedCount = updates.filter((u) => u.statusChanged).length;
+      setSaveSuccessMessage(
+        t(
+          'common.statusesUpdated',
+          {
+            count: statusChangedCount,
+            defaultValue: `${statusChangedCount} 個狀態已修改`,
+          },
+        ),
+      );
+      window.setTimeout(() => setSaveSuccessMessage(null), 3000);
     } catch (err) {
       console.error('Failed to save trial application statuses', err);
       const msg = err instanceof Error ? err.message : t('common.error', 'Something went wrong.');
@@ -631,6 +607,11 @@ export default function TrialApplicationsPage() {
         {loadError && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {loadError}
+          </div>
+        )}
+        {saveSuccessMessage && (
+          <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+            {saveSuccessMessage}
           </div>
         )}
 

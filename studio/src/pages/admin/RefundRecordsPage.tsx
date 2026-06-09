@@ -1,39 +1,20 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { formatDateTime } from '../../lib/utils';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
+import { normalizeRefundRecords, type RefundRecord } from '../../lib/adminRefundRecords';
 import { Search, RefreshCw, RotateCcw } from 'lucide-react';
-import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
-
-export interface RefundRecord {
-  id: string;
-  enrollment_id: string;
-  user_id: string;
-  user_name: string;
-  class_id: string;
-  class_name: string;
-  class_code: string;
-  tokens_refunded: number;
-  remarks: string;
-  refunded_by: string;
-  refunded_at: string;
-}
-
-/** Fallback demo data when API is unavailable */
-const FALLBACK_REFUND_RECORDS: RefundRecord[] = [
-  { id: 'refund_1', enrollment_id: 'enr_1', user_id: 'student-001', user_name: 'Student One', class_id: 'cls_1', class_name: 'Kids Ballet', class_code: 'KB-A', tokens_refunded: 1, remarks: 'Sick leave', refunded_by: 'admin', refunded_at: new Date().toISOString() },
-];
 
 export default function RefundRecordsPage() {
   const { t, i18n } = useTranslation();
   const [records, setRecords] = useState<RefundRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [lastLoadedAt, setLastLoadedAt] = useState<Date | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
   const [sortKey, setSortKey] = useState<string | null>('refunded_at');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
@@ -46,42 +27,57 @@ export default function RefundRecordsPage() {
     return langMap[i18n.language] || i18n.language || 'en-US';
   };
 
-  const loadRecords = useCallback(async () => {
+  async function loadRecords() {
     setLoading(true);
+    setLoadError(null);
     try {
-      const res = await api.get<RefundRecord[]>('admin/refund-records?demo=1').catch(() => ({ success: true, data: FALLBACK_REFUND_RECORDS }));
-      setRecords(res.data ?? FALLBACK_REFUND_RECORDS);
+      const params: Record<string, string> = {};
+      if (searchTerm.trim()) params.search = searchTerm.trim();
+
+      const res = await api.get<unknown>('/admin/refund-records', params);
+      if (res.success === false) {
+        throw new Error(res.msg || res.message || 'Failed to load refund records');
+      }
+      const rows = normalizeRefundRecords(res.data ?? res);
+      setRecords(rows);
+      setLastLoadedAt(new Date());
     } catch (err) {
       console.error('Failed to load refund records:', err);
-      setRecords(FALLBACK_REFUND_RECORDS);
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : t('admin.refundRecords.loadFailed', '無法載入退款記錄');
+      setLoadError(msg);
+      setRecords([]);
     } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    void loadRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load only
   }, []);
 
   useEffect(() => {
-    loadRecords();
-  }, [loadRecords]);
-
-  useEffect(() => {
-    const handler = () => loadRecords();
+    const handler = () => {
+      void loadRecords();
+    };
     window.addEventListener('refund-record-added', handler);
     return () => window.removeEventListener('refund-record-added', handler);
-  }, [loadRecords]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- always use latest filters on event
+  }, [searchTerm]);
 
   const filtered = records.filter((r) => {
-    const matchSearch =
-      !searchTerm ||
-      r.user_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (r.class_name && r.class_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (r.class_code && r.class_code.toLowerCase().includes(searchTerm.toLowerCase()));
-    if (!matchSearch) return false;
-    if (dateFrom || dateTo) {
-      const d = new Date(r.refunded_at).getTime();
-      if (dateFrom && d < new Date(dateFrom + 'T00:00:00').getTime()) return false;
-      if (dateTo && d > new Date(dateTo + 'T23:59:59').getTime()) return false;
-    }
-    return true;
+    if (!searchTerm) return true;
+    const q = searchTerm.toLowerCase();
+    return (
+      r.user_name.toLowerCase().includes(q) ||
+      (r.class_name && r.class_name.toLowerCase().includes(q)) ||
+      (r.class_code && r.class_code.toLowerCase().includes(q))
+    );
   });
 
   const sorted = [...filtered].sort((a, b) => {
@@ -104,7 +100,7 @@ export default function RefundRecordsPage() {
     pageSize: refundPageSize,
     totalItems: refundTotalItems,
     paginatedItems: paginatedRefunds,
-  } = useTablePagination(sorted, undefined, [searchTerm, dateFrom, dateTo, sortKey, sortDir]);
+  } = useTablePagination(sorted, undefined, [searchTerm, sortKey, sortDir]);
 
   function handleSort(key: string) {
     if (sortKey === key) {
@@ -113,16 +109,6 @@ export default function RefundRecordsPage() {
       setSortKey(key);
       setSortDir('asc');
     }
-  }
-
-  if (loading && records.length === 0) {
-    return (
-      <Layout>
-        <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary" />
-        </div>
-      </Layout>
-    );
   }
 
   return (
@@ -139,54 +125,62 @@ export default function RefundRecordsPage() {
             </div>
           </div>
           <button
-            onClick={loadRecords}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+            type="button"
+            onClick={() => void loadRecords()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-60"
           >
-            <RefreshCw className="h-4 w-4" />
-            {t('admin.refundRecords.refresh')}
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? t('common.loading', '載入中…') : t('admin.refundRecords.refresh')}
           </button>
         </div>
 
+        {loadError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {loadError}
+            <span className="block text-xs text-red-600 mt-1">
+              {t('admin.refundRecords.apiHint', '請確認後端已部署 GET /api/admin/refund-records 且 refund_records 資料表存在。')}
+            </span>
+          </div>
+        )}
+        {lastLoadedAt && !loadError && (
+          <p className="text-xs text-gray-500">
+            {t('admin.refundRecords.lastLoaded', {
+              count: records.length,
+              time: formatDateTime(lastLoadedAt.toISOString(), getLocale()),
+              defaultValue: '共 {{count}} 筆 · 上次更新 {{time}}',
+            })}
+          </p>
+        )}
+
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           <div className="p-4 border-b border-gray-200">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder={t('admin.refundRecords.searchPlaceholder')}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-              </div>
-              <div className="flex gap-2 flex-wrap items-end">
-                <div>
-                  <span className="block text-xs text-gray-500 mb-1">{t('admin.refundRecords.dateFrom')}</span>
-                  <DateSelect
-                    value={dateFrom}
-                    onChange={setDateFrom}
-                    className="px-3 py-2 text-sm"
-                    ariaLabel={t('admin.refundRecords.dateFrom')}
-                  />
-                </div>
-                <div>
-                  <span className="block text-xs text-gray-500 mb-1">{t('admin.refundRecords.dateTo')}</span>
-                  <DateSelect
-                    value={dateTo}
-                    onChange={setDateTo}
-                    className="px-3 py-2 text-sm"
-                    ariaLabel={t('admin.refundRecords.dateTo')}
-                  />
-                </div>
-              </div>
+            <div className="relative max-w-md">
+              <span
+                className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400"
+                aria-hidden="true"
+              >
+                <Search className="h-4 w-4 shrink-0" />
+              </span>
+              <input
+                type="text"
+                placeholder={t('admin.refundRecords.searchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="block w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm leading-5 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+              />
             </div>
           </div>
 
-          {sorted.length === 0 ? (
+          {loading && records.length === 0 ? (
+            <div className="py-16 flex justify-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+            </div>
+          ) : sorted.length === 0 ? (
             <div className="py-16 text-center">
               <RotateCcw className="h-12 w-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-600">{t('admin.refundRecords.noRecords')}</p>
+              <p className="text-sm text-gray-500 mt-1">{t('admin.refundRecords.noRecordsHint')}</p>
             </div>
           ) : (
             <>

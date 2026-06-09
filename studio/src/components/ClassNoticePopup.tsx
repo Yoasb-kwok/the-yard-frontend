@@ -47,19 +47,6 @@ function addDismissedId(id: string) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
 }
 
-/** Demo notice when API is unavailable (e.g. no backend) so the popup can be tested. */
-function getDemoClassNotices(): ClassNoticeItem[] {
-  return [
-    {
-      id: 'demo-class-notice-1',
-      class_id: 0,
-      class_name: '兒童芭蕾 A',
-      message: '本週六因場地維修，原定 10:00 課堂改為 14:00 上課，請準時出席。',
-      created_at: new Date().toISOString(),
-    },
-  ];
-}
-
 export default function ClassNoticePopup() {
   const { t, i18n } = useTranslation();
   const { profile } = useAuth();
@@ -88,11 +75,8 @@ export default function ClassNoticePopup() {
       .then((res) => {
         const data = (res as any).data;
         if (!Array.isArray(data)) {
-          const demo = getDemoClassNotices();
-          const dismissed = getDismissedIds();
-          const unseen = demo.filter((n) => !dismissed.includes(String(n.id)));
-          setNotices(unseen);
-          setOpen(unseen.length > 0);
+          setNotices([]);
+          setOpen(false);
           setCurrentIndex(0);
           return;
         }
@@ -103,11 +87,8 @@ export default function ClassNoticePopup() {
         setCurrentIndex(0);
       })
       .catch(() => {
-        const demo = getDemoClassNotices();
-        const dismissed = getDismissedIds();
-        const unseen = demo.filter((n) => !dismissed.includes(String(n.id)));
-        setNotices(unseen);
-        setOpen(unseen.length > 0);
+        setNotices([]);
+        setOpen(false);
         setCurrentIndex(0);
       })
       .finally(() => setLoading(false));

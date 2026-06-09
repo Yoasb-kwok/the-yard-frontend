@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import PublicLayout from '../../components/PublicLayout';
 import { formatDate } from '../../lib/utils';
 import { ArrowLeft } from 'lucide-react';
-import { getStoredNewsPosts, getDemoNewsPosts } from '../../lib/newsStorage';
 import { api } from '../../lib/api';
 import { resolveUploadUrl } from '../../lib/uploads';
 
@@ -65,21 +64,9 @@ export default function NewsDetailPage() {
         return;
       }
     } catch {
-      // API failed, use stored or demo
+      // API failed
     }
-    const stored = getStoredNewsPosts();
-    const fromStored = stored.find((p) => p.id === id);
-    if (fromStored) {
-      setPost(toNewsPost(fromStored, lang));
-    } else {
-      const demo = getDemoNewsPosts(i18n.language);
-      const foundPost = demo.find((p) => p.id === id);
-      if (foundPost) {
-        setPost({ id: foundPost.id, title: foundPost.title, content: foundPost.content, image_url: foundPost.image_url, published_at: foundPost.published_at });
-      } else {
-        setPost(null);
-      }
-    }
+    setPost(null);
     setLoading(false);
   }
 

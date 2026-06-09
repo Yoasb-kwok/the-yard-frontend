@@ -7,12 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { containsWhitespace, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
-import {
-  getFallbackUpcomingClasses,
-  shouldUseDemoUpcomingClasses,
-  type EnrolledClass,
-} from '../../lib/studentEnrollments';
-import { Home, User, ChevronRight, Plus, KeyRound, Mail, Phone, Bell, Users, Calendar } from 'lucide-react';
+import { pickEnrollmentProfileId, type EnrolledClass } from '../../lib/studentEnrollments';
+import { fetchStudentUpcomingClasses } from '../../lib/studentUpcomingClasses';
+import { Home, User, ChevronRight, Plus, KeyRound, Mail, Phone, Users, Calendar } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import AccountSecurityCard from '../../components/AccountSecurityCard';
 
@@ -45,6 +42,7 @@ export default function DashboardPage() {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddProfileData & { has_joined_courses: boolean }>(emptyAddForm());
   const [addMemberError, setAddMemberError] = useState<string | null>(null);
+  const [addMemberSaving, setAddMemberSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [parentForm, setParentForm] = useState({
@@ -53,10 +51,6 @@ export default function DashboardPage() {
     residential_district: '',
   });
   const [parentSaveMessage, setParentSaveMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (primaryProfileId) switchProfile(primaryProfileId);
-  }, [primaryProfileId, switchProfile]);
 
   useEffect(() => {
     if (!masterProfile) return;
@@ -73,7 +67,7 @@ export default function DashboardPage() {
       map[p.id] = { count: 0, name: p.full_name ?? t('dashboard.child') };
     });
     upcomingClasses.forEach((e) => {
-      const id = (e.profile_id || e.user_id || '').trim();
+      const id = pickEnrollmentProfileId(e) ?? '';
       if (!id) return;
       if (map[id]) {
         map[id].count += 1;
@@ -98,27 +92,25 @@ export default function DashboardPage() {
 
   async function loadUpcomingClasses() {
     setLoading(true);
-    const fallback = profiles?.flatMap((p) =>
-      shouldUseDemoUpcomingClasses(p.id) ? getFallbackUpcomingClasses(p.id, p.full_name) : []
-    ) ?? [];
     const token = localStorage.getItem('token');
     if (!token) {
-      setUpcomingClasses(fallback);
+      setUpcomingClasses([]);
       setLoading(false);
       return;
     }
     try {
-      const classesRes = await api.get<{ data?: UpcomingClass[] }>('/student/upcoming-classes');
-      const classesData = (classesRes as { data?: UpcomingClass[] }).data;
-      setUpcomingClasses(Array.isArray(classesData) && classesData.length > 0 ? classesData : fallback);
+      const classesData = await fetchStudentUpcomingClasses(undefined, {
+        singleProfileAccount: (profiles?.length ?? 0) <= 1,
+      });
+      setUpcomingClasses(classesData);
     } catch {
-      setUpcomingClasses(fallback);
+      setUpcomingClasses([]);
     } finally {
       setLoading(false);
     }
   }
 
-  function handleSaveParentInfo(e: React.FormEvent) {
+  async function handleSaveParentInfo(e: React.FormEvent) {
     e.preventDefault();
     if (!masterProfile || !profiles?.length) return;
     const payload = {
@@ -126,9 +118,14 @@ export default function DashboardPage() {
       contact_number: parentForm.contact_number.trim() || null,
       residential_district: parentForm.residential_district || null,
     };
-    profiles.forEach((p) => updateProfile(p.id, payload));
-    setParentSaveMessage(t('profile.mainAccountUpdated'));
-    setTimeout(() => setParentSaveMessage(null), 3000);
+    try {
+      await Promise.all(profiles.map((p) => updateProfile(p.id, payload)));
+      setParentSaveMessage(t('profile.mainAccountUpdated'));
+      setTimeout(() => setParentSaveMessage(null), 3000);
+    } catch (err) {
+      setParentSaveMessage(err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗'));
+      setTimeout(() => setParentSaveMessage(null), 5000);
+    }
   }
 
   if (loading) {
@@ -305,14 +302,6 @@ export default function DashboardPage() {
               <div className="rounded-xl border border-gray-200 p-4">
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">{t('dashboard.quickLinks', '快捷入口')}</h3>
                 <nav className="space-y-1">
-                  <Link
-                    to="/notifications"
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    <Bell className="h-4 w-4 text-gray-400" />
-                    {t('nav.notifications', '訊息中心')}
-                    <ChevronRight className="h-4 w-4 ml-auto text-gray-300" />
-                  </Link>
                   {profiles && profiles.length > 0 && (
                     <button
                       type="button"
@@ -338,6 +327,7 @@ export default function DashboardPage() {
           mobile={user?.mobile ?? (masterProfile?.contact_number ?? masterProfile?.mobile ?? null)}
           onAccountUpdated={() => refreshMe()}
           initialOpenPasswordModal={requirePasswordChange || searchParams.get('changePassword') === '1'}
+          allowEmailMobileUpdate={false}
         />
 
         <p className="text-sm text-gray-600">{t('dashboard.scheduleHint')}</p>
@@ -348,7 +338,7 @@ export default function DashboardPage() {
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-4 shadow-xl sm:p-6">
             <h3 className="mb-4 text-lg font-semibold text-gray-900">{t('profile.addFamilyMember')}</h3>
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 setAddMemberError(null);
                 if (!addForm.full_name.trim()) return;
@@ -356,22 +346,30 @@ export default function DashboardPage() {
                   setAddMemberError(t('common.usernameNoSpaces'));
                   return;
                 }
-                addProfile({
-                  full_name: addForm.full_name.trim(),
-                  nick_name: addForm.nick_name || null,
-                  date_of_birth: addForm.date_of_birth || null,
-                  sex: addForm.sex,
-                  parents_name: addForm.parents_name || null,
-                  contact_number: addForm.contact_number || null,
-                  residential_district: addForm.residential_district || null,
-                  has_joined_courses: addForm.has_joined_courses,
-                  level: addForm.level,
-                });
-                setAddMemberOpen(false);
-                setAddForm(emptyAddForm());
-                setAddMemberError(null);
-                setSuccessMessage(t('profile.memberAdded'));
-                setTimeout(() => setSuccessMessage(null), 3000);
+                setAddMemberSaving(true);
+                try {
+                  await addProfile({
+                    full_name: addForm.full_name.trim(),
+                    nick_name: addForm.nick_name || null,
+                    date_of_birth: addForm.date_of_birth || null,
+                    sex: addForm.sex,
+                    parents_name: addForm.parents_name || null,
+                    contact_number: addForm.contact_number || null,
+                    residential_district: addForm.residential_district || null,
+                    has_joined_courses: addForm.has_joined_courses,
+                    level: addForm.level,
+                  });
+                  setAddMemberOpen(false);
+                  setAddForm(emptyAddForm());
+                  setSuccessMessage(t('profile.memberAdded'));
+                  setTimeout(() => setSuccessMessage(null), 3000);
+                } catch (err) {
+                  setAddMemberError(
+                    err instanceof Error ? err.message : t('common.saveFailed', '儲存失敗'),
+                  );
+                } finally {
+                  setAddMemberSaving(false);
+                }
               }}
               className="space-y-4"
             >
@@ -495,8 +493,12 @@ export default function DashboardPage() {
                 >
                   {t('common.cancel')}
                 </button>
-                <button type="submit" className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark">
-                  {t('common.create')}
+                <button
+                  type="submit"
+                  disabled={addMemberSaving}
+                  className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary-dark disabled:opacity-50"
+                >
+                  {addMemberSaving ? t('common.loading') : t('common.create')}
                 </button>
               </div>
             </form>

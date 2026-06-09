@@ -6,10 +6,9 @@ import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from 
 import { formatDateTimeRange, shouldPostponeClassWithHolidays, formatProgramCodeDisplay, parseAgeRange, ageRangeToTag } from '../../lib/utils';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
-import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users } from 'lucide-react';
+import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users, Trash2 } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, useAuth } from '../../contexts/AuthContext';
-import { getFallbackClassesForAdmin } from '../../lib/demoCourses';
 import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
 
 interface Class {
@@ -85,53 +84,6 @@ interface Instructor {
 
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
 
-/** Fallback demo: 與主頁/日曆一致，用共用 demo 課程 */
-const FALLBACK_CLASSES: Class[] = getFallbackClassesForAdmin();
-const FALLBACK_INSTRUCTORS: Instructor[] = [
-  { id: 'inst_1', name: '李老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_2', name: '陳老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_3', name: '王老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_4', name: '張老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_5', name: '黃老師', profile_image_url: null, created_at: new Date().toISOString() },
-  { id: 'inst_6', name: '林老師', profile_image_url: null, created_at: new Date().toISOString() },
-];
-
-/** Demo enrollments for attendance list when API returns no data */
-function getFallbackEnrollments(classId: string, enrolledCount: number): Enrollment[] {
-  const now = new Date();
-  const created = now.toISOString().slice(0, 10);
-  const demoStudents: { name: string; mobile: string }[] = [
-    { name: '陳小明', mobile: '85291234567' },
-    { name: '李美儀', mobile: '85292345678' },
-    { name: '黃家豪', mobile: '85293456789' },
-    { name: '張心怡', mobile: '85294567890' },
-    { name: '王俊傑', mobile: '85295678901' },
-    { name: '林曉晴', mobile: '85296789012' },
-    { name: '劉子軒', mobile: '85297890123' },
-    { name: '何思敏', mobile: '85298901234' },
-  ];
-  const statuses: Enrollment['status'][] = ['attended', 'attended', 'enrolled', 'absent', 'sick_leave'];
-  const count = Math.min(Math.max(enrolledCount, 1), demoStudents.length);
-  return Array.from({ length: count }, (_, i) => {
-    const s = demoStudents[i];
-    const status = statuses[i % statuses.length];
-    const checkIn = status === 'attended' ? '14:00' : null;
-    const checkOut = status === 'attended' ? '15:00' : null;
-    return {
-      id: `enr_demo_${classId}_${i + 1}`,
-      class_id: classId,
-      user_id: `user_demo_${i + 1}`,
-      user_name: s.name,
-      user_mobile: s.mobile,
-      status,
-      check_in_time: checkIn,
-      check_out_time: checkOut,
-      sick_leave_document_url: null,
-      created_at: `${created}T00:00:00.000Z`,
-    };
-  });
-}
-
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
 function getClassDisplayName(c: Class): string {
@@ -162,6 +114,14 @@ function buildDefaultTagValues(
   if (!out.level) out.level = 'entry';
   if (!out.age) out.age = '5-8';
   return out;
+}
+
+function isNumericClassId(id: string | number): boolean {
+  return /^[1-9][0-9]*$/.test(String(id));
+}
+
+function toLocalDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
 export default function ClassesPage() {
@@ -212,6 +172,8 @@ export default function ClassesPage() {
     [tagTypes]
   );
   const [expandedAttendanceClassId, setExpandedAttendanceClassId] = useState<string | null>(null);
+  const [deleteTargetClass, setDeleteTargetClass] = useState<Class | null>(null);
+  const [deleteMode, setDeleteMode] = useState<'single' | 'series'>('single');
   const [attendanceData, setAttendanceData] = useState<{
     class: ClassWithAttendance;
     enrollments: Enrollment[];
@@ -285,20 +247,8 @@ export default function ClassesPage() {
   async function loadClasses() {
     try {
       setLoading(true);
-      const endpoints = ['/admin/classes', '/admin/classes?demo=1', '/classes'];
-      let rows: any[] = [];
-      for (const endpoint of endpoints) {
-        try {
-          const response = await api.get<any[]>(endpoint);
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            rows = response.data;
-            break;
-          }
-        } catch {
-          // Try next endpoint.
-        }
-      }
-      const sourceRows = rows.length > 0 ? rows : FALLBACK_CLASSES;
+      const response = await api.get<any[]>('/admin/classes');
+      const sourceRows = response.success && Array.isArray(response.data) ? response.data : [];
       const transformedClasses: Class[] = sourceRows.map((cls: any) => ({
         id: cls.id?.toString() ?? cls.id,
         name: cls.name ?? cls.class_name ?? '',
@@ -326,7 +276,7 @@ export default function ClassesPage() {
       setClasses(transformedClasses);
     } catch (error) {
       console.error('Error loading classes:', error);
-      setClasses(FALLBACK_CLASSES);
+      setClasses([]);
     } finally {
       setLoading(false);
     }
@@ -334,20 +284,8 @@ export default function ClassesPage() {
 
   async function loadInstructors() {
     try {
-      const endpoints = ['admin/instructors', 'admin/instructors?demo=1'];
-      let rows: any[] = [];
-      for (const endpoint of endpoints) {
-        try {
-          const response = await api.get<any[]>(endpoint);
-          if (response.success && Array.isArray(response.data) && response.data.length > 0) {
-            rows = response.data;
-            break;
-          }
-        } catch {
-          // Try next endpoint.
-        }
-      }
-      const sourceRows = rows.length > 0 ? rows : FALLBACK_INSTRUCTORS;
+      const response = await api.get<any[]>('/admin/instructors');
+      const sourceRows = response.success && Array.isArray(response.data) ? response.data : [];
       setInstructors(
         sourceRows.map((inst: any) => ({
           id: String(inst.id),
@@ -358,7 +296,7 @@ export default function ClassesPage() {
       );
     } catch (error) {
       console.error('Error loading instructors:', error);
-      setInstructors(FALLBACK_INSTRUCTORS);
+      setInstructors([]);
     }
   }
 
@@ -371,23 +309,21 @@ export default function ClassesPage() {
     try {
       const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
       const list = res.success && Array.isArray(res.data) ? res.data : [];
-      const enrollments: Enrollment[] = list.length > 0
-        ? list.map((e: any) => ({
-            id: String(e.id),
-            class_id: classId,
-            user_id: e.user_id ?? '',
-            user_name: e.user_name ?? '',
-            user_mobile: e.user_mobile ?? null,
-            status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
-            check_in_time: e.check_in_time ?? null,
-            check_out_time: e.check_out_time ?? null,
-            sick_leave_document_url: e.sick_leave_document_url ?? null,
-            created_at: e.created_at ?? '',
-          }))
-        : getFallbackEnrollments(classId, c.enrolled_count);
+      const enrollments: Enrollment[] = list.map((e: any) => ({
+        id: String(e.id),
+        class_id: classId,
+        user_id: e.user_id ?? '',
+        user_name: e.user_name ?? '',
+        user_mobile: e.user_mobile ?? null,
+        status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+        check_in_time: e.check_in_time ?? null,
+        check_out_time: e.check_out_time ?? null,
+        sick_leave_document_url: e.sick_leave_document_url ?? null,
+        created_at: e.created_at ?? '',
+      }));
       return { class: classWithAttendance, enrollments };
     } catch {
-      return { class: classWithAttendance, enrollments: getFallbackEnrollments(classId, c.enrolled_count) };
+      return { class: classWithAttendance, enrollments: [] };
     }
   }
 
@@ -526,6 +462,89 @@ export default function ClassesPage() {
     );
   }
 
+  const recurringLastLessonDate = useMemo(() => {
+    if (editingClass || !form.repeat_weekly || !form.date) return null;
+    const total = Math.floor(Number(form.total_lessons)) || 0;
+    if (total < 1) return null;
+    const cursor = new Date(`${form.date}T00:00:00`);
+    if (Number.isNaN(cursor.getTime())) return null;
+    let count = 0;
+    while (count < total) {
+      const key = toLocalDateKey(cursor);
+      if (!holidayDatesSet.has(key)) count += 1;
+      if (count >= total) break;
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    return new Date(cursor);
+  }, [editingClass, form.repeat_weekly, form.date, form.total_lessons, holidayDatesSet]);
+
+  async function bulkDeleteClasses(classIds: Array<string | number>) {
+    const ids = Array.from(
+      new Set(
+        classIds
+          .map((id) => Number(id))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    );
+    if (ids.length === 0) {
+      throw new Error('No valid class ids to delete');
+    }
+    const response = await api.post<{
+      requested_count?: number;
+      deleted_count?: number;
+    }>('/admin/classes/bulk-delete', { ids });
+    if (!response.success) {
+      throw new Error(response.msg || 'Failed to delete classes');
+    }
+    return {
+      requested_count: Number(response.data?.requested_count ?? ids.length),
+      deleted_count: Number(response.data?.deleted_count ?? 0),
+    };
+  }
+
+  async function handleDeleteClass(classItem: Class, deleteSeries: boolean) {
+    const repeated = findRepeatedClasses(classItem).filter((c) => isNumericClassId(c.id));
+    const targetClasses = deleteSeries ? [classItem, ...repeated] : [classItem];
+    if (!isNumericClassId(classItem.id)) {
+      alert(t('admin.classes.demoDataCannotEdit'));
+      return;
+    }
+
+    try {
+      const result = await bulkDeleteClasses(targetClasses.map((c) => c.id));
+      await loadClasses();
+      if (deleteSeries) {
+        if (result.deleted_count === result.requested_count) {
+          alert(t('admin.classes.classesDeleted', { count: result.deleted_count }));
+        } else if (result.deleted_count > 0) {
+          alert(
+            t('admin.classes.classesDeletedPartial', {
+              deleted: result.deleted_count,
+              requested: result.requested_count,
+            }),
+          );
+        } else {
+          alert(t('admin.classes.classesDeletedNone'));
+        }
+        return;
+      }
+
+      if (result.deleted_count > 0) {
+        alert(t('admin.classes.classDeleted'));
+      } else {
+        alert(t('admin.classes.classesDeletedNone'));
+      }
+    } catch (error) {
+      console.error('Error deleting class:', error);
+      alert(error instanceof Error ? error.message : t('common.error'));
+    }
+  }
+
+  function openDeleteDialog(classItem: Class) {
+    setDeleteTargetClass(classItem);
+    setDeleteMode('single');
+  }
+
   /** Build datetime string for API: local date + time as "YYYY-MM-DDTHH:mm:ss" (no Z) so backend stores the same time. */
   function toLocalDateTimeString(dateStr: string, timeStr: string): string {
     if (!dateStr || !timeStr) return '';
@@ -658,8 +677,7 @@ export default function ClassesPage() {
     const selectedAgeTagCode = form.tag_values.age || ageRangeToTag(form.lowest_age, form.oldest_age);
     // If editing, update the existing class(es)
     if (editingClass) {
-      const isNumericId = (id: string | number) => /^[1-9][0-9]*$/.test(String(id));
-      if (!isNumericId(editingClass.id)) {
+      if (!isNumericClassId(editingClass.id)) {
         alert(t('admin.classes.demoDataCannotEdit') || '此課程為示範資料，無法儲存。請重新載入頁面取得真實課程後再編輯。');
         return;
       }
@@ -678,7 +696,7 @@ export default function ClassesPage() {
           
           // Update each class via API
           const updatePromises = allClassesToUpdate
-            .filter((c) => isNumericId(c.id))
+            .filter((c) => isNumericClassId(c.id))
             .map(async (c) => {
             // Calculate new times for this class
             const classStart = new Date(c.start_time);
@@ -1000,58 +1018,6 @@ export default function ClassesPage() {
       allow_trial: true,
       tag_values: buildDefaultTagValues(tagTypes),
     });
-  }
-
-  async function toggleCancel(classId: string, currentStatus: boolean) {
-    try {
-      const updateData = {
-        is_cancelled: !currentStatus ? 1 : 0,
-      };
-      
-      const response = await api.patch(`/admin/classes/${classId}`, updateData);
-      
-      if (response.success && response.data) {
-        // Transform API response to match frontend Class interface
-        const updatedClass: Class = {
-          id: response.data.id.toString(),
-          name: response.data.name,
-          name_zh_tw: getClassNameByLang(response.data, 'zh_tw'),
-          name_zh_cn: getClassNameByLang(response.data, 'zh_cn'),
-          name_en: getClassNameByLang(response.data, 'en'),
-          class_code: response.data.class_code || response.data.program_code || '',
-          instructor: response.data.instructor || '',
-          substitute_instructor: response.data.substitute_instructor || null,
-          start_time: response.data.start_time,
-          end_time: response.data.end_time,
-          capacity: response.data.capacity,
-          enrolled_count: response.data.enrolled_count || 0,
-          is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
-          is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
-          allow_trial: response.data.allow_trial === 1 || response.data.allow_trial === true,
-          location: response.data.location,
-          level: response.data.level,
-          age_tag: response.data.age_group as AgeTag,
-          tag_values: extractClassTagValues(response.data),
-        };
-        
-        setClasses(classes.map(c => 
-          c.id === classId ? updatedClass : c
-        ));
-        
-        // Update attendance data if it's currently expanded
-        if (attendanceData && attendanceData.class.id === classId) {
-          setAttendanceData({
-            ...attendanceData,
-            class: { ...attendanceData.class, is_cancelled: updatedClass.is_cancelled },
-          });
-        }
-      } else {
-        throw new Error(response.msg || 'Failed to update class');
-      }
-    } catch (error) {
-      console.error('Error toggling cancel status:', error);
-      alert(error instanceof Error ? error.message : 'Failed to update class status');
-    }
   }
 
   const getDaysInMonth = (date: Date): Date[] => {
@@ -1376,14 +1342,11 @@ export default function ClassesPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => toggleCancel(classItem.id, classItem.is_cancelled)}
-                      className={`px-4 py-2 rounded-md text-sm font-medium ${
-                        classItem.is_cancelled
-                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                          : 'bg-red-100 text-red-700 hover:bg-red-200'
-                      }`}
+                      onClick={() => openDeleteDialog(classItem)}
+                      className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center"
                     >
-                      {classItem.is_cancelled ? t('admin.classes.restore') : t('admin.classes.cancel')}
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      {t('common.delete')}
                     </button>
                   </div>
                 </div>
@@ -2094,14 +2057,11 @@ export default function ClassesPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => toggleCancel(classItem.id, classItem.is_cancelled)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium ${
-                      classItem.is_cancelled
-                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                        : 'bg-red-100 text-red-700 hover:bg-red-200'
-                    }`}
+                    onClick={() => openDeleteDialog(classItem)}
+                    className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center"
                   >
-                    {classItem.is_cancelled ? t('admin.classes.restore') : t('admin.classes.cancel')}
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    {t('common.delete')}
                   </button>
                 </div>
               </div>
@@ -2420,6 +2380,17 @@ export default function ClassesPage() {
                     }
                     className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                   />
+                  {recurringLastLessonDate && (
+                    <p className="mt-2 text-xs text-gray-600">
+                      {t('admin.classes.lastLessonPreview', {
+                        date: recurringLastLessonDate.toLocaleDateString(getLocale(), {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                        }),
+                      })}
+                    </p>
+                  )}
                 </div>
               )}
               <div className="flex items-center">
@@ -2468,6 +2439,68 @@ export default function ClassesPage() {
                   {editingClass ? t('common.update') : t('common.create')}
                 </button>
               </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTargetClass && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">
+              {t('admin.classes.deleteDialogTitle', 'Delete Class')}
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              {t('admin.classes.deleteDialogPrompt', 'Choose what to delete:')}
+            </p>
+            <div className="space-y-2 mb-6">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="deleteMode"
+                  checked={deleteMode === 'single'}
+                  onChange={() => setDeleteMode('single')}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300"
+                />
+                <span className="ml-2 text-sm text-gray-700">{t('admin.classes.deleteSingle')}</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="deleteMode"
+                  checked={deleteMode === 'series'}
+                  onChange={() => setDeleteMode('series')}
+                  disabled={findRepeatedClasses(deleteTargetClass).length === 0}
+                  className="h-4 w-4 text-primary focus:ring-primary border-gray-300 disabled:opacity-60"
+                />
+                <span className="ml-2 text-sm text-gray-700">
+                  {t('admin.classes.deleteSeriesWithCount', {
+                    count: findRepeatedClasses(deleteTargetClass).length + 1,
+                    defaultValue: `Delete related series (${findRepeatedClasses(deleteTargetClass).length + 1})`,
+                  })}
+                </span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteTargetClass(null)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const target = deleteTargetClass;
+                  setDeleteTargetClass(null);
+                  if (!target) return;
+                  await handleDeleteClass(target, deleteMode === 'series');
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                {t('common.delete')}
+              </button>
+            </div>
           </div>
         </div>
       )}

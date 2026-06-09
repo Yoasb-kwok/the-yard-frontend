@@ -4,7 +4,8 @@ This matrix is for the current frontend flow:
 
 - Frontend calls `POST /api/payment/checkout-session`
 - Browser redirects to Stripe hosted page (`url`)
-- Frontend verifies with `GET /api/payment/order-status?session_id=...`
+- On return: `POST /api/payment/confirm-session` (card instant settle) then `GET /api/payment/order-status?session_id=...`
+- See `STRIPE_CARD_INSTANT_SETTLEMENT.md` for backend rules (card ≠ admin pending→paid).
 
 Use this to track which methods are visible, testable, and correctly settled into your order records.
 

@@ -5,11 +5,26 @@ import Layout from '../../components/Layout';
 import PageLoading from '../../components/PageLoading';
 import LoadErrorBanner from '../../components/LoadErrorBanner';
 import EmptyState from '../../components/EmptyState';
-import { formatDateDdMmYy, formatMobileForDisplay } from '../../lib/utils';
+import { formatDateDdMmYy, formatMobileForDisplay, getAgeFromDateOfBirth } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
 import { findEditUserDuplicateFields } from '../../lib/adminUserDuplicates';
-import { isDemoMode } from '../../lib/mock';
-import { Search, Edit, Trash2, Mail, Calendar, Package, Receipt, Clock, Download, Send, BookOpen } from 'lucide-react';
+import { Search, Edit, Trash2, Mail, Receipt, Download, Send, ChevronDown, ChevronRight } from 'lucide-react';
+import {
+  buildAdminUserFamily,
+  formatStudentAgeLabel,
+  formatStudentLevelLabel,
+  type AdminUserFamily,
+} from '../../lib/adminUserFamily';
+import { formatResidentialDistrictLabel } from '../../lib/adminUserFields';
+import AdminUserEditModal, {
+  buildParentEditForm,
+  buildStudentEditForms,
+  emptyStudentEditForm,
+  type ParentEditFormState,
+  type StudentEditFormState,
+} from '../../components/admin/AdminUserEditModal';
+import { buildAdminStudentProfilePatchRow } from '../../lib/studentProfilesApi';
+import AdminUserStudentsTable from '../../components/admin/AdminUserStudentsTable';
 import { readHasTrialFromApi, userHasTrialApplication } from '../../lib/adminUserTrials';
 import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
@@ -36,6 +51,9 @@ interface User {
   user_tokens: UserToken[];
   /** 是否曾提交試堂申請 */
   has_trial_application: boolean;
+  /** 學員子帳戶數量 */
+  student_profile_count: number;
+  family: AdminUserFamily;
 }
 
 function normalizeUserTokens(raw: unknown): UserToken[] {
@@ -54,55 +72,6 @@ function normalizeUserTokens(raw: unknown): UserToken[] {
     };
   });
 }
-
-// Mock data
-const MOCK_USERS: User[] = [
-  {
-    id: 'student-001',
-    account_number: 'MOCK-STD-001',
-    full_name: 'Student User',
-    username: 'student001',
-    email: 'student.user@example.com',
-    role: 'student',
-    mobile: '87654321',
-    id_card_last4: '1001',
-    has_trial_application: true,
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [
-      { id: 'ut-m1', remaining_tokens: 5, expiry_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
-    ],
-  },
-  {
-    id: 'student-002',
-    account_number: 'MOCK-STD-002',
-    full_name: 'John Doe',
-    username: 'jdoe',
-    email: 'john.doe@example.com',
-    role: 'student',
-    mobile: '98765432',
-    id_card_last4: '2002',
-    has_trial_application: false,
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [
-      { id: 'ut-m2', remaining_tokens: 2, expiry_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
-    ],
-  },
-  {
-    id: 'student-003',
-    account_number: 'MOCK-STD-003',
-    full_name: 'Jane Smith',
-    username: 'jsmith',
-    email: 'jane.smith@example.com',
-    role: 'student',
-    mobile: '91234567',
-    id_card_last4: null,
-    has_trial_application: false,
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    user_tokens: [
-      { id: 'ut-m3', remaining_tokens: 8, expiry_date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] },
-    ],
-  },
-];
 
 /** Sortable header cells: allow wrapped labels so long titles do not overlap adjacent columns. */
 const usersThClass =
@@ -141,23 +110,26 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editModal, setEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({
+  const [parentEditForm, setParentEditForm] = useState<ParentEditFormState>({
     email: '',
     username: '',
-    full_name: '',
     mobile: '',
-    id_card_last4: '',
+    parents_name: '',
+    contact_number: '',
+    residential_district: '',
   });
+  const [studentEditForms, setStudentEditForms] = useState<StudentEditFormState[]>([]);
   const [editSaving, setEditSaving] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [tokenExpiryModal, setTokenExpiryModal] = useState(false);
   const [selectedUserForTokenEdit, setSelectedUserForTokenEdit] = useState<User | null>(null);
   const [tokenExpiryForm, setTokenExpiryForm] = useState<{ [key: number]: string }>({});
-  const [sortKey, setSortKey] = useState<string | null>('full_name');
+  const [sortKey, setSortKey] = useState<string | null>('parent_name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
 
   useEffect(() => {
     loadUsers();
@@ -195,6 +167,20 @@ export default function UsersPage() {
             : raw.hkid_last4 != null
               ? String(raw.hkid_last4)
               : null;
+    const family = buildAdminUserFamily(raw, raw.profiles ?? raw.student_profiles ?? raw.studentProfiles);
+    const studentCountRaw = raw.student_profile_count ?? raw.studentProfileCount;
+    const studentProfileCountFromApi =
+      typeof studentCountRaw === 'number'
+        ? studentCountRaw
+        : Array.isArray(raw.profiles)
+          ? (raw.profiles as unknown[]).filter((p) => {
+              const row = p as Record<string, unknown>;
+              const kind = String(row.profile_kind ?? row.profileKind ?? 'student').toLowerCase();
+              return kind !== 'parent';
+            }).length
+          : 0;
+    const student_profile_count = Math.max(studentProfileCountFromApi, family.students.length, 1);
+
     return {
       id: String(raw.id),
       account_number: acct,
@@ -207,6 +193,8 @@ export default function UsersPage() {
       created_at: (raw.created_at as string) ?? new Date().toISOString(),
       user_tokens: normalizeUserTokens(raw.user_tokens),
       has_trial_application: readHasTrialFromApi(raw),
+      student_profile_count,
+      family,
     };
   }
 
@@ -244,8 +232,7 @@ export default function UsersPage() {
     } catch (error) {
       console.error('Error loading users:', error);
       setLoadError(error instanceof Error ? error.message : '無法載入用戶列表');
-      // Only use embedded mock when running in demo mode; otherwise show empty + error so stale mock is not mistaken for live DB.
-      setUsers(isDemoMode() ? enrichUsersWithTrials(MOCK_USERS, []) : []);
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -253,13 +240,14 @@ export default function UsersPage() {
 
   function openEditModal(user: User) {
     setSelectedUser(user);
-    setEditForm({
-      email: user.email || '',
-      username: user.username || '',
-      full_name: user.full_name,
-      mobile: user.mobile || '',
-      id_card_last4: user.id_card_last4 || '',
-    });
+    setParentEditForm(
+      buildParentEditForm(user.family, {
+        email: user.email,
+        username: user.username,
+        mobile: user.mobile,
+      }),
+    );
+    setStudentEditForms(buildStudentEditForms(user.family.students));
     setEditModal(true);
   }
 
@@ -268,23 +256,22 @@ export default function UsersPage() {
     const dup = findEditUserDuplicateFields(
       users,
       selectedUser.id,
-      editForm.email,
-      editForm.username,
+      parentEditForm.email,
+      parentEditForm.username,
     );
     return {
       email: dup.has('email') ? t('admin.users.emailAlreadyExists') : undefined,
       username: dup.has('username') ? t('admin.users.usernameAlreadyExists') : undefined,
     };
-  }, [editModal, selectedUser, users, editForm.email, editForm.username, t]);
+  }, [editModal, selectedUser, users, parentEditForm.email, parentEditForm.username, t]);
 
   const hasEditDuplicateError = Boolean(editDuplicateErrors.email || editDuplicateErrors.username);
 
   async function handleUpdate(e?: React.FormEvent) {
     e?.preventDefault();
     if (!selectedUser) return;
-    const email = editForm.email.trim();
-    const username = editForm.username.trim();
-    if (!editForm.full_name.trim()) return;
+    const email = parentEditForm.email.trim();
+    const username = parentEditForm.username.trim();
     if (!email) {
       alert(t('register.emailRequired'));
       return;
@@ -304,38 +291,43 @@ export default function UsersPage() {
       return;
     }
 
+    const invalidStudent = studentEditForms.find((s) => !s.full_name.trim());
+    if (invalidStudent) {
+      alert(t('admin.users.studentNameRequired'));
+      return;
+    }
+
     if (!window.confirm(t('admin.users.confirmUpdateUser'))) return;
 
     setEditSaving(true);
     try {
-      const idLast = editForm.id_card_last4.trim();
       const response = await api.patch(`/admin/users/${selectedUser.id}`, {
         email,
         username: username || null,
         nick_name: username || null,
-        full_name: editForm.full_name.trim(),
-        mobile: editForm.mobile.trim() || null,
-        id_card_last4: idLast || null,
-        id_last_four: idLast || null,
+        mobile: parentEditForm.mobile.trim() || null,
+        parents_name: parentEditForm.parents_name.trim() || null,
+        contact_number: parentEditForm.contact_number.trim() || null,
+        residential_district: parentEditForm.residential_district.trim() || null,
         role: 'student',
+        student_profiles: studentEditForms.map((s) =>
+          buildAdminStudentProfilePatchRow({
+            id: s.id,
+            full_name: s.full_name.trim(),
+            date_of_birth: s.date_of_birth.trim() || null,
+            sex: s.sex,
+            id_card_last4: s.id_card_last4.trim() || null,
+            level: s.level || null,
+            age_tag: s.age_tag || null,
+            parents_name: parentEditForm.parents_name.trim() || null,
+            contact_number: parentEditForm.contact_number.trim() || null,
+            residential_district: parentEditForm.residential_district.trim() || null,
+          }),
+        ),
       });
 
       if (response.success) {
-        setUsers(
-          users.map((u) =>
-            u.id === selectedUser.id
-              ? {
-                  ...u,
-                  email,
-                  username: username || null,
-                  full_name: editForm.full_name.trim(),
-                  mobile: editForm.mobile.trim() || null,
-                  id_card_last4: idLast || null,
-                  role: 'student' as const,
-                }
-              : u
-          )
-        );
+        await loadUsers();
         alert(t('admin.users.userUpdated'));
         setEditModal(false);
         setSelectedUser(null);
@@ -439,16 +431,41 @@ export default function UsersPage() {
     }
   }
 
+  function getParentName(u: User): string {
+    return (
+      u.family.parent.parents_name?.trim() ||
+      u.family.parent.account_display_name?.trim() ||
+      u.full_name
+    );
+  }
+
+  function formatResidentialDistrict(key: string | null | undefined): string {
+    return formatResidentialDistrictLabel(key, t);
+  }
+
   const filteredUsers = users.filter((user) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
+    const parentMatch =
+      (user.family.parent.parents_name?.toLowerCase().includes(q) ?? false) ||
+      (user.family.parent.account_display_name?.toLowerCase().includes(q) ?? false);
+    const studentMatch = user.family.students.some(
+      (s) =>
+        s.full_name.toLowerCase().includes(q) ||
+        (s.student_id?.toLowerCase().includes(q) ?? false) ||
+        (s.nick_name?.toLowerCase().includes(q) ?? false),
+    );
     return (
       user.full_name.toLowerCase().includes(q) ||
       (user.mobile?.toLowerCase().includes(q) ?? false) ||
       (user.email?.toLowerCase().includes(q) ?? false) ||
       (user.username?.toLowerCase().includes(q) ?? false) ||
       (user.account_number?.toLowerCase().includes(q) ?? false) ||
-      (user.id_card_last4?.includes(search.trim()) ?? false)
+      (user.id_card_last4?.includes(search.trim()) ?? false) ||
+      (user.family.parent.residential_district?.toLowerCase().includes(q) ?? false) ||
+      formatResidentialDistrict(user.family.parent.residential_district).toLowerCase().includes(q) ||
+      parentMatch ||
+      studentMatch
     );
   });
 
@@ -463,6 +480,26 @@ export default function UsersPage() {
         numeric: true,
         sensitivity: 'base',
       });
+    } else if (sk === 'parent_name') {
+      cmp = getParentName(a).localeCompare(getParentName(b), undefined, { sensitivity: 'base' });
+    } else if (sk === 'student_name') {
+      const sa = a.family.students[0]?.full_name ?? '';
+      const sb = b.family.students[0]?.full_name ?? '';
+      cmp = sa.localeCompare(sb, undefined, { sensitivity: 'base' });
+    } else if (sk === 'date_of_birth') {
+      const da = a.family.students[0]?.date_of_birth ?? '';
+      const db = b.family.students[0]?.date_of_birth ?? '';
+      cmp = da.localeCompare(db);
+    } else if (sk === 'sex') {
+      const sa = a.family.students[0]?.sex;
+      const sb = b.family.students[0]?.sex;
+      cmp = Number(sa === true) - Number(sb === true);
+    } else if (sk === 'student_id_card_last4') {
+      cmp = (a.family.students[0]?.id_card_last4 ?? '').localeCompare(
+        b.family.students[0]?.id_card_last4 ?? '',
+        undefined,
+        { sensitivity: 'base' },
+      );
     } else if (sk === 'full_name') {
       cmp = (a.full_name || '').localeCompare(b.full_name || '', undefined, { sensitivity: 'base' });
     } else if (sk === 'username') {
@@ -471,8 +508,16 @@ export default function UsersPage() {
       cmp = (a.mobile || '').localeCompare(b.mobile || '', undefined, { sensitivity: 'base' });
     } else if (sk === 'email') {
       cmp = (a.email || '').localeCompare(b.email || '', undefined, { sensitivity: 'base' });
+    } else if (sk === 'residential_district') {
+      cmp = formatResidentialDistrict(a.family.parent.residential_district).localeCompare(
+        formatResidentialDistrict(b.family.parent.residential_district),
+        undefined,
+        { sensitivity: 'base' },
+      );
     } else if (sk === 'id_card_last4') {
       cmp = (a.id_card_last4 || '').localeCompare(b.id_card_last4 || '', undefined, { sensitivity: 'base' });
+    } else if (sk === 'student_profile_count' || sk === 'members_count') {
+      cmp = a.student_profile_count - b.student_profile_count;
     } else if (sk === 'has_trial_application') {
       cmp = Number(a.has_trial_application) - Number(b.has_trial_application);
     } else if (sk === 'remaining_tokens') {
@@ -538,33 +583,54 @@ export default function UsersPage() {
   function exportCsv() {
     const headers = [
       t('admin.users.colAccountNumber'),
-      t('admin.users.colFullName'),
-      t('admin.users.colIdCardLast4'),
-      t('admin.users.colUsername'),
+      t('admin.users.colParentName'),
+      t('admin.users.colStudentCount'),
       t('admin.users.colMobile'),
+      t('admin.users.colResidentialDistrict'),
       t('admin.users.colEmail'),
+      t('admin.users.colJoinedAt'),
+      t('admin.users.colStudentName'),
+      t('admin.users.colDateOfBirth'),
+      t('admin.users.colSex'),
+      t('admin.users.colIdCardLast4'),
       t('admin.users.colTrialApplied'),
       t('admin.users.colRemainingTokens'),
       t('admin.users.colTokenExpiry'),
-      t('admin.users.colJoinedAt'),
+      t('profile.studentAge'),
+      t('profile.level'),
     ];
-    const rows = sortedUsers.map((u) => {
-      const tokens = u.user_tokens.reduce((s, t) => s + t.remaining_tokens, 0);
-      const expiry = getEarliestExpiryDate(u.user_tokens);
-      return [
-        u.account_number || '',
-        u.full_name,
-        u.id_card_last4 || '',
-        u.username || '',
-        formatMobileForDisplay(u.mobile, ''),
-        u.email || '',
-        u.has_trial_application ? t('common.yes') : t('common.no'),
-        String(tokens),
-        expiry ? formatDateDdMmYy(expiry) : '',
-        formatDateDdMmYy(u.created_at),
-      ]
-        .map((c) => `"${String(c).replace(/"/g, '""')}"`)
-        .join(',');
+    const rows: string[] = [];
+    sortedUsers.forEach((u) => {
+      const tokens = u.user_tokens.reduce((s, tok) => s + tok.remaining_tokens, 0);
+      const tokenExpiry = getEarliestExpiryDate(u.user_tokens);
+      const parentName = getParentName(u);
+      const trialLabel = u.has_trial_application ? t('common.yes') : t('common.no');
+      const joinedLabel = formatDateDdMmYy(u.created_at);
+      const tokenExpiryLabel = tokenExpiry ? formatDateDdMmYy(tokenExpiry) : '';
+      u.family.students.forEach((s) => {
+        rows.push(
+          [
+            u.account_number || '',
+            parentName,
+            String(u.student_profile_count),
+            formatMobileForDisplay(u.mobile, ''),
+            formatResidentialDistrict(u.family.parent.residential_district),
+            u.email || '',
+            joinedLabel,
+            s.full_name,
+            s.date_of_birth || '',
+            s.sex == null ? '' : s.sex ? t('profile.male') : t('profile.female'),
+            s.id_card_last4 || '',
+            trialLabel,
+            String(tokens),
+            tokenExpiryLabel,
+            formatStudentAgeLabel(s, t, getAgeFromDateOfBirth),
+            formatStudentLevelLabel(s.level, t),
+          ]
+            .map((c) => `"${String(c).replace(/"/g, '""')}"`)
+            .join(','),
+        );
+      });
     });
     const csv = [headers.join(','), ...rows].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
@@ -600,6 +666,7 @@ export default function UsersPage() {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900">{t('admin.users.title')}</h1>
         </div>
+        <p className="text-sm text-gray-600 -mt-2">{t('admin.users.accountMembersHint')}</p>
         <div className="bg-white rounded-lg shadow-md p-6">
           {bulkMessage && (
             <div className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800 text-sm">
@@ -638,23 +705,22 @@ export default function UsersPage() {
           </div>
 
           <div className="overflow-x-auto -mx-1 px-1">
-            <table className="w-full min-w-[1220px] table-fixed border-collapse text-xs">
+            <table className="w-full min-w-[1060px] table-fixed border-collapse text-xs">
               <colgroup>
-                <col style={{ width: 40 }} />
+                <col style={{ width: 36 }} />
+                <col style={{ width: 36 }} />
+                <col style={{ width: 96 }} />
                 <col style={{ width: 100 }} />
-                <col style={{ width: 108 }} />
+                <col style={{ width: 56 }} />
+                <col style={{ width: 88 }} />
                 <col style={{ width: 80 }} />
-                <col style={{ width: 92 }} />
-                <col style={{ width: 112 }} />
-                <col style={{ width: 168 }} />
-                <col style={{ width: 76 }} />
-                <col style={{ width: 72 }} />
-                <col style={{ width: 120 }} />
-                <col style={{ width: 100 }} />
                 <col style={{ width: 128 }} />
+                <col style={{ width: 88 }} />
+                <col style={{ width: 120 }} />
               </colgroup>
               <thead className="bg-gray-50">
                 <tr>
+                  <th className="px-1 py-2.5 text-left align-top" aria-label={t('admin.users.expandFamily')} />
                   <th className="px-1.5 py-2.5 text-left align-top">
                     <input
                       type="checkbox"
@@ -667,14 +733,26 @@ export default function UsersPage() {
                     />
                   </th>
                   <TableSortButton label={t('admin.users.colAccountNumber')} sortKey="account_number" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
-                  <TableSortButton label={t('admin.users.colFullName')} sortKey="full_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
-                  <TableSortButton label={t('admin.users.colIdCardLast4')} sortKey="id_card_last4" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
-                  <TableSortButton label={t('admin.users.colUsername')} sortKey="username" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
+                  <TableSortButton label={t('admin.users.colParentName')} sortKey="parent_name" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
+                  <TableSortButton
+                    label={t('admin.users.colStudentCount')}
+                    sortKey="student_profile_count"
+                    currentSortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className={usersThClass}
+                    title={t('admin.users.membersCountTitle')}
+                  />
                   <TableSortButton label={t('admin.users.colMobile')} sortKey="mobile" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
+                  <TableSortButton
+                    label={t('admin.users.colResidentialDistrict')}
+                    sortKey="residential_district"
+                    currentSortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                    className={usersThClass}
+                  />
                   <TableSortButton label={t('admin.users.colEmail')} sortKey="email" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
-                  <TableSortButton label={t('admin.users.colTrialApplied')} sortKey="has_trial_application" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
-                  <TableSortButton label={t('admin.users.colRemainingTokens')} sortKey="remaining_tokens" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
-                  <TableSortButton label={t('admin.users.colTokenExpiry')} sortKey="token_expiry" currentSortKey={sortKey} sortDir={sortDir} onSort={handleSort} className={usersThClass} />
                   <TableSortButton
                     label={t('admin.users.colJoinedAt')}
                     sortKey="created_at"
@@ -683,24 +761,34 @@ export default function UsersPage() {
                     onSort={handleSort}
                     className={usersThClass}
                   />
-                  <th className={`${usersThClass} text-right`}>
-                    {t('admin.users.actions')}
-                  </th>
+                  <th className={`${usersThClass} text-right`}>{t('admin.users.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {sortedUsers.length === 0 ? (
                   <tr>
-                    <td colSpan={12} className="px-2 py-12">
+                    <td colSpan={10} className="px-2 py-12">
                       <EmptyState message={t('admin.users.noUsers', '暫無用戶')} />
                     </td>
                   </tr>
                 ) : (
-                paginatedUsers.map((user) => {
-                  const totalTokens = user.user_tokens.reduce((sum, t) => sum + t.remaining_tokens, 0);
+                paginatedUsers.flatMap((user) => {
+                  const parentName = getParentName(user);
+                  const isExpanded = expandedUserId === user.id;
                   const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
-                  return (
-                    <tr key={user.id}>
+                  const rows = [
+                    <tr key={user.id} className={isExpanded ? 'bg-slate-50' : undefined}>
+                      <td className="px-1 py-3 align-middle">
+                        <button
+                          type="button"
+                          onClick={() => setExpandedUserId(isExpanded ? null : user.id)}
+                          className="p-1 rounded text-gray-500 hover:bg-gray-200 hover:text-gray-800"
+                          title={t('admin.users.viewFamilyDetails')}
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </button>
+                      </td>
                       <td className="px-1.5 py-3 align-middle">
                         <input
                           type="checkbox"
@@ -715,17 +803,12 @@ export default function UsersPage() {
                         </div>
                       </td>
                       <td className="px-2 py-3 font-medium text-gray-900 min-w-0">
-                        <div className="truncate" title={user.full_name}>
-                          {user.full_name}
+                        <div className="truncate" title={parentName}>
+                          {parentName}
                         </div>
                       </td>
-                      <td className="px-2 py-3 text-gray-600 whitespace-nowrap font-mono tabular-nums text-center">
-                        {user.id_card_last4 || '–'}
-                      </td>
-                      <td className="px-2 py-3 text-gray-600 min-w-0">
-                        <div className="truncate" title={user.username || undefined}>
-                          {user.username || '–'}
-                        </div>
+                      <td className="px-2 py-3 text-center text-gray-700 tabular-nums">
+                        {user.student_profile_count}
                       </td>
                       <td
                         className="px-2 py-3 text-gray-600 whitespace-nowrap tabular-nums"
@@ -733,46 +816,20 @@ export default function UsersPage() {
                       >
                         {formatMobileForDisplay(user.mobile)}
                       </td>
+                      <td
+                        className="px-2 py-3 text-gray-600 min-w-0"
+                        title={user.family.parent.residential_district || undefined}
+                      >
+                        <div className="truncate">
+                          {formatResidentialDistrict(user.family.parent.residential_district)}
+                        </div>
+                      </td>
                       <td className="px-2 py-3 text-gray-600 min-w-0">
                         <div className="truncate" title={user.email || undefined}>
                           {user.email || '–'}
                         </div>
                       </td>
-                      <td className="px-2 py-3 align-middle">
-                        {user.has_trial_application ? (
-                          <button
-                            type="button"
-                            onClick={() => navigate('/admin/trial-applications')}
-                            className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2 py-1 text-primary hover:bg-primary/15"
-                            title={t('admin.users.viewTrialApplications')}
-                          >
-                            <BookOpen className="h-3.5 w-3.5 shrink-0" />
-                            <span className="font-medium">{t('common.yes')}</span>
-                          </button>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-gray-400" title={t('admin.users.trialAppliedNo')}>
-                            <BookOpen className="h-3.5 w-3.5 shrink-0 opacity-40" />
-                            <span>{t('common.no')}</span>
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-3 text-gray-600 whitespace-nowrap text-center tabular-nums">{totalTokens}</td>
                       <td className="px-2 py-3 text-gray-600 whitespace-nowrap tabular-nums">
-                        <div className="flex items-center gap-1">
-                          <span>{earliestExpiry ? formatDateDdMmYy(earliestExpiry) : '–'}</span>
-                          {earliestExpiry && (
-                            <button
-                              type="button"
-                              onClick={() => openTokenExpiryModal(user)}
-                              className="text-primary hover:text-primary-dark shrink-0 p-0.5"
-                              title={t('admin.users.editTokenExpiryDate')}
-                            >
-                              <Calendar className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-2 py-3 text-gray-600 whitespace-nowrap align-middle tabular-nums">
                         {formatDateDdMmYy(user.created_at)}
                       </td>
                       <td className="px-2 py-3 align-middle">
@@ -794,16 +851,6 @@ export default function UsersPage() {
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
-                          {totalTokens > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => navigate(`/admin/users/${user.id}/assign-tokens`)}
-                              className="text-green-600 hover:text-green-800 p-0.5 inline-flex shrink-0"
-                              title={t('admin.users.assignTokens')}
-                            >
-                              <Package className="h-3.5 w-3.5" />
-                            </button>
-                          )}
                           <button
                             type="button"
                             onClick={() => navigate(`/admin/users/${user.id}/purchase-history`)}
@@ -814,15 +861,7 @@ export default function UsersPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => navigate(`/admin/users/${user.id}/schedule`)}
-                            className="text-purple-600 hover:text-purple-800 p-0.5 inline-flex shrink-0"
-                            title={t('admin.users.upcomingClasses')}
-                          >
-                            <Clock className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => sendPasswordReset(user.id)}
+                            onClick={() => sendPasswordReset(user.email || user.id)}
                             className="text-gray-600 hover:text-gray-800 p-0.5 inline-flex shrink-0"
                             title={t('admin.users.passwordReset')}
                           >
@@ -830,8 +869,39 @@ export default function UsersPage() {
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  );
+                    </tr>,
+                  ];
+                  if (isExpanded) {
+                    rows.push(
+                      <tr key={`${user.id}-students`}>
+                        <td colSpan={10} className="p-0 bg-slate-50">
+                          <div className="px-4 py-3 border-t border-gray-200">
+                            <p className="text-xs font-medium text-emerald-800 mb-2">
+                              {t('admin.users.studentProfilesSection')}
+                            </p>
+                            <AdminUserStudentsTable
+                              students={user.family.students}
+                              hasTrialApplication={user.has_trial_application}
+                              tokenExpiryDate={earliestExpiry}
+                              onViewTrials={() => navigate('/admin/trial-applications')}
+                              onAssignTokens={(profileId) =>
+                                navigate(
+                                  `/admin/users/${user.id}/assign-tokens?profileId=${encodeURIComponent(profileId)}`,
+                                )
+                              }
+                              onUpcomingClasses={(profileId) =>
+                                navigate(
+                                  `/admin/users/${user.id}/schedule?profileId=${encodeURIComponent(profileId)}`,
+                                )
+                              }
+                              onEditTokenExpiry={() => openTokenExpiryModal(user)}
+                            />
+                          </div>
+                        </td>
+                      </tr>,
+                    );
+                  }
+                  return rows;
                 })
                 )}
               </tbody>
@@ -849,90 +919,32 @@ export default function UsersPage() {
 
       {editModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full shadow-xl">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full shadow-xl max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-semibold text-gray-900 mb-1">{t('admin.users.editUser')}</h2>
-            <p className="text-sm text-gray-500 mb-4">{selectedUser.full_name}</p>
+            <p className="text-sm text-gray-500 mb-4">{getParentName(selectedUser)}</p>
             <form onSubmit={handleUpdate} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.colAccountNumber')}</label>
-                <input
-                  type="text"
-                  readOnly
-                  value={selectedUser.account_number || '—'}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.colEmail')}</label>
-                <input
-                  type="email"
-                  required
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  aria-invalid={Boolean(editDuplicateErrors.email)}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${
-                    editDuplicateErrors.email ? inputErrorClass : ''
-                  }`}
-                />
-                {editDuplicateErrors.email && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">
-                    {editDuplicateErrors.email}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.colUsername')}</label>
-                <input
-                  type="text"
-                  value={editForm.username}
-                  onChange={(e) => setEditForm({ ...editForm, username: e.target.value.replace(/\s/g, '') })}
-                  aria-invalid={Boolean(editDuplicateErrors.username)}
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${
-                    editDuplicateErrors.username ? inputErrorClass : ''
-                  }`}
-                  autoComplete="username"
-                />
-                {editDuplicateErrors.username && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">
-                    {editDuplicateErrors.username}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.fullName')}</label>
-                <input
-                  type="text"
-                  required
-                  value={editForm.full_name}
-                  onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.colIdCardLast4')}</label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  value={editForm.id_card_last4}
-                  onChange={(e) =>
-                    setEditForm({
-                      ...editForm,
-                      id_card_last4: e.target.value.replace(/[^A-Za-z0-9]/g, '').slice(0, 4),
-                    })
-                  }
-                  className="w-full px-3 py-2 border rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.users.mobile')}</label>
-                <input
-                  type="text"
-                  value={editForm.mobile}
-                  onChange={(e) => setEditForm({ ...editForm, mobile: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
+              <AdminUserEditModal
+                accountNumber={selectedUser.account_number}
+                family={selectedUser.family}
+                parentForm={parentEditForm}
+                studentForms={studentEditForms}
+                onParentChange={setParentEditForm}
+                onStudentChange={(index, next) =>
+                  setStudentEditForms((prev) =>
+                    prev.map((row, i) => (i === index ? next : row)),
+                  )
+                }
+                onAddStudent={() =>
+                  setStudentEditForms((prev) => [...prev, emptyStudentEditForm()])
+                }
+                onRemoveStudent={(index) =>
+                  setStudentEditForms((prev) => prev.filter((_, i) => i !== index))
+                }
+                emailError={editDuplicateErrors.email}
+                usernameError={editDuplicateErrors.username}
+                inputErrorClass={inputErrorClass}
+              />
+              <div className="flex justify-end gap-3 pt-2 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => {
@@ -948,8 +960,8 @@ export default function UsersPage() {
                   type="submit"
                   disabled={
                     editSaving ||
-                    !editForm.full_name.trim() ||
-                    !editForm.email.trim() ||
+                    !parentEditForm.email.trim() ||
+                    studentEditForms.some((s) => !s.full_name.trim()) ||
                     hasEditDuplicateError
                   }
                   className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"

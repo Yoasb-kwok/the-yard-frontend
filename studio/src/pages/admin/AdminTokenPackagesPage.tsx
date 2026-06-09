@@ -14,8 +14,12 @@ import {
 import { formatCurrency } from '../../lib/utils';
 
 interface FormState {
-  name: string;
-  description: string;
+  name_zh_tw: string;
+  name_zh_cn: string;
+  name_en: string;
+  description_zh_tw: string;
+  description_zh_cn: string;
+  description_en: string;
   token_count: string;
   price: string;
   validity_days: string;
@@ -23,20 +27,17 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  name: '',
-  description: '',
+  name_zh_tw: '',
+  name_zh_cn: '',
+  name_en: '',
+  description_zh_tw: '',
+  description_zh_cn: '',
+  description_en: '',
   token_count: '',
   price: '',
   validity_days: '',
   is_active: true,
 };
-
-/** Fallback demo data when admin API is unavailable, so the page still renders. */
-const FALLBACK_PACKAGES: TokenPackageRow[] = [
-  { id: 1, name: 'Starter Pack', description: 'Perfect for beginners', token_count: 5, price: 500, validity_days: 30, is_active: true },
-  { id: 2, name: 'Regular Pack', description: 'Great value for regular students', token_count: 10, price: 900, validity_days: 60, is_active: true },
-  { id: 3, name: 'Premium Pack', description: 'Best value for frequent visitors', token_count: 20, price: 1600, validity_days: 90, is_active: true },
-];
 
 export default function AdminTokenPackagesPage() {
   const { t } = useTranslation();
@@ -60,8 +61,8 @@ export default function AdminTokenPackagesPage() {
       const rows = await fetchAdminTokenPackages();
       setPackages(rows);
     } catch (err) {
-      console.warn('Admin token packages API unavailable, using fallback.', err);
-      setPackages(FALLBACK_PACKAGES);
+      console.warn('Admin token packages API unavailable.', err);
+      setPackages([]);
     } finally {
       setLoading(false);
     }
@@ -76,8 +77,12 @@ export default function AdminTokenPackagesPage() {
   function openEditModal(pkg: TokenPackageRow) {
     setEditing(pkg);
     setForm({
-      name: pkg.name,
-      description: pkg.description,
+      name_zh_tw: pkg.name_zh_tw ?? pkg.name ?? '',
+      name_zh_cn: pkg.name_zh_cn ?? '',
+      name_en: pkg.name_en ?? '',
+      description_zh_tw: pkg.description_zh_tw ?? pkg.description ?? '',
+      description_zh_cn: pkg.description_zh_cn ?? '',
+      description_en: pkg.description_en ?? '',
       token_count: String(pkg.token_count),
       price: String(pkg.price),
       validity_days: String(pkg.validity_days),
@@ -95,7 +100,13 @@ export default function AdminTokenPackagesPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const name = form.name.trim();
+    const nameZhTw = form.name_zh_tw.trim();
+    const nameZhCn = form.name_zh_cn.trim();
+    const nameEn = form.name_en.trim();
+    const descriptionZhTw = form.description_zh_tw.trim();
+    const descriptionZhCn = form.description_zh_cn.trim();
+    const descriptionEn = form.description_en.trim();
+    const name = nameZhTw || nameZhCn || nameEn;
     const tokenCount = Number(form.token_count);
     const price = Number(form.price);
     const validityDays = Number(form.validity_days);
@@ -119,7 +130,13 @@ export default function AdminTokenPackagesPage() {
 
     const payload = {
       name,
-      description: form.description.trim(),
+      description: descriptionZhTw || descriptionZhCn || descriptionEn,
+      name_zh_tw: nameZhTw || undefined,
+      name_zh_cn: nameZhCn || undefined,
+      name_en: nameEn || undefined,
+      description_zh_tw: descriptionZhTw || undefined,
+      description_zh_cn: descriptionZhCn || undefined,
+      description_en: descriptionEn || undefined,
       token_count: tokenCount,
       price: Math.round(price * 100) / 100,
       validity_days: validityDays,
@@ -283,8 +300,10 @@ export default function AdminTokenPackagesPage() {
                       <div className="flex justify-between items-start mb-3">
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold text-gray-900">{pkg.name}</h3>
-                          {pkg.description && (
-                            <p className="text-sm text-gray-600 mt-1">{pkg.description}</p>
+                          {(pkg.description_zh_tw || pkg.description_zh_cn || pkg.description_en || pkg.description) && (
+                            <p className="text-sm text-gray-600 mt-1">
+                              {pkg.description_zh_tw || pkg.description_zh_cn || pkg.description_en || pkg.description}
+                            </p>
                           )}
                           <span
                             className={`mt-2 inline-block px-2 py-1 rounded text-xs font-medium ${
@@ -412,7 +431,9 @@ export default function AdminTokenPackagesPage() {
                         <tr key={pkg.id} className={active ? '' : 'opacity-60'}>
                           <td className="px-4 py-3 text-sm font-medium text-gray-900">{pkg.name}</td>
                           <td className="px-4 py-3 text-sm text-gray-600 max-w-[260px]">
-                            <div className="line-clamp-2">{pkg.description || '-'}</div>
+                            <div className="line-clamp-2">
+                              {pkg.description_zh_tw || pkg.description_zh_cn || pkg.description_en || pkg.description || '-'}
+                            </div>
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900 font-medium">{pkg.token_count}</td>
                           <td className="px-4 py-3 text-sm text-gray-900 font-medium">{formatCurrency(pkg.price)}</td>
@@ -487,30 +508,57 @@ export default function AdminTokenPackagesPage() {
                 : t('admin.tokenPackages.createPackage', 'Create Package')}
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
                   {t('admin.tokenPackages.name', 'Name')} *
                 </label>
                 <input
                   type="text"
-                  required
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  value={form.name_zh_tw}
+                  onChange={(e) => setForm({ ...form, name_zh_tw: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Regular Pack"
+                  placeholder={t('admin.tokenPackages.nameZhTwPlaceholder', '繁體中文名稱')}
+                />
+                <input
+                  type="text"
+                  value={form.name_zh_cn}
+                  onChange={(e) => setForm({ ...form, name_zh_cn: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('admin.tokenPackages.nameZhCnPlaceholder', '简体中文名称')}
+                />
+                <input
+                  type="text"
+                  value={form.name_en}
+                  onChange={(e) => setForm({ ...form, name_en: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('admin.tokenPackages.nameEnPlaceholder', 'English name')}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+              <div className="space-y-3">
+                <label className="block text-sm font-medium text-gray-700">
                   {t('admin.tokenPackages.description', 'Description')}
                 </label>
                 <textarea
                   rows={2}
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  value={form.description_zh_tw}
+                  onChange={(e) => setForm({ ...form, description_zh_tw: e.target.value })}
                   className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder={t('admin.tokenPackages.descriptionPlaceholder', 'Short description shown on shop card')}
+                  placeholder={t('admin.tokenPackages.descriptionZhTwPlaceholder', '繁體中文描述')}
+                />
+                <textarea
+                  rows={2}
+                  value={form.description_zh_cn}
+                  onChange={(e) => setForm({ ...form, description_zh_cn: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('admin.tokenPackages.descriptionZhCnPlaceholder', '简体中文描述')}
+                />
+                <textarea
+                  rows={2}
+                  value={form.description_en}
+                  onChange={(e) => setForm({ ...form, description_en: e.target.value })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                  placeholder={t('admin.tokenPackages.descriptionEnPlaceholder', 'English description')}
                 />
               </div>
 

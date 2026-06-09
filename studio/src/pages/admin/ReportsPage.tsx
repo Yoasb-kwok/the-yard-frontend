@@ -19,38 +19,6 @@ import {
 } from 'recharts';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
-/** Demo: 每月收入 */
-const DEMO_MONTHLY_REVENUE = (() => {
-  const now = new Date();
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
-    const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return { month: label, revenue: 38000 + Math.round(Math.random() * 12000) };
-  });
-})();
-
-/** Demo: 每班出席率 */
-const DEMO_CLASS_ATTENDANCE = [
-  { name: '兒童芭蕾 A', rate: 92, attended: 22, total: 24 },
-  { name: '兒童爵士 B', rate: 88, attended: 14, total: 16 },
-  { name: '幼兒律動', rate: 95, attended: 19, total: 20 },
-  { name: '青少年街舞', rate: 85, attended: 17, total: 20 },
-  { name: '中國舞 C', rate: 90, attended: 18, total: 20 },
-];
-
-/** Demo: 試堂轉正價比例 */
-const DEMO_TRIAL_CONVERSION = { trials: 48, enrolled: 18, rate: 37.5 };
-
-/** Demo: 代幣消耗（近月） */
-const DEMO_TOKEN_CONSUMPTION = (() => {
-  const now = new Date();
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1);
-    const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    return { month: label, consumed: 120 + Math.round(Math.random() * 40), purchased: 150 + Math.round(Math.random() * 30) };
-  });
-})();
-
 const PIE_COLORS = ['#1a365d', '#2c5282', '#2b6cb0', '#3182ce', '#4299e1'];
 
 export default function ReportsPage() {
@@ -58,7 +26,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [monthlyRevenue, setMonthlyRevenue] = useState<{ month: string; revenue: number }[]>([]);
   const [classAttendance, setClassAttendance] = useState<{ name: string; rate: number; attended: number; total: number }[]>([]);
-  const [trialConversion, setTrialConversion] = useState(DEMO_TRIAL_CONVERSION);
+  const [trialConversion, setTrialConversion] = useState({ trials: 0, enrolled: 0, rate: 0 });
   const [tokenConsumption, setTokenConsumption] = useState<{ month: string; consumed: number; purchased: number }[]>([]);
 
   useEffect(() => {
@@ -66,20 +34,20 @@ export default function ReportsPage() {
       setLoading(true);
       try {
         const [revRes, attRes, tokRes] = await Promise.all([
-          api.get<{ monthly: { month: string; revenue: number }[] }>('/admin/reports/monthly-revenue?demo=1').catch(() => ({ data: { monthly: DEMO_MONTHLY_REVENUE } })),
-          api.get<{ byClass: { name: string; rate: number; attended: number; total: number }[] }>('/admin/reports/class-attendance?demo=1').catch(() => ({ data: { byClass: DEMO_CLASS_ATTENDANCE } })),
-          api.get<{ monthly: { month: string; consumed: number; purchased: number }[] }>('/admin/reports/token-consumption?demo=1').catch(() => ({ data: { monthly: DEMO_TOKEN_CONSUMPTION } })),
+          api.get<{ monthly: { month: string; revenue: number }[] }>('/admin/reports/monthly-revenue'),
+          api.get<{ byClass: { name: string; rate: number; attended: number; total: number }[] }>('/admin/reports/class-attendance'),
+          api.get<{ monthly: { month: string; consumed: number; purchased: number }[] }>('/admin/reports/token-consumption'),
         ]);
-        const revData = (revRes as any).data?.monthly ?? DEMO_MONTHLY_REVENUE;
-        const attData = (attRes as any).data?.byClass ?? DEMO_CLASS_ATTENDANCE;
-        const tokData = (tokRes as any).data?.monthly ?? DEMO_TOKEN_CONSUMPTION;
-        setMonthlyRevenue(Array.isArray(revData) ? revData : DEMO_MONTHLY_REVENUE);
-        setClassAttendance(Array.isArray(attData) ? attData : DEMO_CLASS_ATTENDANCE);
-        setTokenConsumption(Array.isArray(tokData) ? tokData : DEMO_TOKEN_CONSUMPTION);
+        const revData = (revRes as any).data?.monthly;
+        const attData = (attRes as any).data?.byClass;
+        const tokData = (tokRes as any).data?.monthly;
+        setMonthlyRevenue(Array.isArray(revData) ? revData : []);
+        setClassAttendance(Array.isArray(attData) ? attData : []);
+        setTokenConsumption(Array.isArray(tokData) ? tokData : []);
       } catch {
-        setMonthlyRevenue(DEMO_MONTHLY_REVENUE);
-        setClassAttendance(DEMO_CLASS_ATTENDANCE);
-        setTokenConsumption(DEMO_TOKEN_CONSUMPTION);
+        setMonthlyRevenue([]);
+        setClassAttendance([]);
+        setTokenConsumption([]);
       } finally {
         setLoading(false);
       }
