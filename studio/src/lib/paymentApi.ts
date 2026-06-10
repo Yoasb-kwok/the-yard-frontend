@@ -70,9 +70,23 @@ export function parsePaymentOrder(raw: unknown): PaymentOrderStatus | null {
   };
 }
 
+export const ORDER_REMARKS_MAX_LENGTH = 50;
+
+export interface CheckoutOrderExtras {
+  startDate?: string | null;
+  remarks?: string | null;
+}
+
+function appendOrderExtras(body: Record<string, unknown>, extras?: CheckoutOrderExtras): void {
+  const startDate = extras?.startDate?.trim();
+  if (startDate) body.start_date = startDate;
+  const remarks = extras?.remarks?.trim();
+  if (remarks) body.remarks = remarks.slice(0, ORDER_REMARKS_MAX_LENGTH);
+}
+
 export async function createCheckoutSession(
   packageId: number,
-  options?: { studentProfileId?: string | null },
+  options?: CheckoutOrderExtras & { studentProfileId?: string | null },
 ): Promise<{ url: string; session_id: string }> {
   const returnUrls = buildStripeCheckoutReturnUrls();
   const body: Record<string, unknown> = {
@@ -85,6 +99,7 @@ export async function createCheckoutSession(
     body.studentProfileId = profileId;
     body.profile_id = profileId;
   }
+  appendOrderExtras(body, options);
   const res = (await api.post('/payment/checkout-session', body)) as ApiEnvelope;
   const payload = unwrapPayload(res);
   const url = String(payload.url ?? res.url ?? '').trim();
@@ -111,7 +126,7 @@ export async function confirmCheckoutSession(sessionId: string): Promise<Payment
   return parsePaymentOrder(payload);
 }
 
-export interface CreateOfflineOrderParams {
+export interface CreateOfflineOrderParams extends CheckoutOrderExtras {
   packageId: number;
   quantity?: number;
   paymentMethod: 'cash' | 'fps';
@@ -139,6 +154,7 @@ export async function createOfflineOrder(params: CreateOfflineOrderParams): Prom
   if (params.discountAmount != null && Number.isFinite(params.discountAmount) && params.discountAmount > 0) {
     body.discount_amount = params.discountAmount;
   }
+  appendOrderExtras(body, params);
 
   const res = (await api.post('/orders', body)) as ApiEnvelope;
   if (!res.success) {

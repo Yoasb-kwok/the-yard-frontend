@@ -44,6 +44,13 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
+function clampDateValue(value: string, min: string, max: string): string {
+  if (!value) return value;
+  if (min && value < min) return min;
+  if (max && value > max) return max;
+  return value;
+}
+
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 export default function DateSelect({
@@ -71,10 +78,15 @@ export default function DateSelect({
   const minY = useMemo(() => (min ? parseInt(min.slice(0, 4), 10) : new Date().getFullYear() - 100), [min]);
   const maxY = useMemo(() => (max ? parseInt(max.slice(0, 4), 10) : new Date().getFullYear() + 10), [max]);
 
+  const minParts = toParts(min);
+  const maxParts = toParts(max);
+
   const parts = toParts(value);
   const year = parts?.y ?? 0;
   const month = parts?.m ?? 0;
   const day = parts?.d ?? 0;
+
+  const emit = (next: string) => onChange(clampDateValue(next, min, max));
 
   const years = useMemo(() => {
     const list: number[] = [];
@@ -82,36 +94,71 @@ export default function DateSelect({
     return list;
   }, [minY, maxY]);
 
-  const maxDay = useMemo(() => (year && month ? daysInMonth(year, month) : 31), [year, month]);
+  const monthOptions = useMemo(() => {
+    if (!year) return MONTHS;
+    return MONTHS.filter((m) => {
+      if (minParts && year === minParts.y && m < minParts.m) return false;
+      if (maxParts && year === maxParts.y && m > maxParts.m) return false;
+      return true;
+    });
+  }, [year, minParts, maxParts]);
+
+  const dayOptions = useMemo(() => {
+    if (!year || !month) return Array.from({ length: 31 }, (_, i) => i + 1);
+    const daysInMo = daysInMonth(year, month);
+    let start = 1;
+    let end = daysInMo;
+    if (minParts && year === minParts.y && month === minParts.m) start = Math.max(start, minParts.d);
+    if (maxParts && year === maxParts.y && month === maxParts.m) end = Math.min(end, maxParts.d);
+    if (start > end) return [];
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  }, [year, month, minParts, maxParts]);
 
   const handleYear = (y: number) => {
     if (!y) {
+      if (required && min) {
+        emit(min);
+        return;
+      }
       onChange('');
       return;
     }
-    const m = month || 1;
-    const d = day ? Math.min(day, daysInMonth(y, m)) : 1;
-    onChange(toValue(y, m, d));
+    let m = month || 1;
+    if (minParts && y === minParts.y && m < minParts.m) m = minParts.m;
+    if (maxParts && y === maxParts.y && m > maxParts.m) m = maxParts.m;
+    let d = day ? Math.min(day, daysInMonth(y, m)) : 1;
+    if (minParts && y === minParts.y && m === minParts.m && d < minParts.d) d = minParts.d;
+    if (maxParts && y === maxParts.y && m === maxParts.m && d > maxParts.d) d = maxParts.d;
+    emit(toValue(y, m, d));
   };
 
   const handleMonth = (m: number) => {
     if (!m) {
+      if (required && min) {
+        emit(min);
+        return;
+      }
       onChange(year ? toValue(year, 1, 1) : '');
       return;
     }
-    const d = day ? Math.min(day, daysInMonth(year || new Date().getFullYear(), m)) : 1;
-    onChange(toValue(year || new Date().getFullYear(), m, d));
+    const y = year || new Date().getFullYear();
+    let d = day ? Math.min(day, daysInMonth(y, m)) : 1;
+    if (minParts && y === minParts.y && m === minParts.m && d < minParts.d) d = minParts.d;
+    if (maxParts && y === maxParts.y && m === maxParts.m && d > maxParts.d) d = maxParts.d;
+    emit(toValue(y, m, d));
   };
 
   const handleDay = (d: number) => {
     if (!d) {
+      if (required && min) {
+        emit(min);
+        return;
+      }
       onChange(year && month ? toValue(year, month, 1) : '');
       return;
     }
-    onChange(toValue(year || new Date().getFullYear(), month || 1, d));
+    emit(toValue(year || new Date().getFullYear(), month || 1, d));
   };
-
-  const dayOptions = useMemo(() => Array.from({ length: maxDay }, (_, i) => i + 1), [maxDay]);
 
   const baseClass = 'rounded-md border border-gray-300 px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary bg-white ' + (disabled ? 'opacity-60 cursor-not-allowed ' : '');
   const selectClass = baseClass + (className ? ` ${className}` : '');
@@ -141,7 +188,7 @@ export default function DateSelect({
         aria-label={t('common.month', '月')}
       >
         <option value="">{t('common.month', '月')}</option>
-        {MONTHS.map((m) => (
+        {monthOptions.map((m) => (
           <option key={m} value={m}>{m}</option>
         ))}
       </select>

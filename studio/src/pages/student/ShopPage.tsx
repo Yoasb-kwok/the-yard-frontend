@@ -3,12 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency, calculateDiscount } from '../../lib/utils';
+import { formatCurrency, calculateDiscount, getLocalDateIso } from '../../lib/utils';
 import { ShoppingCart, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
-import { createCheckoutSession, createOfflineOrder } from '../../lib/paymentApi';
+import {
+  createCheckoutSession,
+  createOfflineOrder,
+  ORDER_REMARKS_MAX_LENGTH,
+  type CheckoutOrderExtras,
+} from '../../lib/paymentApi';
 import { getSitePageContentForLocale, loadSimpleSitePage } from '../../lib/sitePageContent';
+import DateSelect from '../../components/DateSelect';
 
 interface TokenPackage {
   id: number;
@@ -77,6 +83,8 @@ export default function ShopPage() {
     discount_value: number;
   } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'cash'>('credit_card');
+  const [startDate, setStartDate] = useState(() => getLocalDateIso());
+  const [orderRemarks, setOrderRemarks] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -87,9 +95,18 @@ export default function ShopPage() {
     mode: 'legacy',
   });
 
+  const todayIso = useMemo(() => getLocalDateIso(), []);
+
   useEffect(() => {
     loadPackages();
   }, []);
+
+  const checkoutExtras = useMemo((): CheckoutOrderExtras => {
+    const extras: CheckoutOrderExtras = {};
+    if (startDate.trim()) extras.startDate = startDate.trim();
+    if (orderRemarks.trim()) extras.remarks = orderRemarks.trim();
+    return extras;
+  }, [startDate, orderRemarks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,6 +279,7 @@ export default function ShopPage() {
       try {
         const { url } = await createCheckoutSession(cart[0].package.id, {
           studentProfileId: profile?.id,
+          ...checkoutExtras,
         });
         window.location.href = url;
       } catch (e) {
@@ -294,6 +312,7 @@ export default function ShopPage() {
           studentProfileId: profile.id,
           couponId: i === 0 && appliedCoupon ? appliedCoupon.id : undefined,
           discountAmount: lineDiscount > 0 ? lineDiscount : undefined,
+          ...checkoutExtras,
         });
       }
       alert(t('shop.orderPlaced'));
@@ -474,6 +493,38 @@ export default function ShopPage() {
                     <div className="flex justify-between text-lg font-bold">
                       <span>{t('shop.total')}:</span>
                       <span>{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mb-4 pt-4 border-t">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('shop.startDate')}
+                      </label>
+                      <DateSelect
+                        value={startDate}
+                        onChange={setStartDate}
+                        minDate={todayIso}
+                        required
+                        className="w-full"
+                        ariaLabel={t('shop.startDate')}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('shop.remarks')}
+                      </label>
+                      <textarea
+                        value={orderRemarks}
+                        onChange={(e) => setOrderRemarks(e.target.value.slice(0, ORDER_REMARKS_MAX_LENGTH))}
+                        placeholder={t('shop.remarksPlaceholder')}
+                        maxLength={ORDER_REMARKS_MAX_LENGTH}
+                        rows={3}
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-y min-h-[4.5rem]"
+                      />
+                      <p className="text-xs text-gray-500 mt-1 text-right">
+                        {orderRemarks.length}/{ORDER_REMARKS_MAX_LENGTH}
+                      </p>
                     </div>
                   </div>
 

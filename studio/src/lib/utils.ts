@@ -60,6 +60,14 @@ export function formatDate(date: string | Date, locale: string = 'en-US'): strin
 }
 
 /** Compact calendar date: dd/mm/yy (e.g. 19/05/26). */
+/** Local calendar date as YYYY-MM-DD (not UTC). */
+export function getLocalDateIso(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function formatDateDdMmYy(date: string | Date): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '–';
@@ -69,12 +77,34 @@ export function formatDateDdMmYy(date: string | Date): string {
   return `${day}/${month}/${year}`;
 }
 
+const DATE_ONLY_DISPLAY: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+function parseCalendarDateInput(date: string | Date): Date {
+  if (typeof date === 'string') {
+    const iso = date.trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+  }
+  return new Date(date);
+}
+
+/** Same date style as formatDateTime, without time (for YYYY-MM-DD / DATE columns). */
+export function formatDateOnly(date: string | Date, locale: string = 'en-US'): string {
+  const d = parseCalendarDateInput(date);
+  if (Number.isNaN(d.getTime())) return '–';
+  return d.toLocaleDateString(locale, DATE_ONLY_DISPLAY);
+}
+
 export function formatDateTime(date: string | Date, locale: string = 'en-US'): string {
   const d = new Date(date);
   return d.toLocaleDateString(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    ...DATE_ONLY_DISPLAY,
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
