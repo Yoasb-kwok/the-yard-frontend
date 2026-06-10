@@ -136,12 +136,13 @@ export default function StudentTokenBalanceSection({
 
   const totalTokens = resolveStudentRemainingBalance(tokens, wallet);
   const expiringTokens = tokens.filter((tok) => isExpiringSoon(tok.expiry_date));
-  const earliestExpiryDate =
+  const walletExpiryDate =
     tokens.length > 0
-      ? tokens.reduce(
-          (earliest, token) => (new Date(token.expiry_date) < new Date(earliest) ? token.expiry_date : earliest),
-          tokens[0].expiry_date
-        )
+      ? tokens.reduce((latest, token) => {
+          if (!token.expiry_date) return latest;
+          if (!latest) return token.expiry_date;
+          return token.expiry_date.slice(0, 10) >= latest.slice(0, 10) ? token.expiry_date : latest;
+        }, '' as string) || null
       : null;
 
   const profileClasses = profileId
@@ -212,9 +213,9 @@ export default function StudentTokenBalanceSection({
         </div>
         <div className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">{totalTokens}</div>
         <p className="text-gray-600 text-sm mb-3">{t('dashboard.availableTokens')}</p>
-        {earliestExpiryDate && (
+        {walletExpiryDate && (
           <div className="text-sm text-gray-600 mb-3">
-            {t('dashboard.expires')}: {formatDate(earliestExpiryDate, getLocale())}
+            {t('dashboard.expires')}: {formatDate(walletExpiryDate, getLocale())}
           </div>
         )}
         {expiringTokens.length > 0 && (

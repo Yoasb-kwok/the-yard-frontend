@@ -972,6 +972,7 @@
       "newExpiryDate": "New Expiry Date",
       "tokenPackage": "Token Package",
       "tokenExpiryDateUpdated": "Token expiry date updated successfully",
+      "unifiedTokenExpiryHint": "All active token batches for this student will share this expiry date.",
       "assignTokens": "Assign Tokens",
       "noTokens": "No token packages",
       "purchaseHistory": "Purchase History",

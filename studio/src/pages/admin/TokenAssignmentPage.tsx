@@ -72,7 +72,7 @@ function mapAdminUserRow(
 ): User {
   const balance = getAdminUserTokenBalance(raw, enrollmentRows, studentProfileId);
   const tokens = Array.isArray(raw.user_tokens) ? raw.user_tokens : [];
-  let earliestExpiry = '';
+  let latestExpiry = '';
   for (const t of tokens) {
     const row = t as Record<string, unknown>;
     const exp =
@@ -81,7 +81,7 @@ function mapAdminUserRow(
         : typeof row.expires_at === 'string'
           ? row.expires_at.slice(0, 10)
           : '';
-    if (exp && (!earliestExpiry || exp < earliestExpiry)) earliestExpiry = exp;
+    if (exp && (!latestExpiry || exp > latestExpiry)) latestExpiry = exp;
   }
   return {
     id: String(raw.id ?? ''),
@@ -91,7 +91,7 @@ function mapAdminUserRow(
     remaining_tokens: balance.remaining,
     assigned_tokens: balance.assigned,
     purchased_tokens: balance.purchased,
-    expiry_date: earliestExpiry,
+    expiry_date: latestExpiry,
   };
 }
 

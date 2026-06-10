@@ -973,6 +973,7 @@
       "newExpiryDate": "新到期日",
       "tokenPackage": "代幣套票",
       "tokenExpiryDateUpdated": "代幣到期日已成功更新",
+      "unifiedTokenExpiryHint": "此學員所有有效代幣批次將統一使用此到期日。",
       "assignTokens": "分配代幣",
       "noTokens": "沒有代幣套票",
       "purchaseHistory": "購買記錄",
