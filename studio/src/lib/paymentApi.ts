@@ -111,6 +111,47 @@ export async function confirmCheckoutSession(sessionId: string): Promise<Payment
   return parsePaymentOrder(payload);
 }
 
+export interface CreateOfflineOrderParams {
+  packageId: number;
+  quantity?: number;
+  paymentMethod: 'cash' | 'fps';
+  studentProfileId?: string | null;
+  couponId?: string | null;
+  discountAmount?: number;
+}
+
+/** Create a pending cash or FPS token package order (tokens credited when admin marks paid). */
+export async function createOfflineOrder(params: CreateOfflineOrderParams): Promise<PaymentOrderStatus> {
+  const body: Record<string, unknown> = {
+    package_id: params.packageId,
+    quantity: params.quantity ?? 1,
+    payment_method: params.paymentMethod,
+  };
+  const profileId = params.studentProfileId?.trim();
+  if (profileId) {
+    body.student_profile_id = profileId;
+    body.studentProfileId = profileId;
+    body.profile_id = profileId;
+  }
+  if (params.couponId) {
+    body.coupon_id = params.couponId;
+  }
+  if (params.discountAmount != null && Number.isFinite(params.discountAmount) && params.discountAmount > 0) {
+    body.discount_amount = params.discountAmount;
+  }
+
+  const res = (await api.post('/orders', body)) as ApiEnvelope;
+  if (!res.success) {
+    throw new Error(res.msg || 'Failed to create order');
+  }
+  const payload = unwrapPayload(res);
+  const order = parsePaymentOrder(payload);
+  if (!order) {
+    throw new Error('Invalid order response');
+  }
+  return order;
+}
+
 export async function getOrderStatus(params: {
   session_id?: string;
   internal_id?: string;

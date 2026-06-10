@@ -9,7 +9,7 @@ import { api } from '../../lib/api';
 import InstructorIntroCard from '../../components/InstructorIntroCard';
 import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
-import { createCheckoutSession } from '../../lib/paymentApi';
+import { createCheckoutSession, createOfflineOrder } from '../../lib/paymentApi';
 import { getSitePageContentForLocale, loadSimpleSitePage } from '../../lib/sitePageContent';
 
 interface ClassData {
@@ -299,18 +299,42 @@ export default function TokenPackagePage() {
       return;
     }
 
+    if (!profile?.id) {
+      alert(t('shop.profileRequired', { defaultValue: 'Please select a student profile before checkout.' }));
+      return;
+    }
+
+    const cartSubtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
+    const cartDiscount = appliedCoupon
+      ? calculateDiscount(cartSubtotal, appliedCoupon.discount_type, appliedCoupon.discount_value)
+      : 0;
+
     setSubmitting(true);
-
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    alert(t('shop.orderPlaced'));
-    setCart([]);
-    setAppliedCoupon(null);
-    setCouponCode('');
-    setReferralCode('');
-    navigate('/dashboard');
-    setSubmitting(false);
+    try {
+      for (let i = 0; i < cart.length; i++) {
+        const item = cart[i];
+        const lineSubtotal = item.package.price * item.quantity;
+        const lineDiscount = cartSubtotal > 0 ? (cartDiscount * lineSubtotal) / cartSubtotal : 0;
+        await createOfflineOrder({
+          packageId: item.package.id,
+          quantity: item.quantity,
+          paymentMethod: 'cash',
+          studentProfileId: profile.id,
+          couponId: i === 0 && appliedCoupon ? appliedCoupon.id : undefined,
+          discountAmount: lineDiscount > 0 ? lineDiscount : undefined,
+        });
+      }
+      alert(t('shop.orderPlaced'));
+      setCart([]);
+      setAppliedCoupon(null);
+      setCouponCode('');
+      setReferralCode('');
+      navigate('/payment-history');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('shop.orderFailed', { defaultValue: 'Failed to place order.' }));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
