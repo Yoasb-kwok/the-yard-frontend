@@ -5,9 +5,16 @@ export interface AdminPendingCounts {
   pendingApplications: number;
   pendingTrials: number;
   pendingEnrollmentRequests: number;
+  /** Orders with payment_status pending or failed (sidebar badge on purchase history). */
+  pendingOrders: number;
 }
 
-const ZERO_COUNTS: AdminPendingCounts = { pendingApplications: 0, pendingTrials: 0, pendingEnrollmentRequests: 0 };
+const ZERO_COUNTS: AdminPendingCounts = {
+  pendingApplications: 0,
+  pendingTrials: 0,
+  pendingEnrollmentRequests: 0,
+  pendingOrders: 0,
+};
 let lastKnownCounts: AdminPendingCounts = ZERO_COUNTS;
 
 /**
@@ -36,6 +43,7 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
             pendingTrials: data.pendingTrials,
             pendingEnrollmentRequests:
               typeof data.pendingEnrollmentRequests === 'number' ? data.pendingEnrollmentRequests : 0,
+            pendingOrders: typeof data.pendingOrders === 'number' ? data.pendingOrders : 0,
           };
           lastKnownCounts = next;
           setCounts(next);
