@@ -203,7 +203,7 @@
     "leaveRejectedTitle": "{{studentName}}的请假未获批准",
     "leaveRejectedMessage": "{{studentName}}的{{leaveTypeLabel}}申请（{{className}}）未获批准，请查看原因或重新申请。",
     "leavePendingTitle": "请假申请待定中",
-    "leavePendingMessage": "{{className}} 第{{n}}堂的{{leaveTypeLabel}}申请正在处理中。",
+    "leavePendingMessage": "{{className}}（{{classDate}}）的{{leaveTypeLabel}}申请正在处理中。",
     "extensionApprovedTitle": "{{studentName}}的改期已批准",
     "extensionApprovedMessage": "{{studentName}}的改期申请（{{className}}）已获 admin 批准。",
     "extensionRejectedTitle": "{{studentName}}的改期未获批准",

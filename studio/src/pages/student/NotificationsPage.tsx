@@ -79,6 +79,7 @@ export default function NotificationsPage() {
         studentRequests,
         studentName: studentDisplayName,
         t,
+        locale: i18n.language,
       }),
     [apiNotifications, trials, enrollments, studentRequests, studentDisplayName, t, i18n.language],
   );

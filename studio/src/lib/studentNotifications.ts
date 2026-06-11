@@ -3,8 +3,14 @@
  * 合併 API `/student/notifications`、試堂列表、報名課程內的請假狀態。
  */
 
-import { resolveLeaveLessonDisplayNumber, type EnrolledClass } from './studentEnrollments';
+import {
+  buildLessonDatesByEnrollmentId,
+  isPerLessonEnrollmentRow,
+  resolveLeaveLessonDisplayNumber,
+  type EnrolledClass,
+} from './studentEnrollments';
 import type { TrialApplicationItem, TrialStatus } from './studentTrialApplications';
+import { formatNotificationClassDate } from './utils';
 
 export type StudentNotificationCategory = 'trial' | 'leave' | 'extension' | 'class' | 'other';
 
@@ -90,26 +96,57 @@ function readLessonNumberField(raw: Record<string, unknown>, ...keys: string[]):
   return '';
 }
 
-function enrichApiNotificationLessonFromEnrollments(
+function notificationLocale(locale?: string): string {
+  if (locale === 'zh-CN') return 'zh-CN';
+  if (locale === 'en') return 'en-US';
+  return 'zh-TW';
+}
+
+function classDateFromApiFields(n: ApiNotification, locale?: string): string {
+  if (n.dateTimeStr?.trim()) {
+    return formatNotificationClassDate(n.dateTimeStr, notificationLocale(locale));
+  }
+  return '';
+}
+
+function resolveLeaveClassDate(
+  enrollment: EnrolledClass,
+  lessonIndex: number | undefined | null,
+  locale?: string,
+): string {
+  const loc = notificationLocale(locale);
+  if (isPerLessonEnrollmentRow(enrollment)) {
+    return formatNotificationClassDate(enrollment.class.start_time, loc);
+  }
+  const dates = buildLessonDatesByEnrollmentId([enrollment]).get(enrollment.id) ?? [];
+  if (dates.length === 0) {
+    return formatNotificationClassDate(enrollment.class.start_time, loc);
+  }
+  const displayNum = resolveLeaveLessonDisplayNumber(enrollment, lessonIndex);
+  const lessonDate = dates[Math.max(0, displayNum - 1)] ?? dates[0];
+  return formatNotificationClassDate(lessonDate, loc);
+}
+
+function enrichApiNotificationFromEnrollments(
   n: ApiNotification,
   enrollments: EnrolledClass[],
 ): ApiNotification {
-  if (resolveNotificationLessonNumber(n)) return n;
   if (categorizeNotificationType(n.type) !== 'leave') return n;
   const className = (n.className ?? '').trim();
   if (!className) return n;
-  for (const enrollment of enrollments) {
-    if ((enrollment.class?.name ?? '').trim() !== className) continue;
+  const enrollment = enrollments.find((e) => (e.class?.name ?? '').trim() === className);
+  if (!enrollment) return n;
+  let next = { ...n };
+  if (!next.dateTimeStr?.trim()) {
+    next = { ...next, dateTimeStr: enrollment.class.start_time };
+  }
+  if (!resolveNotificationLessonNumber(next)) {
     const pending = (enrollment.leave_requests ?? []).find((r) => r.status === 'pending');
     if (pending?.lesson_index != null) {
-      return { ...n, lesson_index: pending.lesson_index };
-    }
-    const classLesson = enrollment.class.lesson_number;
-    if (classLesson != null && classLesson >= 1) {
-      return { ...n, lesson_number: classLesson, n: String(classLesson) };
+      next = { ...next, lesson_index: pending.lesson_index };
     }
   }
-  return n;
+  return next;
 }
 
 function resolveNotificationLessonNumber(n: ApiNotification): string {
@@ -179,17 +216,17 @@ export function matchesActiveProfile(n: ApiNotification, activeProfileId?: strin
   return targets.includes(activeProfileId);
 }
 
-export function buildNotification(n: ApiNotification, t: TFn): NotificationItem {
+export function buildNotification(n: ApiNotification, t: TFn, locale?: string): NotificationItem {
   const leaveLabel = leaveTypeLabel(n.leaveType, t);
-  const lessonN = resolveNotificationLessonNumber(n);
+  const classDate = classDateFromApiFields(n, locale);
   const vars: Record<string, string> = {
     studentName: n.studentName || '',
     className: n.className || '',
+    classDate,
     dateTimeStr: n.dateTimeStr || '',
     leaveTypeLabel: leaveLabel,
     daysLeft: n.daysLeft ?? '',
     remainingTokens: n.remainingTokens ?? '',
-    n: lessonN ? Number(lessonN) : '',
   };
   let title = n.title ?? '';
   let message = n.message ?? '';
@@ -282,6 +319,7 @@ export function buildTrialApplicationNotifications(
 export function buildLeaveNotificationsFromEnrollments(
   enrollments: EnrolledClass[],
   t: TFn,
+  locale?: string,
 ): NotificationItem[] {
   const items: NotificationItem[] = [];
   enrollments.forEach((enrollment) => {
@@ -290,8 +328,8 @@ export function buildLeaveNotificationsFromEnrollments(
     (enrollment.leave_requests || []).forEach((r) => {
       const leaveTypeLabelStr =
         r.leave_type === 'personal' ? t('notifications.leaveTypePersonal') : t('notifications.leaveTypeSick');
-      const lessonN = resolveLeaveLessonDisplayNumber(enrollment, r.lesson_index);
-      const vars = { studentName, className, n: lessonN, leaveTypeLabel: leaveTypeLabelStr };
+      const classDate = resolveLeaveClassDate(enrollment, r.lesson_index, locale);
+      const vars = { studentName, className, classDate, leaveTypeLabel: leaveTypeLabelStr };
       if (r.status === 'pending') {
         items.push({
           id: `leave-pending-${enrollment.id}-${r.lesson_index}`,
@@ -328,7 +366,7 @@ export function buildLeaveNotificationsFromEnrollments(
 
     const sick = enrollment.sick_leave_application;
     if (sick?.status === 'pending') {
-      const lessonN = resolveLeaveLessonDisplayNumber(enrollment, null);
+      const classDate = resolveLeaveClassDate(enrollment, null, locale);
       items.push({
         id: `sick-pending-${enrollment.id}`,
         type: 'leave_pending',
@@ -337,7 +375,7 @@ export function buildLeaveNotificationsFromEnrollments(
         message: t('notifications.leavePendingMessage', {
           studentName,
           className,
-          n: lessonN,
+          classDate,
           leaveTypeLabel: t('notifications.leaveTypeSick'),
         }),
         date: new Date().toISOString(),
@@ -452,22 +490,22 @@ export type StudentRequestRow = {
 export function buildNotificationsFromStudentRequests(
   rows: StudentRequestRow[],
   t: TFn,
+  locale?: string,
 ): NotificationItem[] {
   return rows.flatMap((row) => {
     const className = row.class_name ?? '';
     const studentName = row.user_name ?? '';
     const leaveTypeLabel =
       row.leave_type === 'personal' ? t('notifications.leaveTypePersonal') : t('notifications.leaveTypeSick');
-    const lessonN = resolveLeaveLessonDisplayNumber(
-      { class: { lesson_number: row.lesson_number ?? null } },
-      row.lesson_index,
-    );
+    const classDate = row.class_date
+      ? formatNotificationClassDate(row.class_date, notificationLocale(locale))
+      : '';
     const vars = {
       studentName,
       className,
+      classDate,
       dateTimeStr: row.class_date ?? '',
       leaveTypeLabel,
-      n: lessonN,
     };
     if (row.kind === 'extension') {
       if (row.status === 'pending') {
@@ -602,19 +640,20 @@ export function collectStudentNotifications(input: {
   studentRequests?: StudentRequestRow[];
   studentName?: string;
   t: TFn;
+  locale?: string;
 }): NotificationItem[] {
-  const { apiNotifications, trials, enrollments, studentRequests = [], studentName, t } = input;
+  const { apiNotifications, trials, enrollments, studentRequests = [], studentName, t, locale } = input;
 
   const fromApi = apiNotifications
     .filter((n) => n.type !== 'news')
-    .map((n) => buildNotification(enrichApiNotificationLessonFromEnrollments(n, enrollments), t))
+    .map((n) => buildNotification(enrichApiNotificationFromEnrollments(n, enrollments), t, locale))
     .filter(isFocusedNotification);
 
   const synthesized = [
     ...buildTrialApplicationNotifications(trials, t, studentName),
-    ...buildLeaveNotificationsFromEnrollments(enrollments, t),
+    ...buildLeaveNotificationsFromEnrollments(enrollments, t, locale),
     ...buildExtensionNotificationsFromEnrollments(enrollments, t),
-    ...buildNotificationsFromStudentRequests(studentRequests, t),
+    ...buildNotificationsFromStudentRequests(studentRequests, t, locale),
   ];
 
   const byId = new Map<string, NotificationItem>();

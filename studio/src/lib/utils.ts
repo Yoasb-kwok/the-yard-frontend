@@ -94,6 +94,21 @@ function parseCalendarDateInput(date: string | Date): Date {
   return new Date(date);
 }
 
+/** Class date for student notifications, e.g. zh-TW: 2026年6月12日 */
+export function formatNotificationClassDate(date: string | Date, locale: string = 'zh-TW'): string {
+  if (date == null || date === '') return '';
+  const raw = String(date).trim();
+  let d: Date;
+  const slashDate = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slashDate) {
+    d = new Date(Number(slashDate[1]), Number(slashDate[2]) - 1, Number(slashDate[3]));
+  } else {
+    d = parseCalendarDateInput(raw.includes('T') || raw.includes(' ') ? raw.replace(' ', 'T') : raw);
+  }
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
 /** Same date style as formatDateTime, without time (for YYYY-MM-DD / DATE columns). */
 export function formatDateOnly(date: string | Date, locale: string = 'en-US'): string {
   const d = parseCalendarDateInput(date);

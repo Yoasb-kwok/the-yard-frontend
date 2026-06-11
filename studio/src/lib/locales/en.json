@@ -203,7 +203,7 @@
     "leaveRejectedTitle": "{{studentName}}'s leave not approved",
     "leaveRejectedMessage": "{{studentName}}'s {{leaveTypeLabel}} request ({{className}}) was not approved. Please check the reason or re-apply.",
     "leavePendingTitle": "Leave request pending",
-    "leavePendingMessage": "Your {{leaveTypeLabel}} request for {{className}} lesson {{n}} is being processed.",
+    "leavePendingMessage": "Your {{leaveTypeLabel}} request for {{className}} ({{classDate}}) is being processed.",
     "extensionApprovedTitle": "{{studentName}}'s reschedule approved",
     "extensionApprovedMessage": "{{studentName}}'s reschedule request ({{className}}) has been approved by admin.",
     "extensionRejectedTitle": "{{studentName}}'s reschedule not approved",
