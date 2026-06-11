@@ -1809,7 +1809,7 @@
       "lessonsUnit": "lessons",
       "partiallyAssigned": "{{assigned}}/{{total}} assigned",
       "assignFullCourse": "Assign full course ({{count}} lessons)",
-      "assignDistributedPerLesson": "{{count}} lessons will each receive {{tokens}} token(s) (not all on one lesson).",
+      "assignDistributedPerLesson": "{{count}} lesson(s) from this one onward, {{tokens}} token(s) each (earlier lessons in the series are skipped).",
       "assignPartialCourseWarning": "This enrollment requires {{expected}} lessons, but only {{found}} class rows are available to assign in the system. The rest may need to be created in Admin → Classes.",
       "assignBatchFailed": "Token assignment failed. See the error message from the server.",
       "fulfillRequestFailed": "Tokens were assigned, but marking the enrollment request as fulfilled failed: {{error}}",

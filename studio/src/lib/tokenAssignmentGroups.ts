@@ -146,6 +146,40 @@ export type TokenAssignPlan =
       expectedLessonCount?: number;
     };
 
+function compareLessonsChronologically(
+  a: TokenAssignmentClassRow,
+  b: TokenAssignmentClassRow,
+): number {
+  return (
+    (Number(a.lesson_number) || 0) - (Number(b.lesson_number) || 0) ||
+    new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  );
+}
+
+/** Bookable lessons from the selected lesson forward (not earlier sessions in the series). */
+export function sliceAssignableFromLesson(
+  assignable: TokenAssignmentClassRow[],
+  anchor: TokenAssignmentClassRow,
+): TokenAssignmentClassRow[] {
+  if (assignable.length === 0) return [];
+
+  const sorted = [...assignable].sort(compareLessonsChronologically);
+  const anchorKey = normalizeClassId(anchor.id);
+  const directIdx = sorted.findIndex((l) => normalizeClassId(l.id) === anchorKey);
+  if (directIdx >= 0) return sorted.slice(directIdx);
+
+  const anchorTime = new Date(anchor.start_time).getTime();
+  const anchorLesson = Number(anchor.lesson_number) || 0;
+  return sorted.filter((lesson) => {
+    const lessonTime = new Date(lesson.start_time).getTime();
+    if (!Number.isNaN(anchorTime) && !Number.isNaN(lessonTime) && lessonTime >= anchorTime) {
+      return true;
+    }
+    const lessonNum = Number(lesson.lesson_number) || 0;
+    return anchorLesson > 0 && lessonNum >= anchorLesson;
+  });
+}
+
 /**
  * Full-course token grants should charge one class row per lesson (quantity 1 each),
  * not quantity N on a single class_id.
@@ -191,6 +225,11 @@ export function resolveTokenAssignPlan(input: {
   const canPick = input.canAssignFullCourse ?? input.canAssign;
   const assignable = bookable.filter((c) => canPick(c));
 
+  const lessonsToAssign = Math.min(
+    assignable.length,
+    isFullCourse ? lessonsRequested : Math.ceil(count / tokensPerLesson),
+  );
+
   const requestIds = parseLessonClassIds(input.requestLessonClassIds);
   if (requestIds.length > 0 && isFullCourse) {
     const byId = new Map(input.classes.map((c) => [normalizeClassId(c.id), c]));
@@ -198,11 +237,13 @@ export function resolveTokenAssignPlan(input: {
       .map((id) => byId.get(normalizeClassId(id)))
       .filter((c): c is TokenAssignmentClassRow => c != null && canPick(c));
     if (fromRequest.length > 0) {
-      let lessonIds = fromRequest.map((c) => c.id);
       const preferred = input.preferredLinkClassId?.trim();
-      if (preferred && lessonIds.includes(preferred)) {
-        lessonIds = [preferred, ...lessonIds.filter((id) => id !== preferred)];
-      }
+      const anchorRow =
+        (preferred
+          ? fromRequest.find((c) => normalizeClassId(c.id) === normalizeClassId(preferred))
+          : undefined) ?? target;
+      const pool = sliceAssignableFromLesson(fromRequest, anchorRow);
+      const lessonIds = pool.slice(0, lessonsToAssign).map((c) => c.id);
       return {
         mode: 'batch',
         lessonIds,
@@ -213,24 +254,23 @@ export function resolveTokenAssignPlan(input: {
     }
   }
 
-  if (assignable.length === 0) {
+  const assignPool = sliceAssignableFromLesson(assignable, target);
+  const pool = assignPool.length > 0 ? assignPool : assignable;
+
+  if (pool.length === 0) {
     return { mode: 'single', classId: input.classId, quantity: Math.min(count, tokensPerLesson) };
   }
 
-  const lessonsToAssign = Math.min(
-    assignable.length,
+  const lessonsToAssignFromAnchor = Math.min(
+    pool.length,
     isFullCourse ? lessonsRequested : Math.ceil(count / tokensPerLesson),
   );
 
-  if (lessonsToAssign <= 1 && count <= tokensPerLesson && !isFullCourse) {
+  if (lessonsToAssignFromAnchor <= 1 && count <= tokensPerLesson && !isFullCourse) {
     return { mode: 'single', classId: input.classId, quantity: count };
   }
 
-  let lessonIds = assignable.slice(0, lessonsToAssign).map((c) => c.id);
-  const preferred = input.preferredLinkClassId?.trim();
-  if (preferred && lessonIds.includes(preferred)) {
-    lessonIds = [preferred, ...lessonIds.filter((id) => id !== preferred)];
-  }
+  const lessonIds = pool.slice(0, lessonsToAssignFromAnchor).map((c) => c.id);
 
   return {
     mode: 'batch',

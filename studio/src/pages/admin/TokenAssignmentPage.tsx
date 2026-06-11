@@ -490,7 +490,15 @@ export default function TokenAssignmentPage() {
   }, [searchParams]);
 
   const buildTokenAssignPlan = useCallback(
-    (classId: string, tokenCount: number) => {
+    (
+      classId: string,
+      tokenCount: number,
+      overrides?: {
+        enrollmentScope?: EnrollmentScope;
+        expectedLessonCount?: number;
+        preferredLinkClassId?: string;
+      },
+    ) => {
       const ctx = getAssignLinkContext();
       return resolveTokenAssignPlan({
         classId,
@@ -498,9 +506,12 @@ export default function TokenAssignmentPage() {
         classes,
         canAssign: canAssignToClass,
         canAssignFullCourse: canAssignFullCourseBatch,
-        enrollmentScope: ctx.enrollmentScope,
-        expectedLessonCount: ctx.expectedLessonCount,
-        preferredLinkClassId: enrollmentAssignLinkRef.current?.classId ?? classId,
+        enrollmentScope: overrides?.enrollmentScope ?? ctx.enrollmentScope,
+        expectedLessonCount: overrides?.expectedLessonCount ?? ctx.expectedLessonCount,
+        preferredLinkClassId:
+          overrides?.preferredLinkClassId ??
+          enrollmentAssignLinkRef.current?.classId ??
+          classId,
         requestLessonClassIds: ctx.lessonClassIds?.length ? ctx.lessonClassIds : getRequestLessonClassIds(),
       });
     },
@@ -1144,11 +1155,21 @@ export default function TokenAssignmentPage() {
     setAssignTokenInput('1');
   };
 
-  const openAssignGroup = (group: TokenAssignmentCourseGroup, _lessonIds: string[]) => {
-    const first = group.lessons[0];
-    if (!first) return;
-    const tokenCount = Math.max(group.totalLessons, group.lessons.length);
-    const plan = buildTokenAssignPlan(first.id, tokenCount);
+  const openAssignGroup = (group: TokenAssignmentCourseGroup, lessonIds: string[]) => {
+    const assignableIds =
+      lessonIds.length > 0
+        ? lessonIds
+        : group.lessons.filter((l) => canAssignFullCourseBatch(l)).map((l) => l.id);
+    const anchor = group.lessons.find((l) => l.id === assignableIds[0]);
+    if (!anchor) return;
+    const tokensPerLesson = Math.max(1, Number(anchor.token_cost) || 1);
+    const lessonCount = assignableIds.length;
+    const tokenCount = lessonCount * tokensPerLesson;
+    const plan = buildTokenAssignPlan(anchor.id, tokenCount, {
+      enrollmentScope: 'full_course',
+      expectedLessonCount: lessonCount,
+      preferredLinkClassId: anchor.id,
+    });
     if (plan.mode === 'batch') {
       setConfirmModal({
         type: 'assignBatch',

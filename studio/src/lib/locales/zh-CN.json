@@ -1791,7 +1791,7 @@
       "lessonsUnit": "堂",
       "partiallyAssigned": "已分配 {{assigned}}/{{total}}",
       "assignFullCourse": "整期分配 ({{count}}堂)",
-      "assignDistributedPerLesson": "将分配到 {{count}} 堂课，每堂 {{tokens}} 个代币（不会全部放在同一堂）。",
+      "assignDistributedPerLesson": "将从此堂起向后分配 {{count}} 堂课，每堂 {{tokens}} 个代币（不会包含此堂之前的课堂）。",
       "assignPartialCourseWarning": "此报名需要 {{expected}} 堂，但系统目前只找到 {{found}} 堂可分配。其余堂数可能尚未在「课程管理」建立。",
       "assignBatchFailed": "代币分配失败，请查看服务器返回的错误信息。",
       "fulfillRequestFailed": "代币已分配，但标记报名申请完成失败：{{error}}",
