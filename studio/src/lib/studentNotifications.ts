@@ -350,6 +350,7 @@ export function buildLeaveNotificationsFromEnrollments(
           message: t('notifications.leaveApprovedMessage', vars),
           date: new Date().toISOString(),
           studentName: studentName || undefined,
+          className: className || undefined,
         });
       } else if (r.status === 'rejected') {
         items.push({
@@ -360,6 +361,7 @@ export function buildLeaveNotificationsFromEnrollments(
           message: t('notifications.leaveRejectedMessage', vars),
           date: new Date().toISOString(),
           studentName: studentName || undefined,
+          className: className || undefined,
         });
       }
     });
@@ -399,6 +401,7 @@ export function buildLeaveNotificationsFromEnrollments(
         }),
         date: new Date().toISOString(),
         studentName: studentName || undefined,
+        className: className || undefined,
       });
     } else if (sick?.status === 'rejected') {
       items.push({
@@ -417,6 +420,7 @@ export function buildLeaveNotificationsFromEnrollments(
         }),
         date: new Date().toISOString(),
         studentName: studentName || undefined,
+        className: className || undefined,
       });
     }
   });
@@ -565,6 +569,7 @@ export function buildNotificationsFromStudentRequests(
         message: t('notifications.leaveApprovedMessage', vars),
         date: row.created_at,
         studentName: studentName || undefined,
+        className: className || undefined,
       }];
     }
     if (row.status === 'rejected') {
@@ -576,6 +581,7 @@ export function buildNotificationsFromStudentRequests(
         message: t('notifications.leaveRejectedMessage', vars),
         date: row.created_at,
         studentName: studentName || undefined,
+        className: className || undefined,
       }];
     }
     return [];
@@ -591,6 +597,47 @@ function toDayBucket(date: string): string {
   const d = new Date(date);
   if (Number.isNaN(d.getTime())) return String(date || '').slice(0, 10);
   return d.toISOString().slice(0, 10);
+}
+
+/** Pending: "爵士舞（2026年6月29日）的…" — Approved: "…申請（test）已獲…" */
+function parseClassNameFromLeaveMessage(message: string): string {
+  const approved = message.match(/申請[（(]([^）)]+)[）)]/);
+  if (approved) return approved[1].trim().toLowerCase();
+  const pending = message.match(/^(.+?)[（(]/);
+  if (pending) return pending[1].trim().toLowerCase();
+  const enPending = message.match(/for\s+(.+?)\s+\(/i);
+  if (enPending) return enPending[1].trim().toLowerCase();
+  return '';
+}
+
+function parseClassDateFromLeavePendingMessage(message: string): string {
+  const m = message.match(/[（(]([^）)]+)[）)]/);
+  if (!m) return '';
+  const inner = m[1].trim();
+  if (/\d{4}年|年\d{1,2}月|\b\d{4}\b|January|February|March|April|May|June|July|August|September|October|November|December/i.test(inner)) {
+    return inner.toLowerCase();
+  }
+  return '';
+}
+
+function leaveNotificationDedupeKey(item: NotificationItem): string {
+  const student = (item.studentName || '').trim().toLowerCase();
+  const className =
+    (item.className || '').trim().toLowerCase() || parseClassNameFromLeaveMessage(item.message);
+  const parts = [item.category, item.type, student, className];
+  if (item.type === 'leave_pending') {
+    parts.push(parseClassDateFromLeavePendingMessage(item.message));
+  }
+  return parts.join('|');
+}
+
+function extensionNotificationDedupeKey(item: NotificationItem): string {
+  return [
+    item.category,
+    item.type,
+    (item.studentName || '').trim().toLowerCase(),
+    (item.className || '').trim().toLowerCase() || parseClassNameFromLeaveMessage(item.message),
+  ].join('|');
 }
 
 function dedupeTrialNotifications(items: NotificationItem[]): NotificationItem[] {
@@ -610,20 +657,22 @@ function dedupeTrialNotifications(items: NotificationItem[]): NotificationItem[]
   });
 }
 
-/** API stored row + enrollment/request synthesis often describe the same leave — keep one. */
+/** Same leave from API + enrollments, or multiple stored rows — keep latest only. */
 function dedupeLeaveAndExtensionNotifications(items: NotificationItem[]): NotificationItem[] {
   const seen = new Set<string>();
   return items.filter((item) => {
-    if (item.category !== 'leave' && item.category !== 'extension') return true;
-    const semanticKey = [
-      item.category,
-      item.type,
-      (item.studentName || '').trim().toLowerCase(),
-      (item.className || '').trim().toLowerCase(),
-      item.message.trim(),
-    ].join('|');
-    if (seen.has(semanticKey)) return false;
-    seen.add(semanticKey);
+    if (item.category === 'leave') {
+      const key = leaveNotificationDedupeKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }
+    if (item.category === 'extension') {
+      const key = extensionNotificationDedupeKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }
     return true;
   });
 }
