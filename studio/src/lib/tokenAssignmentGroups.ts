@@ -42,6 +42,8 @@ export interface TokenAssignmentCourseGroup {
   location?: TokenAssignmentClassRow['location'];
   totalLessons: number;
   lessons: TokenAssignmentClassRow[];
+  /** Lessons with an enrollment (token assigned), regardless of past/future. */
+  assignedLessonCount: number;
   unassignedCount: number;
   assignedTokenCount: number;
 }
@@ -89,11 +91,13 @@ export function buildCourseGroups(
   for (const [key, list] of byKey) {
     list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
     const first = list[0];
+    let assignedLessonCount = 0;
     let unassignedCount = 0;
     let assignedTokenCount = 0;
     for (const lesson of list) {
       const lessonKey = normalizeClassId(lesson.id);
       if (assignedClassIds.has(lessonKey)) {
+        assignedLessonCount += 1;
         const en = enrollmentByClassId.get(lessonKey);
         assignedTokenCount += en?.tokens_charged && en.tokens_charged > 0 ? en.tokens_charged : 1;
       } else if (!lesson.is_cancelled && !isLessonPast(lesson) && !isLessonFull(lesson)) {
@@ -109,6 +113,7 @@ export function buildCourseGroups(
       location: first.location,
       totalLessons: Math.max(totalFromApi, list.length),
       lessons: list,
+      assignedLessonCount,
       unassignedCount,
       assignedTokenCount,
     });

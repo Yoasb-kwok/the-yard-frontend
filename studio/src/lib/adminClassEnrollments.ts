@@ -7,7 +7,7 @@ import type { TokenAssignmentClassRow } from './tokenAssignmentGroups';
 export type AdminClassEnrollmentRow = {
   id: string;
   class_id: string;
-  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave';
+  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave' | 'cancelled';
   tokens_charged: number;
   created_at: string;
   className: string;
@@ -162,5 +162,38 @@ export function mergeClassRowsWithEnrollments(
 }
 
 export function enrollmentIsTokenAssigned(enrollment: AdminClassEnrollmentRow): boolean {
+  if (String(enrollment.status).toLowerCase() === 'cancelled') return false;
   return enrollment.tokens_charged > 0;
+}
+
+function enrollmentPickPriority(enrollment: AdminClassEnrollmentRow): number {
+  if (String(enrollment.status).toLowerCase() === 'cancelled') return 0;
+  if (enrollment.tokens_charged > 0) return 3;
+  return 2;
+}
+
+/** When remove + re-assign leaves multiple rows per class_id, pick the active enrollment for UI. */
+export function pickCanonicalEnrollmentsByClass(
+  enrollments: AdminClassEnrollmentRow[],
+): Map<string, AdminClassEnrollmentRow> {
+  const byClass = new Map<string, AdminClassEnrollmentRow>();
+  for (const enrollment of enrollments) {
+    const key = normalizeClassId(enrollment.class_id);
+    if (!key) continue;
+    const prev = byClass.get(key);
+    if (!prev) {
+      byClass.set(key, enrollment);
+      continue;
+    }
+    const prevScore = enrollmentPickPriority(prev);
+    const nextScore = enrollmentPickPriority(enrollment);
+    if (nextScore > prevScore) {
+      byClass.set(key, enrollment);
+      continue;
+    }
+    if (nextScore === prevScore && enrollment.created_at > prev.created_at) {
+      byClass.set(key, enrollment);
+    }
+  }
+  return byClass;
 }

@@ -37,6 +37,7 @@ import {
   mergeClassRowsWithEnrollments,
   normalizeClassId,
   enrollmentIsTokenAssigned,
+  pickCanonicalEnrollmentsByClass,
   type AdminClassEnrollmentRow,
 } from '../../lib/adminClassEnrollments';
 import { withStudentProfileQuery } from '../../lib/studentProfileScope';
@@ -375,16 +376,26 @@ export default function TokenAssignmentPage() {
     setEnrollments((prev) => prev.filter((e) => normalizeClassId(e.class_id) !== key));
   }, []);
 
+  const canonicalEnrollmentsByClass = useMemo(
+    () => pickCanonicalEnrollmentsByClass(enrollments),
+    [enrollments],
+  );
+
+  const canonicalEnrollments = useMemo(
+    () => Array.from(canonicalEnrollmentsByClass.values()),
+    [canonicalEnrollmentsByClass],
+  );
+
   const isClassTokensAssigned = (classId: string): boolean => {
-    const key = normalizeClassId(classId);
-    return enrollments.some((e) => normalizeClassId(e.class_id) === key && enrollmentIsTokenAssigned(e));
+    const enrollment = canonicalEnrollmentsByClass.get(normalizeClassId(classId));
+    return enrollment != null && enrollmentIsTokenAssigned(enrollment);
   };
 
   const hasEnrollmentAwaitingTokens = (classId: string): boolean => {
     const key = normalizeClassId(classId);
-    return enrollments.some(
-      (e) => normalizeClassId(e.class_id) === key && !enrollmentIsTokenAssigned(e),
-    );
+    const enrollment = canonicalEnrollmentsByClass.get(key);
+    if (!enrollment || enrollmentIsTokenAssigned(enrollment)) return false;
+    return String(enrollment.status).toLowerCase() !== 'cancelled';
   };
 
   const isClassFull = (classItem: Class): boolean => {
@@ -1030,54 +1041,60 @@ export default function TokenAssignmentPage() {
   const assignedClassIds = useMemo(
     () =>
       new Set(
-        enrollments
+        canonicalEnrollments
           .filter(enrollmentIsTokenAssigned)
           .map((e) => normalizeClassId(e.class_id))
           .filter(Boolean),
       ),
-    [enrollments],
+    [canonicalEnrollments],
   );
 
   const enrollmentIdByClassId = useMemo(() => {
     const m = new Map<string, string>();
-    for (const e of enrollments) m.set(normalizeClassId(e.class_id), e.id);
+    for (const e of canonicalEnrollments) {
+      if (!enrollmentIsTokenAssigned(e)) continue;
+      m.set(normalizeClassId(e.class_id), e.id);
+    }
     return m;
-  }, [enrollments]);
+  }, [canonicalEnrollments]);
 
   const tokensChargedByClassId = useMemo(() => {
     const m = new Map<string, number>();
-    for (const e of enrollments) m.set(normalizeClassId(e.class_id), e.tokens_charged);
+    for (const e of canonicalEnrollments) {
+      if (!enrollmentIsTokenAssigned(e)) continue;
+      m.set(normalizeClassId(e.class_id), e.tokens_charged);
+    }
     return m;
-  }, [enrollments]);
+  }, [canonicalEnrollments]);
 
   const enrollmentStatusByClassId = useMemo(() => {
     const m = new Map<string, string>();
-    for (const e of enrollments) m.set(normalizeClassId(e.class_id), e.status);
+    for (const e of canonicalEnrollments) {
+      m.set(normalizeClassId(e.class_id), e.status);
+    }
     return m;
-  }, [enrollments]);
+  }, [canonicalEnrollments]);
 
   const enrollmentByClassId = useMemo(() => {
     const m = new Map<string, { class_id: string; tokens_charged: number; status: string }>();
-    for (const e of enrollments) {
+    for (const e of canonicalEnrollments) {
+      if (!enrollmentIsTokenAssigned(e)) continue;
       const key = normalizeClassId(e.class_id);
-      const existing = m.get(key);
-      if (!existing || e.tokens_charged > existing.tokens_charged) {
-        m.set(key, {
-          class_id: key,
-          tokens_charged: e.tokens_charged,
-          status: e.status,
-        });
-      }
+      m.set(key, {
+        class_id: key,
+        tokens_charged: e.tokens_charged,
+        status: e.status,
+      });
     }
     return m;
-  }, [enrollments]);
+  }, [canonicalEnrollments]);
 
   const filteredClasses = useMemo(() => {
     const skipMonth = listTab === 'assigned';
     const filtered = classes.filter((c) => classMatchesFilters(c, { skipMonth }));
     if (listTab !== 'assigned') return filtered;
-    return mergeClassRowsWithEnrollments(filtered, enrollments, { onlyWithTokens: true });
-  }, [classes, classMatchesFilters, listTab, enrollments]);
+    return mergeClassRowsWithEnrollments(filtered, canonicalEnrollments, { onlyWithTokens: true });
+  }, [classes, classMatchesFilters, listTab, canonicalEnrollments]);
 
   const allCourseGroups = useMemo(
     () => buildCourseGroups(filteredClasses, assignedClassIds, enrollmentByClassId),
@@ -1114,8 +1131,13 @@ export default function TokenAssignmentPage() {
     return new Date(y, m - 1, 1).toLocaleDateString(getLocale(), { month: 'short', year: 'numeric' });
   };
 
-  const getStatusLabel = (status: string) =>
-    t(`admin.attendance.statuses.${status as Enrollment['status']}`);
+  const getStatusLabel = (status: string) => {
+    const key = `admin.attendance.statuses.${status}`;
+    const translated = t(key);
+    if (translated !== key) return translated;
+    if (status === 'cancelled') return t('admin.tokenAssignment.lessonStatusCancelled');
+    return status;
+  };
 
   const openAssignLesson = (classItem: Class) => {
     setConfirmModal({ type: 'assign', classId: classItem.id, className: classItem.name });
@@ -1146,11 +1168,14 @@ export default function TokenAssignmentPage() {
 
   const awaitingTokensClassIds = useMemo(() => {
     const s = new Set<string>();
-    for (const e of enrollments) {
-      if (!enrollmentIsTokenAssigned(e)) s.add(normalizeClassId(e.class_id));
+    for (const e of canonicalEnrollments) {
+      const key = normalizeClassId(e.class_id);
+      if (!key || assignedClassIds.has(key)) continue;
+      if (String(e.status).toLowerCase() === 'cancelled') continue;
+      if (!enrollmentIsTokenAssigned(e)) s.add(key);
     }
     return s;
-  }, [enrollments]);
+  }, [canonicalEnrollments, assignedClassIds]);
 
   const listSharedProps = {
     expandedKeys: expandedGroups,

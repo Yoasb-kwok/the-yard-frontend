@@ -171,6 +171,57 @@ export function formatDateTimeRange(
   return `${dateStr} ${t0} - ${endDateStr} ${t1}`;
 }
 
+function formatTimeSlotOnly(start: Date, end: Date, locale: string): string {
+  const timePart: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  };
+  const t0 = start.toLocaleTimeString(locale, timePart);
+  const t1 = end.toLocaleTimeString(locale, timePart);
+  return `${t0}-${t1}`;
+}
+
+/**
+ * Collapsed multi-lesson row: show first→last schedule without a misleading "…" ellipsis.
+ * When all lessons share the same clock time, shows one date range line + one time line.
+ */
+export function formatMultiLessonTimeSummary(
+  firstStart: string | Date,
+  firstEnd: string | Date,
+  lastStart: string | Date,
+  lastEnd: string | Date,
+  locale: string = 'en-US',
+): { primary: string; secondary?: string; secondaryIsTimeOnly?: boolean } {
+  const fs = new Date(firstStart);
+  const fe = new Date(firstEnd);
+  const ls = new Date(lastStart);
+  const le = new Date(lastEnd);
+  if (Number.isNaN(fs.getTime()) || Number.isNaN(ls.getTime())) {
+    return { primary: formatDateTimeRange(firstStart, firstEnd, locale) };
+  }
+
+  const sameSlot =
+    fs.getHours() === ls.getHours() &&
+    fs.getMinutes() === ls.getMinutes() &&
+    fe.getHours() === le.getHours() &&
+    fe.getMinutes() === le.getMinutes();
+
+  if (sameSlot) {
+    return {
+      primary: `${formatDate(firstStart, locale)} – ${formatDate(lastStart, locale)}`,
+      secondary: formatTimeSlotOnly(fs, fe, locale),
+      secondaryIsTimeOnly: true,
+    };
+  }
+
+  return {
+    primary: formatDateTimeRange(firstStart, firstEnd, locale),
+    secondary: formatDateTimeRange(lastStart, lastEnd, locale),
+    secondaryIsTimeOnly: false,
+  };
+}
+
 /** True when this class occurrence has already ended (cannot enroll). */
 export function isClassOccurrencePast(endTime: string | Date, now: Date = new Date()): boolean {
   const end = endTime instanceof Date ? endTime : new Date(endTime);

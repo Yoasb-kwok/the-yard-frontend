@@ -1,7 +1,11 @@
 import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, CheckCircle, Package, X } from 'lucide-react';
-import { formatDateTimeRange, formatProgramCodeDisplay } from '../../lib/utils';
+import {
+  formatDateTimeRange,
+  formatMultiLessonTimeSummary,
+  formatProgramCodeDisplay,
+} from '../../lib/utils';
 import type { TokenAssignmentCourseGroup, TokenAssignmentClassRow } from '../../lib/tokenAssignmentGroups';
 import { normalizeClassId } from '../../lib/adminClassEnrollments';
 import { getLessonEnrollmentUiStatus } from '../../lib/courseLessonEnrollment';
@@ -95,7 +99,7 @@ export default function TokenAssignmentCourseList({
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
               {t('admin.tokenAssignment.instructor')}
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="min-w-[12rem] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
               {t('admin.tokenAssignment.time')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -172,24 +176,21 @@ export default function TokenAssignmentCourseList({
                       {mode === 'assigned' && (
                         <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                       )}
-                      {multiLesson &&
-                        (mode === 'unassigned'
-                          ? group.assignedTokenCount > 0
-                          : group.unassignedCount > 0 || group.assignedTokenCount > 0) && (
+                      {multiLesson && group.assignedLessonCount > 0 && (
                         <span
                           className={`text-xs px-2 py-0.5 rounded ${
-                            mode === 'assigned' && group.unassignedCount === 0
+                            group.assignedLessonCount === group.lessons.length
                               ? 'bg-green-100 text-green-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
-                          {mode === 'assigned' && group.unassignedCount === 0
+                          {group.assignedLessonCount === group.lessons.length
                             ? t('admin.tokenAssignment.fullyAssigned', {
                                 total: group.lessons.length,
                                 defaultValue: '全部 {{total}} 堂已分配',
                               })
                             : t('admin.tokenAssignment.partiallyAssigned', {
-                                assigned: group.lessons.length - group.unassignedCount,
+                                assigned: group.assignedLessonCount,
                                 total: group.lessons.length,
                               })}
                         </span>
@@ -200,10 +201,20 @@ export default function TokenAssignmentCourseList({
                     {group.programCode || '—'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">{group.instructor || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {multiLesson && !expanded
-                      ? `${formatDateTimeRange(first.start_time, first.end_time, locale)} … ${formatDateTimeRange(last.start_time, last.end_time, locale)}`
-                      : formatDateTimeRange(first.start_time, first.end_time, locale)}
+                  <td className="min-w-[12rem] px-4 py-3 text-sm text-gray-700 align-top">
+                    {multiLesson && !expanded ? (
+                      <MultiLessonTimeSummary
+                        firstStart={first.start_time}
+                        firstEnd={first.end_time}
+                        lastStart={last.start_time}
+                        lastEnd={last.end_time}
+                        locale={locale}
+                      />
+                    ) : (
+                      <span className="whitespace-nowrap">
+                        {formatDateTimeRange(first.start_time, first.end_time, locale)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {getLocationLabel(group.location)}
@@ -448,6 +459,38 @@ export default function TokenAssignmentCourseList({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function MultiLessonTimeSummary({
+  firstStart,
+  firstEnd,
+  lastStart,
+  lastEnd,
+  locale,
+}: {
+  firstStart: string;
+  firstEnd: string;
+  lastStart: string;
+  lastEnd: string;
+  locale: string;
+}) {
+  const { primary, secondary, secondaryIsTimeOnly } = formatMultiLessonTimeSummary(
+    firstStart,
+    firstEnd,
+    lastStart,
+    lastEnd,
+    locale,
+  );
+  return (
+    <div className="leading-snug">
+      <div className="whitespace-nowrap">{primary}</div>
+      {secondary ? (
+        <div className={`mt-0.5 ${secondaryIsTimeOnly ? 'text-gray-600' : 'text-gray-700'}`}>
+          {secondary}
+        </div>
+      ) : null}
     </div>
   );
 }
