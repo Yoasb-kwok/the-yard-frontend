@@ -1059,6 +1059,7 @@
       "allClassNames": "All class names",
       "clearClassNameFilter": "Clear class name filter",
       "filterByLocation": "Location",
+      "showExpiredClasses": "Show expired classes",
       "allLocations": "All Locations",
       "allLocationsShort": "All",
       "enrollmentCountSummary": "Enrolled {{enrolled}}/{{capacity}}",

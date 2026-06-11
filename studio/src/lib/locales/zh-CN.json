@@ -1051,6 +1051,7 @@
       "allClassNames": "全部课程名",
       "clearClassNameFilter": "清除课程名筛选",
       "filterByLocation": "地点",
+      "showExpiredClasses": "显示已过期课堂",
       "allLocations": "所有地点",
       "allLocationsShort": "全部",
       "enrollmentCountSummary": "报读人数 {{enrolled}}/{{capacity}}",

@@ -1060,6 +1060,7 @@
       "allClassNames": "全部課程名",
       "clearClassNameFilter": "清除課程名篩選",
       "filterByLocation": "地點",
+      "showExpiredClasses": "顯示已過期課堂",
       "allLocations": "所有地點",
       "allLocationsShort": "全部",
       "enrollmentCountSummary": "報讀人數 {{enrolled}}/{{capacity}}",
