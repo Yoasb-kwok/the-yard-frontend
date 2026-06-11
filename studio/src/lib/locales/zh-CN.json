@@ -1119,7 +1119,8 @@
         "attended": "已出席",
         "absent": "缺席",
         "sick_leave": "病假",
-        "cancelled": "已取消"
+        "cancelled": "已取消",
+        "leave_pending": "请假待定"
       },
       "cancelClass": "取消课程",
       "classCancelledWarning": "此课程已被取消",

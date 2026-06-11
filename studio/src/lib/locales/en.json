@@ -1133,7 +1133,8 @@
         "attended": "Attended",
         "absent": "Absent",
         "sick_leave": "Sick Leave",
-        "cancelled": "Cancelled"
+        "cancelled": "Cancelled",
+        "leave_pending": "Leave pending"
       },
       "cancelClass": "Cancel Class",
       "classCancelledWarning": "This class has been cancelled",

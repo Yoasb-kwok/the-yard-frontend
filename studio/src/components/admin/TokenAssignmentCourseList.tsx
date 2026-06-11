@@ -57,6 +57,23 @@ export default function TokenAssignmentCourseList({
 }: TokenAssignmentCourseListProps) {
   const { t } = useTranslation();
 
+  const enrollmentStatusBadgeClass = (status: string): string => {
+    switch (status) {
+      case 'sick_leave':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'absent':
+        return 'bg-red-100 text-red-800';
+      case 'leave_pending':
+        return 'bg-amber-100 text-amber-800';
+      case 'attended':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-500';
+      default:
+        return 'bg-blue-100 text-blue-800';
+    }
+  };
+
   const lessonStatusLabel = (status: ReturnType<typeof getLessonEnrollmentUiStatus>): string => {
     switch (status) {
       case 'past':
@@ -230,7 +247,9 @@ export default function TokenAssignmentCourseList({
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {!multiLesson && enrollmentStatusByClassId?.get(first.id) && getStatusLabel ? (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${enrollmentStatusBadgeClass(enrollmentStatusByClassId.get(first.id)!)}`}
+                          >
                             {getStatusLabel(enrollmentStatusByClassId.get(first.id)!)}
                           </span>
                         ) : (
@@ -428,7 +447,9 @@ export default function TokenAssignmentCourseList({
                             </td>
                             <td className="px-4 py-2 text-sm">
                               {enrollStatus && getStatusLabel ? (
-                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-xs font-medium ${enrollmentStatusBadgeClass(enrollStatus)}`}
+                                >
                                   {getStatusLabel(enrollStatus)}
                                 </span>
                               ) : (

@@ -7,7 +7,7 @@ import type { TokenAssignmentClassRow } from './tokenAssignmentGroups';
 export type AdminClassEnrollmentRow = {
   id: string;
   class_id: string;
-  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave' | 'cancelled';
+  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave' | 'cancelled' | 'leave_pending';
   tokens_charged: number;
   created_at: string;
   className: string;

@@ -1136,7 +1136,8 @@
         "attended": "已出席",
         "absent": "缺席",
         "sick_leave": "病假",
-        "cancelled": "已取消"
+        "cancelled": "已取消",
+        "leave_pending": "請假待定"
       },
       "cancelClass": "取消課程",
       "classCancelledWarning": "此課程已被取消",
