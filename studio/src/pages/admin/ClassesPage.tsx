@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
 import { formatDateTimeRange, shouldPostponeClassWithHolidays, formatProgramCodeDisplay, parseAgeRange, ageRangeToTag } from '../../lib/utils';
+import { dedupeLatestEnrollmentPerStudent } from '../../lib/adminClassEnrollments';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users, Trash2 } from 'lucide-react';
@@ -318,18 +319,20 @@ export default function ClassesPage() {
     try {
       const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
       const list = res.success && Array.isArray(res.data) ? res.data : [];
-      const enrollments: Enrollment[] = list.map((e: any) => ({
-        id: String(e.id),
-        class_id: classId,
-        user_id: e.user_id ?? '',
-        user_name: e.user_name ?? '',
-        user_mobile: e.user_mobile ?? null,
-        status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
-        check_in_time: e.check_in_time ?? null,
-        check_out_time: e.check_out_time ?? null,
-        sick_leave_document_url: e.sick_leave_document_url ?? null,
-        created_at: e.created_at ?? '',
-      }));
+      const enrollments: Enrollment[] = dedupeLatestEnrollmentPerStudent(
+        list.map((e: any) => ({
+          id: String(e.id),
+          class_id: classId,
+          user_id: e.user_id ?? '',
+          user_name: e.user_name ?? '',
+          user_mobile: e.user_mobile ?? null,
+          status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+          check_in_time: e.check_in_time ?? null,
+          check_out_time: e.check_out_time ?? null,
+          sick_leave_document_url: e.sick_leave_document_url ?? null,
+          created_at: e.created_at ?? '',
+        })),
+      );
       return { class: classWithAttendance, enrollments };
     } catch {
       return { class: classWithAttendance, enrollments: [] };

@@ -173,6 +173,40 @@ function enrollmentPickPriority(enrollment: AdminClassEnrollmentRow): number {
 }
 
 /** When remove + re-assign leaves multiple rows per class_id, pick the active enrollment for UI. */
+/** Rows suitable for dedupeLatestEnrollmentPerStudent (attendance list, etc.). */
+export type StudentKeyedEnrollmentRow = {
+  id: string;
+  user_id?: string | number | null;
+  user_mobile?: string | null;
+  created_at?: string | null;
+};
+
+function enrollmentRecencyScore(row: StudentKeyedEnrollmentRow): number {
+  const parsed = Date.parse(String(row.created_at ?? ''));
+  const time = Number.isFinite(parsed) ? parsed : 0;
+  const idNum = Number(row.id);
+  const idPart = Number.isFinite(idNum) ? idNum : 0;
+  return time * 1_000_000 + idPart;
+}
+
+/** After token remove + re-assign, API may return multiple rows per student — keep the latest only. */
+export function dedupeLatestEnrollmentPerStudent<T extends StudentKeyedEnrollmentRow>(
+  enrollments: T[],
+): T[] {
+  const byStudent = new Map<string, T>();
+  for (const enrollment of enrollments) {
+    const key =
+      String(enrollment.user_id ?? '').trim() ||
+      String(enrollment.user_mobile ?? '').trim() ||
+      enrollment.id;
+    const prev = byStudent.get(key);
+    if (!prev || enrollmentRecencyScore(enrollment) > enrollmentRecencyScore(prev)) {
+      byStudent.set(key, enrollment);
+    }
+  }
+  return Array.from(byStudent.values());
+}
+
 export function pickCanonicalEnrollmentsByClass(
   enrollments: AdminClassEnrollmentRow[],
 ): Map<string, AdminClassEnrollmentRow> {
