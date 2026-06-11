@@ -9,6 +9,7 @@ import { getLessonDates, getLessonDatesSkipHolidays } from './utils';
 export interface EnrolledClass {
   id: string;
   status: string;
+  created_at?: string;
   class_id?: string;
   user_id?: string;
   profile_id?: string;

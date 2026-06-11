@@ -7,8 +7,43 @@ import { withStudentProfileQuery } from './studentProfileScope';
 import {
   filterEnrollmentsForActiveProfile,
   isPerLessonEnrollmentRow,
+  pickEnrollmentProfileId,
   type EnrolledClass,
 } from './studentEnrollments';
+
+const HIDDEN_ENROLLMENT_STATUSES = new Set(['cancelled', 'canceled', 'refunded']);
+
+function enrollmentStatusIsVisible(status: string): boolean {
+  return !HIDDEN_ENROLLMENT_STATUSES.has(status.trim().toLowerCase());
+}
+
+function enrollmentRecencyScore(enrollment: EnrolledClass): number {
+  const parsed = Date.parse(String(enrollment.created_at ?? ''));
+  const time = Number.isFinite(parsed) ? parsed : 0;
+  const idNum = Number(enrollment.id);
+  const idPart = Number.isFinite(idNum) ? idNum : 0;
+  return time * 1_000_000 + idPart;
+}
+
+/** Token remove + re-assign can leave multiple rows per class — keep latest; hide cancelled. */
+export function dedupeLatestEnrollmentPerClass(enrollments: EnrolledClass[]): EnrolledClass[] {
+  const byClass = new Map<string, EnrolledClass>();
+  for (const enrollment of enrollments) {
+    const classId = enrollment.class_id?.trim();
+    const fallbackKey = `${enrollment.class.program_code ?? ''}|${enrollment.class.start_time}`;
+    const classKey = classId || fallbackKey;
+    const profileKey = pickEnrollmentProfileId(enrollment) ?? '';
+    const key =
+      classKey && classKey !== '|'
+        ? `${profileKey}::${classKey}`
+        : `enrollment:${enrollment.id}`;
+    const prev = byClass.get(key);
+    if (!prev || enrollmentRecencyScore(enrollment) > enrollmentRecencyScore(prev)) {
+      byClass.set(key, enrollment);
+    }
+  }
+  return Array.from(byClass.values()).filter((e) => enrollmentStatusIsVisible(e.status));
+}
 
 function readClassBlock(raw: Record<string, unknown>): EnrolledClass['class'] {
   const nested =
@@ -66,6 +101,12 @@ export function normalizeEnrollmentRow(raw: unknown): EnrolledClass | null {
     id,
     class_id: row.class_id != null ? String(row.class_id) : row.classId != null ? String(row.classId) : undefined,
     status: String(row.status ?? 'active'),
+    created_at:
+      row.created_at != null
+        ? String(row.created_at)
+        : row.createdAt != null
+          ? String(row.createdAt)
+          : undefined,
     user_id: row.user_id != null ? String(row.user_id) : undefined,
     profile_id:
       row.profile_id != null
@@ -129,7 +170,8 @@ export async function fetchStudentUpcomingClasses(
   );
   const raw = (res as { data?: unknown }).data ?? res;
   const list = parseStudentUpcomingClassesResponse(raw).filter((e) => !e.class.is_cancelled);
-  return filterEnrollmentsForActiveProfile(list, profileId, options);
+  const scoped = filterEnrollmentsForActiveProfile(list, profileId, options);
+  return dedupeLatestEnrollmentPerClass(scoped);
 }
 
 /** Match leave to lesson_number (1-based) or calendar lessonIndex (0-based). Leave never shifts dates. */
