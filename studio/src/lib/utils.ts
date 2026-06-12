@@ -126,27 +126,69 @@ export function formatDateTime(date: string | Date, locale: string = 'en-US'): s
   });
 }
 
-/**
- * Show mobile without Hong Kong country prefix 852 (e.g. "85291234567", "+852 9123 4567" → "91234567").
- * Macau (853) and mainland (86) keep a +prefix for clarity. Other values are returned trimmed.
- */
-export function formatMobileForDisplay(mobile: string | null | undefined, emptyLabel = '–'): string {
-  if (mobile == null || String(mobile).trim() === '') return emptyLabel;
-  const trimmed = String(mobile).trim();
-  const compact = trimmed.replace(/\s+/g, '');
-  if (/^\+?852\d/.test(compact)) {
-    const local = compact.replace(/^\+?852/, '');
-    return local.length > 0 ? local : emptyLabel;
+function phoneDigitsOnly(v: string | null | undefined): string {
+  return v != null ? String(v).replace(/\D/g, '') : '';
+}
+
+/** Split stored phone into country code + local digits (handles duplicate prefixes like 852852…). */
+export function splitPhoneParts(
+  phone: string | null | undefined,
+  explicitCountryCode?: string | null,
+): { countryCode: string; local: string } {
+  let cc = phoneDigitsOnly(explicitCountryCode);
+  let digits = phoneDigitsOnly(phone);
+  if (!digits) return { countryCode: cc, local: '' };
+
+  if (cc && digits.startsWith(cc)) {
+    let local = digits.slice(cc.length);
+    while (cc && local.startsWith(cc) && local.length > 6) {
+      local = local.slice(cc.length);
+    }
+    return { countryCode: cc, local };
   }
-  if (/^\+?853\d/.test(compact)) {
-    const rest = compact.replace(/^\+?853/, '');
-    return rest.length > 0 ? `+853 ${rest}` : emptyLabel;
+
+  if (digits.startsWith('852') && digits.length >= 11) {
+    return { countryCode: '852', local: digits.slice(3) };
   }
-  if (/^\+?86\d/.test(compact)) {
-    const rest = compact.replace(/^\+?86/, '');
-    return rest.length > 0 ? `+86 ${rest}` : emptyLabel;
+  if (digits.startsWith('853') && digits.length >= 11) {
+    return { countryCode: '853', local: digits.slice(3) };
   }
-  return trimmed;
+  if (digits.startsWith('86') && digits.length >= 12) {
+    return { countryCode: '86', local: digits.slice(2) };
+  }
+
+  return { countryCode: cc || '852', local: digits };
+}
+
+/** Display phone with international prefix, e.g. +852 88888888. */
+export function formatPhoneForDisplay(
+  phone: string | null | undefined,
+  explicitCountryCode?: string | null,
+  emptyLabel = '–',
+): string {
+  const { countryCode, local } = splitPhoneParts(phone, explicitCountryCode);
+  if (!local && !countryCode) return emptyLabel;
+  if (!local) return countryCode ? `+${countryCode}` : emptyLabel;
+  return `+${countryCode} ${local}`;
+}
+
+/** Same as formatPhoneForDisplay — kept for existing call sites across admin/student UI. */
+export function formatMobileForDisplay(
+  mobile: string | null | undefined,
+  emptyLabel = '–',
+  explicitCountryCode?: string | null,
+): string {
+  return formatPhoneForDisplay(mobile, explicitCountryCode, emptyLabel);
+}
+
+/** Normalize user input to digits-only storage form, e.g. 85288888888. */
+export function normalizePhoneToStorage(
+  phone: string | null | undefined,
+  explicitCountryCode?: string | null,
+): string | null {
+  const { countryCode, local } = splitPhoneParts(phone, explicitCountryCode);
+  if (!local) return null;
+  return `${countryCode}${local}`;
 }
 
 /**

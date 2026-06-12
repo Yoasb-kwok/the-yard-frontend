@@ -123,6 +123,18 @@ export default function TrialPage() {
   const isLoggedIn = !!user && !!profile;
 
   // Extract country code and mobile number
+  const stripCountryPrefix = (cc: string, localDigits: string): string => {
+    const country = cc.replace(/\D/g, '');
+    let digits = localDigits.replace(/\D/g, '');
+    if (country && digits.startsWith(country)) {
+      digits = digits.slice(country.length);
+      while (country && digits.startsWith(country) && digits.length > 6) {
+        digits = digits.slice(country.length);
+      }
+    }
+    return digits;
+  };
+
   const getMobileParts = (mobile: string | null): { countryCode: string; number: string } => {
     if (!mobile) {
       return { countryCode: '', number: '' };
@@ -348,7 +360,9 @@ export default function TrialPage() {
           setError(t('trial.fullName') + ' ' + t('common.required'));
           return;
         }
-        const fullContactNumber = profile.mobile || profile.contact_number || '';
+        const mobileParts = getMobileParts(
+          (profile.mobile || profile.contact_number || '').replace(/\D/g, ''),
+        );
         const payload = {
           ...trialApplyClassIdentifiers({
             id: effectiveClassData.id,
@@ -358,8 +372,8 @@ export default function TrialPage() {
           trialClassName: effectiveClassData.name,
           fullName: applicantName,
           email: (user.email || '').trim().toLowerCase(),
-          contactNumber: fullContactNumber || undefined,
-          countryCode: undefined,
+          contactNumber: mobileParts.number || undefined,
+          countryCode: mobileParts.countryCode.replace(/\D/g, '') || undefined,
           // Prefer new key `username`, keep `nickName` for backend compatibility.
           username: (profile.nick_name || '').trim() || undefined,
           nickName: (profile.nick_name || '').trim() || undefined,
@@ -428,7 +442,7 @@ export default function TrialPage() {
     setLoading(true);
 
     try {
-      const fullContactNumber = contactNumber ? `${countryCode}${contactNumber}` : '';
+      const localContactNumber = stripCountryPrefix(countryCode, contactNumber);
       const payload = {
         ...trialApplyClassIdentifiers({
           id: effectiveClassData.id,
@@ -438,7 +452,7 @@ export default function TrialPage() {
         trialClassName: effectiveClassData.name,
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
-        contactNumber: fullContactNumber || undefined,
+        contactNumber: localContactNumber || undefined,
         countryCode: countryCode || undefined,
         // Prefer new key `username`, keep `nickName` for backend compatibility.
         username: nickName.trim() || undefined,
@@ -827,7 +841,11 @@ export default function TrialPage() {
                                   if (!parentsName.trim() && item.parentsName) setParentsName(item.parentsName);
                                   if (!email.trim() && item.email) setEmail(item.email);
                                   if (!contactNumber.trim() && item.contactNumber) {
-                                    setContactNumber(item.contactNumber.replace(/^\+?\d{1,3}/, '').replace(/\D/g, ''));
+                                    const parts = getMobileParts(item.contactNumber.replace(/\D/g, ''));
+                                    if (parts.countryCode) {
+                                      setCountryCode(parts.countryCode.replace(/\D/g, ''));
+                                    }
+                                    setContactNumber(parts.number.replace(/\D/g, ''));
                                   }
                                   setShowNameSuggestions(false);
                                 }}

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BookOpen } from 'lucide-react';
 import { api } from '../../lib/api';
-import { formatDate } from '../../lib/utils';
+import { formatDate, formatDateTime, formatDateTimeRange } from '../../lib/utils';
 import {
+  formatTrialClassSchedule,
   getTrialBadgeClass,
+  getTrialBranchLabel,
   getTrialStatusLabel,
   type TrialApplicationItem,
 } from '../../lib/studentTrialApplications';
@@ -84,25 +86,49 @@ export default function StudentTrialApplicationsSection({ profileId }: StudentTr
       {!trialApplicationsLoaded || trialApplications.length === 0 ? (
         <p className="text-sm text-gray-500 py-2">{t('dashboard.noTrialApplications', '暫無試堂申請')}</p>
       ) : (
-        <ul className="space-y-2">
-          {trialApplications.map((trial) => (
-            <li key={trial.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0 gap-3">
-              <div className="min-w-0">
-                <span className="font-medium text-gray-900">{trial.class_name}</span>
-                {trial.assigned_class_name && (
-                  <span className="block text-xs text-green-700 mt-0.5">
-                    {t('dashboard.trialAssignedTo', '已安排：{{name}}', { name: trial.assigned_class_name })}
-                  </span>
-                )}
-                {trial.applied_date && (
-                  <span className="block text-xs text-gray-500 mt-0.5">{formatDate(trial.applied_date, getLocale())}</span>
-                )}
-              </div>
-              <span className={`flex-shrink-0 text-sm font-medium px-2 py-0.5 rounded ${getTrialBadgeClass(trial.status)}`}>
-                {getTrialStatusLabel(trial.status, t)}
-              </span>
-            </li>
-          ))}
+        <ul className="space-y-3">
+          {trialApplications.map((trial) => {
+            const classSchedule = formatTrialClassSchedule(
+              trial,
+              getLocale(),
+              formatDateTimeRange,
+              formatDateTime,
+            );
+            const branchLabel = getTrialBranchLabel(trial.class_location, t);
+            return (
+              <li
+                key={trial.id}
+                className="flex items-start justify-between py-3 border-b border-gray-100 last:border-0 gap-3"
+              >
+                <div className="min-w-0 space-y-1">
+                  <span className="font-medium text-gray-900">{trial.class_name}</span>
+                  {classSchedule && (
+                    <p className="text-sm text-gray-700">
+                      <span className="text-gray-500">{t('dashboard.trialClassDateTime', '課程日期及時間')}：</span>
+                      {classSchedule}
+                    </p>
+                  )}
+                  {branchLabel && (
+                    <p className="text-sm text-gray-700">
+                      <span className="text-gray-500">{t('dashboard.trialBranch', '分店')}：</span>
+                      {branchLabel}
+                    </p>
+                  )}
+                  {trial.applied_date && (
+                    <p className="text-xs text-gray-500">
+                      <span>{t('dashboard.trialAppliedDate', '申請日期')}：</span>
+                      {formatDate(trial.applied_date, getLocale())}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`flex-shrink-0 text-sm font-medium px-2 py-0.5 rounded ${getTrialBadgeClass(trial.status)}`}
+                >
+                  {getTrialStatusLabel(trial.status, t)}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatDateTime } from '../../lib/utils';
+import { formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { buildTrialConfirmedEmailPatch } from '../../lib/trialConfirmedEmailPayload';
 import { api } from '../../lib/api';
 import { BookOpen, ChevronDown, ChevronRight, Filter, Pencil, Plus } from 'lucide-react';
@@ -451,8 +451,21 @@ export default function TrialApplicationsPage() {
     return translated !== key ? translated : value;
   }
   function getBooleanLabel(value: boolean | null | undefined): string {
-    if (value == null) return t('common.no', { defaultValue: '否' });
+    if (value == null) return '—';
     return value ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' });
+  }
+
+  function getHowDidYouHearLabel(value: string | null | undefined): string {
+    const key = String(value ?? '').trim();
+    if (!key) return '—';
+    const i18nKey = `trial.howDidYouHearOptions.${key}`;
+    const translated = t(i18nKey, { defaultValue: '' });
+    return translated || key;
+  }
+
+  function getSexLabel(value: boolean | null | undefined): string {
+    if (value == null) return '—';
+    return value ? t('profile.male', { defaultValue: '男' }) : t('profile.female', { defaultValue: '女' });
   }
 
   function openNoteEditor(app: TrialApplication) {
@@ -688,7 +701,7 @@ export default function TrialApplicationsPage() {
                     const rows: JSX.Element[] = [
                       <tr key={rowKey} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{app.applicant_name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{app.applicant_phone || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{formatMobileForDisplay(app.applicant_phone, '—')}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{app.trial_class}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{getDisplayCourseCode(app)}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{app.preferred_datetime ? formatDateTime(app.preferred_datetime, getLocale()) : (app.trial_date ? formatDateTime(app.trial_date, getLocale()) : '—')}</td>
@@ -777,16 +790,16 @@ export default function TrialApplicationsPage() {
                               </h3>
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                                 <div><span className="text-gray-500">{t('admin.trialApplications.applicant', '姓名')}：</span><span className="text-gray-900">{app.applicant_name || '—'}</span></div>
-                                <div><span className="text-gray-500">{t('admin.trialApplications.phone', '聯絡電話')}：</span><span className="text-gray-900">{app.applicant_phone || '—'}</span></div>
+                                <div><span className="text-gray-500">{t('admin.trialApplications.phone', '聯絡電話')}：</span><span className="text-gray-900">{formatMobileForDisplay(app.applicant_phone, '—')}</span></div>
                                 <div><span className="text-gray-500">{t('trial.email', { defaultValue: '電郵' })}：</span><span className="text-gray-900">{app.applicant_email || '—'}</span></div>
                                 <div><span className="text-gray-500">{t('trial.nickName', { defaultValue: '暱稱' })}：</span><span className="text-gray-900">{app.nick_name || '—'}</span></div>
                                 <div><span className="text-gray-500">{t('trial.dateOfBirth', { defaultValue: '出生日期' })}：</span><span className="text-gray-900">{app.date_of_birth ? formatDateOnly(app.date_of_birth) : '—'}</span></div>
-                                <div><span className="text-gray-500">{t('trial.sex', { defaultValue: '性別' })}：</span><span className="text-gray-900">{app.sex == null ? '—' : app.sex ? t('profile.female', { defaultValue: '女' }) : t('profile.male', { defaultValue: '男' })}</span></div>
+                                <div><span className="text-gray-500">{t('trial.sex', { defaultValue: '性別' })}：</span><span className="text-gray-900">{getSexLabel(app.sex)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.parentsName', { defaultValue: '家長姓名' })}：</span><span className="text-gray-900">{app.parents_name || '—'}</span></div>
                                 <div><span className="text-gray-500">{t('trial.residentialDistrict', { defaultValue: '居住地區' })}：</span><span className="text-gray-900">{getDistrictLabel(app.residential_district)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.hasJoinedCourses', { defaultValue: '是否參加過常規/暑期課程' })}：</span><span className="text-gray-900">{getBooleanLabel(app.has_joined_courses)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.hasDanceExperience', { defaultValue: '是否有舞蹈經驗' })}：</span><span className="text-gray-900">{getBooleanLabel(app.has_dance_experience)}</span></div>
-                                <div><span className="text-gray-500">{t('trial.howDidYouHear', { defaultValue: '如何得知我們' })}：</span><span className="text-gray-900">{app.how_did_you_hear || '—'}</span></div>
+                                <div><span className="text-gray-500">{t('trial.howDidYouHear', { defaultValue: '如何得知我們' })}：</span><span className="text-gray-900">{getHowDidYouHearLabel(app.how_did_you_hear)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.promoCode', { defaultValue: '優惠碼' })}：</span><span className="text-gray-900">{app.promo_code || '—'}</span></div>
                               </div>
                             </div>
