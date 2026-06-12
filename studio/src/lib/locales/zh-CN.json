@@ -638,6 +638,7 @@
     "stripeHostedHint": "将前往 Stripe 安全结账页使用银行卡付款；无需在本站输入卡号。",
     "stripeSinglePackageOnly": "线上刷卡每次仅限一个套餐，购物车请只保留一项且数量为 1。",
     "stripeRedirectError": "无法开始结账，请稍后再试。",
+    "paymentUnavailable": "无法开始付款，请稍后再试或联系学院协助。",
     "invalidCoupon": "优惠券代码无效",
     "couponAppliedSuccess": "优惠券已成功应用"
   },

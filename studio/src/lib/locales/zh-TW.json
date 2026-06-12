@@ -639,6 +639,7 @@
     "stripeHostedHint": "將前往 Stripe 安全結帳頁以信用卡付款；無需在本站輸入卡號。",
     "stripeSinglePackageOnly": "線上刷卡每次僅限一個套票，購物車請只保留一項且數量為 1。",
     "stripeRedirectError": "無法開始結帳，請稍後再試。",
+    "paymentUnavailable": "無法開始付款，請稍後再試或聯絡學院協助。",
     "invalidCoupon": "優惠券代碼無效",
     "couponAppliedSuccess": "優惠券已成功套用"
   },

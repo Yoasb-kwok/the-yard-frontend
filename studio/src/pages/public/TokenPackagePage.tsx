@@ -11,6 +11,7 @@ import { getInstructorProfile } from '../../lib/instructorProfiles';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
 import {
   createCheckoutSession,
+  resolveCheckoutStartError,
   createOfflineOrder,
   ORDER_REMARKS_MAX_LENGTH,
   type CheckoutOrderExtras,
@@ -311,7 +312,7 @@ export default function TokenPackagePage() {
         });
         window.location.href = url;
       } catch (e) {
-        alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));
+        alert(resolveCheckoutStartError(e, t));
         setSubmitting(false);
       }
       return;

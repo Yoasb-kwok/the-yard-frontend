@@ -1,7 +1,7 @@
 /**
  * Stripe Hosted Checkout — backend contract (no publishable key on frontend).
  */
-import { api } from './api';
+import { api, ApiError } from './api';
 import { buildStripeCheckoutReturnUrls } from './appOrigin';
 
 export interface PaymentOrderStatus {
@@ -71,6 +71,28 @@ export function parsePaymentOrder(raw: unknown): PaymentOrderStatus | null {
 }
 
 export const ORDER_REMARKS_MAX_LENGTH = 50;
+
+const PAYMENT_UNAVAILABLE_CODES = new Set([
+  'PAYMENT_UNAVAILABLE',
+  'STRIPE_NOT_CONFIGURED',
+  'STRIPE_CHECKOUT_FAILED',
+]);
+
+/** User-facing message when card checkout cannot start (never show Stripe/server config details). */
+export function resolveCheckoutStartError(
+  err: unknown,
+  t: (key: string, fallback?: string) => string,
+): string {
+  if (err instanceof ApiError) {
+    if (err.code && PAYMENT_UNAVAILABLE_CODES.has(err.code)) {
+      return t('shop.paymentUnavailable');
+    }
+    if (err.status === 502 || err.status === 503) {
+      return t('shop.paymentUnavailable');
+    }
+  }
+  return t('shop.paymentUnavailable');
+}
 
 export interface CheckoutOrderExtras {
   startDate?: string | null;

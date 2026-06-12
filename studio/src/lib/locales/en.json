@@ -638,6 +638,7 @@
     "stripeHostedHint": "You will be redirected to Stripe's secure checkout page to pay by card. No card details are entered on this site.",
     "stripeSinglePackageOnly": "Online card payment supports one package at a time. Keep only one item in your cart with quantity 1.",
     "stripeRedirectError": "Could not start checkout. Please try again.",
+    "paymentUnavailable": "Payment could not be started. Please try again later or contact the studio for help.",
     "invalidCoupon": "Invalid coupon code",
     "couponAppliedSuccess": "Coupon applied successfully"
   },
