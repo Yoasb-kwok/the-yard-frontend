@@ -15,7 +15,7 @@ import {
   fetchStudentUpcomingClasses,
   findLeaveRequestForEnrollment,
 } from '../../lib/studentUpcomingClasses';
-import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, FileText, X, MapPin } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, User, ChevronLeft, ChevronRight, MoreVertical, X, MapPin } from 'lucide-react';
 import { getLocationCalendarColor, getLocationInfo } from '../../lib/locationInfo';
 import { useModalA11y } from '../../lib/useModalA11y';
 import StudentTokenBalanceSection from '../../components/student/StudentTokenBalanceSection';
@@ -921,22 +921,6 @@ export default function SchedulePage() {
                 <span className="text-3xl font-bold text-primary">{attendanceRate}%</span>
                 <span className="text-gray-600">{t('schedule.thisMonthAttendance')}</span>
               </div>
-            </div>
-          </section>
-        )}
-
-        {/* Section 5: Makeup record */}
-        {myEnrollments.length > 0 && (
-          <section className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden" aria-labelledby="makeup-heading">
-            <div id="makeup-heading" className="px-4 md:px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
-              <h2 className="text-lg font-semibold text-gray-900">{t('schedule.makeupRecord', '已補堂記錄')}</h2>
-            </div>
-            <div className="p-4 md:p-6">
-              <p className="text-sm text-gray-600 mb-3">{t('schedule.makeupRemainingCount', { count: 2 }, '剩餘 2 次補堂')}</p>
-              <ul className="space-y-2 text-sm text-gray-700">
-                <li>兒童芭蕾 A {t('schedule.lessonN', { n: 3 })}（2月20日 請假）→ 已安排補堂 2月25日</li>
-              </ul>
             </div>
           </section>
         )}
