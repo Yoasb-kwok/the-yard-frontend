@@ -330,6 +330,8 @@ async function enrichSpendLessonsFromEnrollments(items: TokenUsageItem[]): Promi
     };
   });
 }
+
+function usageFromRefunds(payload: unknown, refundFallbackLabel: string): TokenUsageItem[] {
   const rows = extractArray(payload, ['refunds', 'records', 'items', 'data']);
   return rows
     .map((raw): TokenUsageItem | null => {
