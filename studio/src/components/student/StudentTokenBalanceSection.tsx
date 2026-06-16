@@ -7,6 +7,7 @@ import { formatDate, isExpiringSoon } from '../../lib/utils';
 import {
   fetchTokenUsageHistory,
   formatTokenUsageLabel,
+  formatTokenUsageLessonLine,
   isStudentTokensUnavailable,
   parseStudentTokensResponse,
   resolveStudentRemainingBalance,
@@ -120,6 +121,7 @@ export default function StudentTokenBalanceSection({
           profileId,
           purchaseLabel: t('dashboard.tokenUsagePurchase'),
           refundLabel: t('dashboard.tokenUsageRefundDefault'),
+          language: i18n.language,
         });
         if (!cancelled) setUsage(list);
       } catch {
@@ -132,7 +134,7 @@ export default function StudentTokenBalanceSection({
     return () => {
       cancelled = true;
     };
-  }, [profileId, t]);
+  }, [profileId, t, i18n.language]);
 
   const totalTokens = resolveStudentRemainingBalance(tokens, wallet);
   const expiringTokens = tokens.filter((tok) => isExpiringSoon(tok.expiry_date));
@@ -236,22 +238,40 @@ export default function StudentTokenBalanceSection({
           ) : usage.length === 0 ? (
             <p className="text-sm text-gray-500">{t('dashboard.tokenUsageEmpty')}</p>
           ) : (
-            <ul className="space-y-2 max-h-48 overflow-y-auto">
+            <ul className="space-y-3 max-h-48 overflow-y-auto">
               {usage.map((u) => (
-                <li key={u.id} className="flex justify-between items-start text-sm gap-2">
-                  <span className="text-gray-600 truncate min-w-0 flex items-center gap-1">
-                    {u.kind === 'refund' && (
-                      <RotateCcw className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0" aria-hidden />
-                    )}
-                    {formatDate(u.date, getLocale())} · {formatTokenUsageLabel(u, t)}
-                  </span>
-                  <span
-                    className={`font-medium flex-shrink-0 ${
-                      u.kind === 'refund' || u.change > 0 ? 'text-green-600' : 'text-red-600'
-                    }`}
-                  >
-                    {u.change > 0 ? `+${u.change}` : u.change}
-                  </span>
+                <li key={u.id} className="text-sm">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-gray-600 min-w-0 flex items-start gap-1">
+                      {u.kind === 'refund' && (
+                        <RotateCcw className="h-3.5 w-3.5 text-emerald-600 flex-shrink-0 mt-0.5" aria-hidden />
+                      )}
+                      <span className="min-w-0">
+                        <span className="block truncate">
+                          {formatDate(u.date, getLocale())} · {formatTokenUsageLabel(u, t)}
+                        </span>
+                        {u.lessons && u.lessons.length > 0 && (
+                          <ul className="mt-1 space-y-0.5">
+                            {u.lessons.map((lesson, idx) => (
+                              <li
+                                key={`${u.id}-lesson-${lesson.class_id ?? idx}`}
+                                className="text-xs text-gray-500 pl-2 border-l-2 border-gray-200"
+                              >
+                                {formatTokenUsageLessonLine(lesson, getLocale(), t)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </span>
+                    </span>
+                    <span
+                      className={`font-medium flex-shrink-0 ${
+                        u.kind === 'refund' || u.change > 0 ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    >
+                      {u.change > 0 ? `+${u.change}` : u.change}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
