@@ -1843,6 +1843,7 @@
       "lessonStatusPast": "已過期（不扣代幣）",
       "lessonStatusFull": "名額已滿",
       "lessonStatusAssigned": "已分配代幣",
+      "lessonStatusTrial": "試堂已確認（無需分配代幣）",
       "lessonStatusAwaiting": "已報名，待分配代幣",
       "lessonStatusCancelled": "已取消",
       "lessonStatusPending": "待分配"

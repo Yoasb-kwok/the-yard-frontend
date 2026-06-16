@@ -1822,6 +1822,7 @@
       "lessonStatusPast": "已过期（不扣代币）",
       "lessonStatusFull": "名额已满",
       "lessonStatusAssigned": "已分配代币",
+      "lessonStatusTrial": "试堂已确认（无需分配代币）",
       "lessonStatusAwaiting": "已报名，待分配代币",
       "lessonStatusCancelled": "已取消",
       "lessonStatusPending": "待分配"

@@ -37,6 +37,7 @@ import {
   mergeClassRowsWithEnrollments,
   normalizeClassId,
   enrollmentIsTokenAssigned,
+  enrollmentIsTrialEnrollment,
   pickCanonicalEnrollmentsByClass,
   type AdminClassEnrollmentRow,
 } from '../../lib/adminClassEnrollments';
@@ -391,10 +392,17 @@ export default function TokenAssignmentPage() {
     return enrollment != null && enrollmentIsTokenAssigned(enrollment);
   };
 
+  const isClassTrialEnrolled = (classId: string): boolean => {
+    const enrollment = canonicalEnrollmentsByClass.get(normalizeClassId(classId));
+    return enrollment != null && enrollmentIsTrialEnrollment(enrollment);
+  };
+
   const hasEnrollmentAwaitingTokens = (classId: string): boolean => {
     const key = normalizeClassId(classId);
     const enrollment = canonicalEnrollmentsByClass.get(key);
-    if (!enrollment || enrollmentIsTokenAssigned(enrollment)) return false;
+    if (!enrollment || enrollmentIsTokenAssigned(enrollment) || enrollmentIsTrialEnrollment(enrollment)) {
+      return false;
+    }
     return String(enrollment.status).toLowerCase() !== 'cancelled';
   };
 
@@ -448,7 +456,7 @@ export default function TokenAssignmentPage() {
 
   const canAssignToClass = (classItem: Class): boolean => {
     const unassignedTokens = getUnassignedTokens();
-    if (isClassTokensAssigned(classItem.id)) return false;
+    if (isClassTokensAssigned(classItem.id) || isClassTrialEnrolled(classItem.id)) return false;
     if (isClassFull(classItem) || isClassPast(classItem) || classItem.is_cancelled || unassignedTokens <= 0) {
       return false;
     }
@@ -456,7 +464,7 @@ export default function TokenAssignmentPage() {
   };
 
   const canAssignFullCourseBatch = (classItem: Class): boolean => {
-    if (isClassTokensAssigned(classItem.id)) return false;
+    if (isClassTokensAssigned(classItem.id) || isClassTrialEnrolled(classItem.id)) return false;
     if (classItem.is_cancelled || isClassPast(classItem) || isClassFull(classItem)) return false;
     return getUnassignedTokens() > 0;
   };
@@ -1187,16 +1195,28 @@ export default function TokenAssignmentPage() {
     });
   };
 
+  const trialEnrolledClassIds = useMemo(
+    () =>
+      new Set(
+        canonicalEnrollments
+          .filter(enrollmentIsTrialEnrollment)
+          .map((e) => normalizeClassId(e.class_id))
+          .filter(Boolean),
+      ),
+    [canonicalEnrollments],
+  );
+
   const awaitingTokensClassIds = useMemo(() => {
     const s = new Set<string>();
     for (const e of canonicalEnrollments) {
       const key = normalizeClassId(e.class_id);
       if (!key || assignedClassIds.has(key)) continue;
+      if (trialEnrolledClassIds.has(key)) continue;
       if (String(e.status).toLowerCase() === 'cancelled') continue;
       if (!enrollmentIsTokenAssigned(e)) s.add(key);
     }
     return s;
-  }, [canonicalEnrollments, assignedClassIds]);
+  }, [canonicalEnrollments, assignedClassIds, trialEnrolledClassIds]);
 
   const listSharedProps = {
     expandedKeys: expandedGroups,
@@ -1204,6 +1224,7 @@ export default function TokenAssignmentPage() {
     locale: getLocale(),
     assignedClassIds,
     awaitingTokensClassIds,
+    trialEnrolledClassIds,
     getLocationLabel,
     getStatusLabel,
     getUnassignedTokens,

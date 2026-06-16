@@ -9,6 +9,7 @@ export type AdminClassEnrollmentRow = {
   class_id: string;
   status: 'enrolled' | 'attended' | 'absent' | 'sick_leave' | 'cancelled' | 'leave_pending';
   tokens_charged: number;
+  enrollment_scope?: string | null;
   created_at: string;
   className: string;
   classCode: string;
@@ -90,12 +91,18 @@ export function mapAdminClassEnrollmentRow(raw: Record<string, unknown>): AdminC
 
   const tokensCharged = readTokensCharged(raw);
   const status = (raw.status as AdminClassEnrollmentRow['status']) || 'enrolled';
+  const enrollmentScopeRaw = raw.enrollment_scope ?? raw.enrollmentScope;
+  const enrollment_scope =
+    enrollmentScopeRaw == null || enrollmentScopeRaw === ''
+      ? null
+      : String(enrollmentScopeRaw).trim();
 
   return {
     id,
     class_id: classId,
     status,
     tokens_charged: tokensCharged,
+    enrollment_scope,
     created_at: String(raw.created_at ?? raw.createdAt ?? ''),
     className: String(cls?.name ?? cls?.class_name ?? raw.class_name ?? raw.className ?? ''),
     classCode: String(cls?.class_code ?? cls?.program_code ?? raw.class_code ?? raw.program_code ?? ''),
@@ -161,13 +168,24 @@ export function mergeClassRowsWithEnrollments(
   return Array.from(byId.values());
 }
 
+export function enrollmentIsTrialEnrollment(enrollment: AdminClassEnrollmentRow): boolean {
+  if (String(enrollment.status).toLowerCase() === 'cancelled') return false;
+  return String(enrollment.enrollment_scope ?? '').trim().toLowerCase() === 'trial';
+}
+
 export function enrollmentIsTokenAssigned(enrollment: AdminClassEnrollmentRow): boolean {
   if (String(enrollment.status).toLowerCase() === 'cancelled') return false;
   return enrollment.tokens_charged > 0;
 }
 
+/** Trial enrollments are on the attendance list but must not receive token assignment. */
+export function enrollmentBlocksTokenAssignment(enrollment: AdminClassEnrollmentRow): boolean {
+  return enrollmentIsTokenAssigned(enrollment) || enrollmentIsTrialEnrollment(enrollment);
+}
+
 function enrollmentPickPriority(enrollment: AdminClassEnrollmentRow): number {
   if (String(enrollment.status).toLowerCase() === 'cancelled') return 0;
+  if (enrollmentIsTrialEnrollment(enrollment)) return 4;
   if (enrollment.tokens_charged > 0) return 3;
   return 2;
 }

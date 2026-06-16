@@ -1840,6 +1840,7 @@
       "lessonStatusPast": "Past (no token charge)",
       "lessonStatusFull": "Class full",
       "lessonStatusAssigned": "Tokens assigned",
+      "lessonStatusTrial": "Trial confirmed — no tokens needed",
       "lessonStatusAwaiting": "Enrolled, awaiting tokens",
       "lessonStatusCancelled": "Cancelled",
       "lessonStatusPending": "Pending assignment"

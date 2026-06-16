@@ -32,6 +32,7 @@ export interface TokenAssignmentCourseListProps {
   tokensChargedByClassId?: Map<string, number>;
   enrollmentStatusByClassId?: Map<string, string>;
   awaitingTokensClassIds?: Set<string>;
+  trialEnrolledClassIds?: Set<string>;
 }
 
 export default function TokenAssignmentCourseList({
@@ -54,8 +55,12 @@ export default function TokenAssignmentCourseList({
   tokensChargedByClassId,
   enrollmentStatusByClassId,
   awaitingTokensClassIds,
+  trialEnrolledClassIds,
 }: TokenAssignmentCourseListProps) {
   const { t } = useTranslation();
+
+  const isTrialLesson = (lesson: TokenAssignmentClassRow): boolean =>
+    trialEnrolledClassIds?.has(normalizeClassId(lesson.id)) ?? false;
 
   const enrollmentStatusBadgeClass = (status: string): string => {
     switch (status) {
@@ -82,6 +87,8 @@ export default function TokenAssignmentCourseList({
         return t('admin.tokenAssignment.lessonStatusFull');
       case 'assigned':
         return t('admin.tokenAssignment.lessonStatusAssigned');
+      case 'trial':
+        return t('admin.tokenAssignment.lessonStatusTrial');
       case 'awaiting_tokens':
         return t('admin.tokenAssignment.lessonStatusAwaiting');
       case 'cancelled':
@@ -149,7 +156,8 @@ export default function TokenAssignmentCourseList({
             const first = group.lessons[0];
             const last = group.lessons[group.lessons.length - 1];
             const assignableInGroup = group.lessons.filter((l) => {
-              if (assignedClassIds.has(normalizeClassId(l.id))) return false;
+              const lessonKey = normalizeClassId(l.id);
+              if (assignedClassIds.has(lessonKey) || trialEnrolledClassIds?.has(lessonKey)) return false;
               if (canAssignFullCourseBatch?.(l)) return true;
               return canAssignToClass(l);
             });
@@ -277,13 +285,19 @@ export default function TokenAssignmentCourseList({
                       </button>
                     )}
                     {mode === 'unassigned' && !multiLesson && first && (
-                      <AssignButton
-                        lesson={first}
-                        canAssign={canAssignToClass(first)}
-                        getUnassignedTokens={getUnassignedTokens}
-                        isClassFull={isClassFull}
-                        onAssign={onAssignLesson}
-                      />
+                      isTrialLesson(first) ? (
+                        <span className="text-xs font-medium text-blue-800">
+                          {t('admin.tokenAssignment.lessonStatusTrial')}
+                        </span>
+                      ) : (
+                        <AssignButton
+                          lesson={first}
+                          canAssign={canAssignToClass(first)}
+                          getUnassignedTokens={getUnassignedTokens}
+                          isClassFull={isClassFull}
+                          onAssign={onAssignLesson}
+                        />
+                      )
                     )}
                     {mode === 'assigned' && !multiLesson && first && enrollmentIdByClassId?.get(first.id) && onRemoveAssignment && (
                       <button
@@ -310,8 +324,10 @@ export default function TokenAssignmentCourseList({
                     const uiStatus = getLessonEnrollmentUiStatus(lesson, {
                       assignedClassIds,
                       awaitingTokensClassIds,
+                      trialEnrolledClassIds,
                     });
                     const isAssigned = uiStatus === 'assigned';
+                    const isTrial = uiStatus === 'trial';
                     const statusText = lessonStatusLabel(uiStatus);
                     const tokens = tokensChargedByClassId?.get(lessonKey) ?? 0;
                     const enrollStatus = enrollmentStatusByClassId?.get(lessonKey);
@@ -321,6 +337,8 @@ export default function TokenAssignmentCourseList({
                         ? 'bg-gray-50/80 text-gray-500'
                         : uiStatus === 'full'
                           ? 'bg-amber-50/30'
+                          : isTrial
+                            ? 'bg-blue-50/40'
                           : isAssigned
                             ? 'hover:bg-green-50/30'
                             : 'hover:bg-gray-50';
@@ -361,6 +379,25 @@ export default function TokenAssignmentCourseList({
                                   ({t('admin.tokenAssignment.tokensAssigned')}: {tokens})
                                 </span>
                               )}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    if (mode === 'unassigned' && isTrial) {
+                      return (
+                        <tr key={`${group.key}-${lesson.id}`} className="bg-blue-50/40">
+                          <td />
+                          <td colSpan={7} className="px-4 py-2 pl-10 text-xs text-blue-900">
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              {formatProgramCodeDisplay(lesson.class_code, lesson.lesson_number) ||
+                                lesson.class_code}
+                              <span>·</span>
+                              {formatDateTimeRange(lesson.start_time, lesson.end_time, locale)}
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-800">
+                                {statusText}
+                              </span>
                             </span>
                           </td>
                         </tr>
@@ -430,14 +467,18 @@ export default function TokenAssignmentCourseList({
                               {lesson.enrolled_count} / {lesson.capacity}
                             </td>
                             <td className="px-4 py-2 text-sm">
-                              <AssignButton
-                                lesson={lesson}
-                                canAssign={canAssignToClass(lesson)}
-                                getUnassignedTokens={getUnassignedTokens}
-                                isClassFull={isClassFull}
-                                onAssign={onAssignLesson}
-                                compact
-                              />
+                              {isTrial ? (
+                                <span className="text-xs font-medium text-blue-800">{statusText}</span>
+                              ) : (
+                                <AssignButton
+                                  lesson={lesson}
+                                  canAssign={canAssignToClass(lesson)}
+                                  getUnassignedTokens={getUnassignedTokens}
+                                  isClassFull={isClassFull}
+                                  onAssign={onAssignLesson}
+                                  compact
+                                />
+                              )}
                             </td>
                           </>
                         ) : (
