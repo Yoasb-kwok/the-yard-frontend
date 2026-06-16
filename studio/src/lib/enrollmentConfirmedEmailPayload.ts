@@ -96,10 +96,8 @@ export function buildEnrollmentConfirmedEmailExtras(
     lesson_count: ctx.lesson_count,
     tokens_assigned: ctx.tokens_assigned,
     lessons: ctx.lessons,
-    ...(ctx.class_code ? { class_code: ctx.class_code } : {}),
     ...(ctx.instructor ? { instructor: ctx.instructor } : {}),
     ...(ctx.branch ? { branch: ctx.branch } : {}),
     ...(ctx.branch_label ? { branch_label: ctx.branch_label } : {}),
-    ...(ctx.enrollment_scope ? { enrollment_scope: ctx.enrollment_scope } : {}),
   };
 }
