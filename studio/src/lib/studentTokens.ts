@@ -43,11 +43,11 @@ function parseLessonDetails(raw: unknown): TokenUsageLessonDetail[] | undefined 
   return lessons.length > 0 ? lessons : undefined;
 }
 
-function toSecondKey(iso: string): string {
-  return String(iso || '').slice(0, 19);
+function toDayKey(iso: string): string {
+  return String(iso || '').slice(0, 10);
 }
 
-/** Group flat spend rows from the same assign action (same second + profile + token batch). */
+/** Group flat spend rows from the same assign action (same day + profile + token batch + course). */
 export function groupTokenUsageSpendItems(items: TokenUsageItem[]): TokenUsageItem[] {
   const others: TokenUsageItem[] = [];
   const spends: TokenUsageItem[] = [];
@@ -63,7 +63,8 @@ export function groupTokenUsageSpendItems(items: TokenUsageItem[]): TokenUsageIt
       others.push(item);
       continue;
     }
-    const key = `${item.profile_id || ''}|${toSecondKey(item.date)}|${item.user_token_id || 'none'}`;
+    const courseKey = (item.class_name || '').trim() || '—';
+    const key = `${item.profile_id || ''}|${toDayKey(item.date)}|${item.user_token_id || 'none'}|${courseKey}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(item);
   }
@@ -295,7 +296,40 @@ export function normalizeTokenUsageList(payload: unknown): TokenUsageItem[] {
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
-function usageFromRefunds(payload: unknown, refundFallbackLabel: string): TokenUsageItem[] {
+function enrollmentIdFromUsageId(id: string): string | null {
+  if (id.startsWith('enr-')) return id.slice(4);
+  return null;
+}
+
+/** Attach lesson date/time from enrollments when token-usage API returns flat rows. */
+async function enrichSpendLessonsFromEnrollments(items: TokenUsageItem[]): Promise<TokenUsageItem[]> {
+  const needsLesson = items.some(
+    (i) => i.kind === 'spend' && i.change < 0 && (!i.lessons || i.lessons.length === 0),
+  );
+  if (!needsLesson) return items;
+
+  const enrollRes = await api.get('/class-enrollments/me').catch(() => null);
+  const fromEnrollments = usageFromEnrollments(enrollRes ?? []);
+  const byEnrollmentId = new Map<string, TokenUsageItem>();
+  for (const row of fromEnrollments) {
+    const eid = enrollmentIdFromUsageId(row.id);
+    if (eid) byEnrollmentId.set(eid, row);
+  }
+
+  return items.map((item) => {
+    if (item.kind !== 'spend' || item.change >= 0 || (item.lessons && item.lessons.length > 0)) {
+      return item;
+    }
+    const eid = enrollmentIdFromUsageId(item.id);
+    const source = eid ? byEnrollmentId.get(eid) : undefined;
+    if (!source?.lessons?.length) return item;
+    return {
+      ...item,
+      user_token_id: item.user_token_id ?? source.user_token_id,
+      lessons: source.lessons,
+    };
+  });
+}
   const rows = extractArray(payload, ['refunds', 'records', 'items', 'data']);
   return rows
     .map((raw): TokenUsageItem | null => {
@@ -498,7 +532,8 @@ export async function fetchTokenUsageHistory(options?: {
 
   const refunds = await fetchRefundUsageHistory(refundLabel);
   const merged = mergeUsageLists(...primary, ...refunds);
-  const result = primary.length === 0 ? groupTokenUsageSpendItems(merged) : merged;
+  const enriched = await enrichSpendLessonsFromEnrollments(merged);
+  const result = groupTokenUsageSpendItems(enriched);
   return filterUsageByProfile(result, options?.profileId).slice(0, limit);
 }
 
