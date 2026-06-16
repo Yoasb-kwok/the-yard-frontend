@@ -6,118 +6,24 @@ import { api, ApiError } from '../../lib/api';
 import {
   getEnrollmentTokenCost,
   getLessonsForScope,
-  normalizeEnrollmentRequestCounts,
   type EnrollmentScope,
 } from '../../lib/classEnrollmentTokens';
-import { getAdminUserTokenBalance } from '../../lib/adminUserTokens';
-import { parseLessonClassIds } from '../../lib/courseLessonEnrollment';
-import { readProfilesArray } from '../../lib/adminUserFields';
-import { normalizeClassId } from '../../lib/adminClassEnrollments';
 import { formatDateTime, formatMobileForDisplay } from '../../lib/utils';
-import { ClipboardList, AlertCircle, Coins, Loader2, Mail, Package, Pencil, RefreshCw, X } from 'lucide-react';
-
-type EnrollmentRequest = {
-  id: string;
-  userId: string;
-  studentProfileId: string | null;
-  studentName: string;
-  userMobile: string | null;
-  classId: string;
-  className: string;
-  classCode?: string;
-  lessonCount: number;
-  tokensRequired: number;
-  enrollmentScope: EnrollmentScope;
-  createdAt: string;
-  unassignedTokens: number | null;
-  /** Wallet-level assigned tokens (display only — not used for tab routing). */
-  assignedTokens: number | null;
-  totalTokens: number | null;
-  status: string;
-  /** Tokens already charged for this request / class (request-level). */
-  tokensChargedForRequest: number;
-  alreadyEnrolled: boolean;
-  lessonClassIds: string[];
-};
-
-function parseEnrollmentRequestId(row: Record<string, unknown>): string {
-  for (const key of ['id', 'request_id', 'enrollment_request_id', 'enrollmentRequestId'] as const) {
-    const value = row[key];
-    if (value == null || value === '') continue;
-    const id = String(value).trim();
-    if (id && id !== '0' && id !== 'undefined') return id;
-  }
-  return '';
-}
-
-function normaliseRequestStatus(raw: unknown): string {
-  const status = String(raw ?? 'pending').trim().toLowerCase();
-  return status || 'pending';
-}
-
-function isPendingRequestStatus(status: string): boolean {
-  return (
-    status === 'pending' ||
-    status === 'submitted' ||
-    status === 'awaiting_tokens' ||
-    status === 'awaiting_assignment' ||
-    status === 'pending_assignment' ||
-    status === 'needs_tokens'
-  );
-}
-
-function isTerminalRequestStatus(status: string): boolean {
-  return status === 'fulfilled' || status === 'rejected' || status === 'cancelled' || status === 'assigned';
-}
-
-function isRejectedOrCancelledRequest(request: EnrollmentRequest): boolean {
-  const status = normaliseRequestStatus(request.status);
-  return status === 'rejected' || status === 'cancelled';
-}
-
-/** Tokens assigned / request closed successfully. */
-function isCompletedTokenAssignment(request: EnrollmentRequest): boolean {
-  if (!request.id || isRejectedOrCancelledRequest(request)) return false;
-  const status = normaliseRequestStatus(request.status);
-  if (status === 'fulfilled' || status === 'assigned') return true;
-  if (request.tokensChargedForRequest > 0) return true;
-  return false;
-}
-
-/** Still needs admin token assignment. */
-function isIncompleteTokenAssignment(request: EnrollmentRequest): boolean {
-  if (!request.id || isRejectedOrCancelledRequest(request)) return false;
-  if (isCompletedTokenAssignment(request)) return false;
-  const status = normaliseRequestStatus(request.status);
-  if (isTerminalRequestStatus(status)) return false;
-  if (isPendingRequestStatus(status)) return true;
-  if (request.alreadyEnrolled && request.tokensChargedForRequest === 0) return true;
-  if (request.tokensRequired > 0) return true;
-  return false;
-}
-
-function isAwaitingTokenAssignment(request: EnrollmentRequest): boolean {
-  return request.alreadyEnrolled && request.tokensChargedForRequest === 0;
-}
-
-function extractRejectCurrentStatus(err: unknown): string | null {
-  if (!(err instanceof ApiError) || !err.data) return null;
-  const raw = err.data.current_status ?? err.data.currentStatus;
-  if (raw == null || raw === '') return null;
-  return normaliseRequestStatus(raw);
-}
-
-function isReadyToAssignRequest(request: EnrollmentRequest): boolean {
-  return isIncompleteTokenAssignment(request) && hasSufficientUnassigned(request);
-}
-
-function isWaitingForTokensRequest(request: EnrollmentRequest): boolean {
-  return isIncompleteTokenAssignment(request) && !hasSufficientUnassigned(request);
-}
-
-function canRejectRequest(request: EnrollmentRequest): boolean {
-  return Boolean(request.id) && isPendingRequestStatus(normaliseRequestStatus(request.status));
-}
+import {
+  canRejectRequest,
+  hasSufficientUnassigned,
+  isAwaitingTokenAssignment,
+  isClassPendingRow,
+  isCompletedTokenAssignment,
+  isIncompleteTokenAssignment,
+  isReadyToAssignRequest,
+  isTokenReadyRow,
+  isWaitingForTokensRequest,
+  loadAdminEnrollmentRequestQueue,
+  normaliseRequestStatus,
+  type EnrollmentRequest,
+} from '../../lib/adminEnrollmentRequestQueue';
+import { AlertCircle, ClipboardList, Coins, Filter, Loader2, Mail, Package, Pencil, RefreshCw, X } from 'lucide-react';
 
 type ClassOption = {
   id: string;
@@ -128,111 +34,24 @@ type ClassOption = {
   isCancelled: boolean;
 };
 
-function parseOptionalTokenCount(value: unknown): number | null {
-  if (value == null || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) && n >= 0 ? n : null;
+function isTerminalRequestStatus(status: string): boolean {
+  return status === 'fulfilled' || status === 'rejected' || status === 'cancelled' || status === 'assigned';
 }
 
-type UserTokenSnapshot = { total: number; assigned: number; unassigned: number };
-
-function getUserTokenSnapshot(raw: Record<string, unknown>): UserTokenSnapshot {
-  const balance = getAdminUserTokenBalance(raw);
-  return {
-    total: balance.purchased,
-    assigned: balance.assigned,
-    unassigned: balance.remaining,
-  };
-}
-
-function normaliseRequests(
-  data: unknown,
-  userTokensById: Map<string, UserTokenSnapshot>,
-  profileTokensById: Map<string, UserTokenSnapshot>,
-): EnrollmentRequest[] {
-  if (!Array.isArray(data)) return [];
-  return data.map((row: Record<string, unknown>) => {
-    const userId = String(row.user_id ?? row.userId ?? '');
-    const snapshot = userId ? userTokensById.get(userId) : undefined;
-    const fromApiUnassigned =
-      parseOptionalTokenCount(row.unassigned_tokens ?? row.unassignedTokens ?? row.available_tokens ?? row.availableTokens) ??
-      parseOptionalTokenCount(row.user_unassigned_tokens ?? row.userUnassignedTokens);
-    const fromApiAssigned =
-      parseOptionalTokenCount(row.assigned_tokens ?? row.assignedTokens ?? row.user_assigned_tokens ?? row.userAssignedTokens);
-    const fromApiTotal = parseOptionalTokenCount(row.total_tokens ?? row.totalTokens ?? row.user_total_tokens ?? row.userTotalTokens);
-
-    const studentProfileId =
-      row.student_profile_id != null
-        ? String(row.student_profile_id).trim()
-        : row.studentProfileId != null
-          ? String(row.studentProfileId).trim()
-          : row.profile_id != null
-            ? String(row.profile_id).trim()
-            : '';
-
-    const profileSnapshot = studentProfileId ? profileTokensById.get(studentProfileId) : undefined;
-
-    const unassignedTokens =
-      fromApiUnassigned ?? profileSnapshot?.unassigned ?? snapshot?.unassigned ?? null;
-    const assignedTokens = fromApiAssigned ?? profileSnapshot?.assigned ?? snapshot?.assigned ?? null;
-    const totalTokens = fromApiTotal ?? profileSnapshot?.total ?? snapshot?.total ?? null;
-
-    const status = normaliseRequestStatus(row.status);
-    const tokensChargedForRequest = Number(
-      row.tokens_charged ??
-        row.tokensCharged ??
-        row.tokens_assigned ??
-        row.tokensAssigned ??
-        row.request_tokens_charged ??
-        0,
-    );
-    const alreadyEnrolled =
-      row.already_enrolled === true ||
-      row.already_enrolled === 1 ||
-      row.alreadyEnrolled === true ||
-      row.alreadyEnrolled === 1;
-
-    const counts = normalizeEnrollmentRequestCounts(row);
-
-    return {
-      id: parseEnrollmentRequestId(row),
-      userId,
-      studentProfileId: studentProfileId || null,
-      studentName: String(row.student_name ?? row.studentName ?? row.user_name ?? row.userName ?? ''),
-      userMobile: row.user_mobile != null ? String(row.user_mobile) : row.mobile != null ? String(row.mobile) : null,
-      classId: String(row.class_id ?? row.classId ?? ''),
-      className: String(row.class_name ?? row.className ?? ''),
-      classCode: row.class_code != null ? String(row.class_code) : row.program_code != null ? String(row.program_code) : undefined,
-      lessonCount: counts.lessonCount,
-      tokensRequired: counts.tokensRequired,
-      enrollmentScope: counts.enrollmentScope,
-      createdAt: String(row.created_at ?? row.createdAt ?? ''),
-      unassignedTokens,
-      assignedTokens,
-      totalTokens,
-      status,
-      tokensChargedForRequest: Number.isFinite(tokensChargedForRequest) && tokensChargedForRequest > 0 ? tokensChargedForRequest : 0,
-      alreadyEnrolled,
-      lessonClassIds: parseLessonClassIds(
-        row.lesson_class_ids ?? row.lessonClassIds ?? row.lesson_ids ?? row.lessonIds,
-      ),
-    };
-  });
-}
-
-function hasSufficientUnassigned(request: EnrollmentRequest): boolean {
-  return request.unassignedTokens != null && request.unassignedTokens >= request.tokensRequired;
+function extractRejectCurrentStatus(err: unknown): string | null {
+  if (!(err instanceof ApiError) || !err.data) return null;
+  const raw = err.data.current_status ?? err.data.currentStatus;
+  if (raw == null || raw === '') return null;
+  return normaliseRequestStatus(raw);
 }
 
 function buildAssignTokensUrl(request: EnrollmentRequest, tab: 'unassigned' | 'assigned'): string {
-  const params = new URLSearchParams({
-    tab,
-    classId: request.classId,
-    requestId: request.id,
-    quantity: String(request.tokensRequired),
-    lessonCount: String(request.lessonCount),
-    scope: request.enrollmentScope,
-  });
+  const params = new URLSearchParams({ tab });
+  if (request.classId) params.set('classId', request.classId);
+  if (request.id && !isTokenReadyRow(request)) params.set('requestId', request.id);
+  if (request.tokensRequired > 0) params.set('quantity', String(request.tokensRequired));
+  if (request.lessonCount > 0) params.set('lessonCount', String(request.lessonCount));
+  if (request.classId) params.set('scope', request.enrollmentScope);
   if (request.studentProfileId) {
     params.set('profileId', request.studentProfileId);
   }
@@ -242,46 +61,8 @@ function buildAssignTokensUrl(request: EnrollmentRequest, tab: 'unassigned' | 'a
   return `/admin/users/${request.userId}/assign-tokens?${params.toString()}`;
 }
 
-function extractEnrollmentRequestRows(payload: unknown): unknown[] {
-  if (Array.isArray(payload)) return payload;
-  if (!payload || typeof payload !== 'object') return [];
-  const root = payload as Record<string, unknown>;
-  const candidates = [
-    root.data,
-    root.requests,
-    root.enrollment_requests,
-    root.enrollmentRequests,
-    root.pending_enrollment_requests,
-    root.pendingEnrollmentRequests,
-    root.items,
-    root.results,
-    root.rows,
-  ];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
-  }
-  const nested = root.data;
-  if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-    const inner = nested as Record<string, unknown>;
-    for (const key of ['data', 'requests', 'enrollment_requests', 'enrollmentRequests', 'items'] as const) {
-      if (Array.isArray(inner[key])) return inner[key] as unknown[];
-    }
-  }
-  return [];
-}
-
 type ListTab = 'incomplete' | 'completed';
-
-function mergeEnrollmentRequestRows(...payloads: unknown[]): unknown[] {
-  const byId = new Map<string, unknown>();
-  for (const payload of payloads) {
-    for (const row of extractEnrollmentRequestRows(payload)) {
-      const id = parseEnrollmentRequestId(row as Record<string, unknown>);
-      if (id) byId.set(id, row);
-    }
-  }
-  return [...byId.values()];
-}
+type IncompleteSubTab = 'ready' | 'insufficient';
 
 function mapClassOptions(data: unknown): ClassOption[] {
   if (!Array.isArray(data)) return [];
@@ -315,50 +96,15 @@ export default function PendingEnrollmentRequestsPage() {
   const [editScope, setEditScope] = useState<EnrollmentScope>('single_lesson');
   const [savingEdit, setSavingEdit] = useState(false);
   const [listTab, setListTab] = useState<ListTab>('incomplete');
+  const [incompleteSubTab, setIncompleteSubTab] = useState<IncompleteSubTab>('ready');
 
   const getLocale = () => (i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US');
 
   const loadRequests = useCallback(() => {
     setApiError(null);
     setLoading(true);
-    Promise.all([
-      api.get<unknown>('/admin/enrollment-requests', { status: 'pending' }),
-      api
-        .get<unknown>('/admin/enrollment-requests', { status: 'fulfilled' })
-        .catch(() => ({ success: true, data: [] as unknown[] })),
-      api.get<Record<string, unknown>[]>('/admin/users').catch(() => ({ success: false, data: [] as Record<string, unknown>[] })),
-    ])
-      .then(([pendingRes, fulfilledRes, usersRes]) => {
-        if (pendingRes.success === false && fulfilledRes.success === false) {
-          setApiError(pendingRes.msg || fulfilledRes.msg || t('common.error'));
-          setRequests([]);
-          return;
-        }
-        const userTokensById = new Map<string, UserTokenSnapshot>();
-        const profileTokensById = new Map<string, UserTokenSnapshot>();
-        if (usersRes.success && Array.isArray(usersRes.data)) {
-          for (const user of usersRes.data) {
-            const id = String(user.id ?? '');
-            if (!id) continue;
-            userTokensById.set(id, getUserTokenSnapshot(user));
-            for (const profile of readProfilesArray(user)) {
-              const pid = normalizeClassId((profile as Record<string, unknown>).id);
-              if (!pid) continue;
-              const balance = getAdminUserTokenBalance(user, undefined, pid);
-              profileTokensById.set(pid, {
-                total: balance.purchased,
-                assigned: balance.assigned,
-                unassigned: balance.remaining,
-              });
-            }
-          }
-        }
-        const rows = mergeEnrollmentRequestRows(
-          pendingRes.data ?? pendingRes,
-          fulfilledRes.data ?? fulfilledRes,
-        );
-        setRequests(normaliseRequests(rows, userTokensById, profileTokensById));
-      })
+    loadAdminEnrollmentRequestQueue()
+      .then((rows) => setRequests(rows))
       .catch((err) => {
         setApiError(err instanceof Error ? err.message : t('common.error'));
         setRequests([]);
@@ -437,6 +183,12 @@ export default function PendingEnrollmentRequestsPage() {
     [incompleteRequests],
   );
 
+  useEffect(() => {
+    if (incompleteSubTab === 'insufficient' && waitingForTokensRequests.length === 0) {
+      setIncompleteSubTab('ready');
+    }
+  }, [incompleteSubTab, waitingForTokensRequests.length]);
+
   async function handleSendInsufficientTokensEmail(request: EnrollmentRequest) {
     if (sendingEmailId) return;
     setSendingEmailId(request.id);
@@ -499,6 +251,22 @@ export default function PendingEnrollmentRequestsPage() {
     setSavingEdit(true);
     setActionError(null);
     try {
+      if (isTokenReadyRow(editingRequest)) {
+        const updated: EnrollmentRequest = {
+          ...editingRequest,
+          classId: selectedClass.id,
+          className: selectedClass.name,
+          classCode: selectedClass.classCode || undefined,
+          lessonCount: editLessonCount,
+          tokensRequired: editTokensRequired,
+          enrollmentScope: editScope,
+        };
+        setRequests((prev) =>
+          prev.map((row) => (row.id === editingRequest.id ? updated : row)),
+        );
+        setEditingRequest(null);
+        return;
+      }
       await api.patch(`/admin/enrollment-requests/${editingRequest.id}`, {
         class_id: selectedClass.id,
         lesson_count: editLessonCount,
@@ -540,27 +308,43 @@ export default function PendingEnrollmentRequestsPage() {
 
   function renderActionsCell(request: EnrollmentRequest, section: 'unassigned' | 'assigned') {
     const insufficientUnassigned = !hasSufficientUnassigned(request);
+    const editLabel = isTokenReadyRow(request)
+      ? t('admin.enrollmentRequests.selectClassAction', '選擇課程')
+      : t('admin.enrollmentRequests.edit');
+    const canAssignNow = Boolean(request.classId) && (request.tokensRequired > 0 || isTokenReadyRow(request));
     return (
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => openEdit(request)}
           className="p-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-          title={t('admin.enrollmentRequests.edit')}
-          aria-label={t('admin.enrollmentRequests.edit')}
+          title={editLabel}
+          aria-label={editLabel}
         >
           <Pencil className="h-4 w-4" />
         </button>
         {section === 'unassigned' ? (
-          <Link
-            to={buildAssignTokensUrl(request, 'unassigned')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary-dark"
-            title={t('admin.enrollmentRequests.assignUnassignedTokens')}
-            aria-label={t('admin.enrollmentRequests.assignUnassignedTokens')}
-          >
-            <Package className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">{t('admin.enrollmentRequests.assignUnassignedTokens')}</span>
-          </Link>
+          canAssignNow ? (
+            <Link
+              to={buildAssignTokensUrl(request, 'unassigned')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary-dark"
+              title={t('admin.enrollmentRequests.assignUnassignedTokens')}
+              aria-label={t('admin.enrollmentRequests.assignUnassignedTokens')}
+            >
+              <Package className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">{t('admin.enrollmentRequests.assignUnassignedTokens')}</span>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => openEdit(request)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-primary text-white rounded-md hover:bg-primary-dark"
+              title={t('admin.enrollmentRequests.selectClassBeforeAssign', '請先選擇課程')}
+            >
+              <Package className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">{t('admin.enrollmentRequests.assignUnassignedTokens')}</span>
+            </button>
+          )
         ) : (
           <>
             {insufficientUnassigned && (
@@ -590,19 +374,21 @@ export default function PendingEnrollmentRequestsPage() {
             </Link>
           </>
         )}
-        <button
-          type="button"
-          onClick={() => {
-            setRejectingId(request.id);
-            setRejectReason('');
-            setActionError(null);
-          }}
-          className="p-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-          title={t('admin.enrollmentRequests.reject')}
-          aria-label={t('admin.enrollmentRequests.reject')}
-        >
-          <X className="h-4 w-4" />
-        </button>
+        {canRejectRequest(request) && (
+          <button
+            type="button"
+            onClick={() => {
+              setRejectingId(request.id);
+              setRejectReason('');
+              setActionError(null);
+            }}
+            className="p-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+            title={t('admin.enrollmentRequests.reject')}
+            aria-label={t('admin.enrollmentRequests.reject')}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
     );
   }
@@ -649,22 +435,39 @@ export default function PendingEnrollmentRequestsPage() {
                   <p className="text-xs text-gray-500">{formatMobileForDisplay(request.userMobile, '—')}</p>
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-900">
-                  <p>{request.className || '—'}</p>
-                  {request.classCode && <p className="text-xs text-primary">{request.classCode}</p>}
-                  {request.alreadyEnrolled && (
-                    <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-900">
-                      {isAwaitingTokenAssignment(request)
-                        ? t('admin.enrollmentRequests.alreadyEnrolledBadge')
-                        : t('admin.enrollmentRequests.alreadyEnrolled')}
+                  {isClassPendingRow(request) ? (
+                    <span className="text-gray-400">—</span>
+                  ) : (
+                    <>
+                      <p>{request.className || '—'}</p>
+                      {request.classCode && <p className="text-xs text-primary">{request.classCode}</p>}
+                      {request.alreadyEnrolled && (
+                        <span className="mt-1 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-900">
+                          {isAwaitingTokenAssignment(request)
+                            ? t('admin.enrollmentRequests.alreadyEnrolledBadge')
+                            : t('admin.enrollmentRequests.alreadyEnrolled')}
+                        </span>
+                      )}
+                    </>
+                  )}
+                  {isTokenReadyRow(request) && (
+                    <span className="mt-1 inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-900">
+                      {t('admin.enrollmentRequests.tokenReadyBadge', '已購代幣待分配')}
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-700">{scopeLabel(request.enrollmentScope, request.lessonCount)}</td>
+                <td className="px-4 py-3 text-sm text-gray-700">
+                  {isClassPendingRow(request) ? '—' : scopeLabel(request.enrollmentScope, request.lessonCount)}
+                </td>
                 <td className="px-4 py-3 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium text-gray-900">{request.tokensRequired}</span>
-                    {renderInsufficientTokensBadge(request.tokensRequired, request.unassignedTokens)}
-                  </div>
+                  {isClassPendingRow(request) ? (
+                    <span className="text-gray-400">—</span>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-gray-900">{request.tokensRequired}</span>
+                      {renderInsufficientTokensBadge(request.tokensRequired, request.unassignedTokens)}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <span className={`font-semibold ${hasSufficientUnassigned(request) ? 'text-green-700' : 'text-amber-700'}`}>
@@ -675,7 +478,11 @@ export default function PendingEnrollmentRequestsPage() {
                   {request.assignedTokens != null ? request.assignedTokens : '—'}
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">
-                  {request.createdAt ? formatDateTime(request.createdAt, getLocale()) : '—'}
+                  {isTokenReadyRow(request)
+                    ? '—'
+                    : request.createdAt
+                      ? formatDateTime(request.createdAt, getLocale())
+                      : '—'}
                 </td>
                 {options?.showStatus && (
                   <td className="px-4 py-3 text-sm">
@@ -708,10 +515,13 @@ export default function PendingEnrollmentRequestsPage() {
     <Layout>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <ClipboardList className="h-7 w-7 text-primary" />
-            {t('admin.enrollmentRequests.title')}
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <ClipboardList className="h-7 w-7 text-primary" />
+              {t('admin.enrollmentRequests.title')}
+            </h1>
+            <p className="text-sm text-gray-600 mt-1 max-w-3xl">{t('admin.enrollmentRequests.hint')}</p>
+          </div>
           <button
             type="button"
             onClick={loadRequests}
@@ -739,14 +549,17 @@ export default function PendingEnrollmentRequestsPage() {
         ) : requests.length === 0 ? (
           <div className="bg-white rounded-lg shadow-md p-8 text-center">
             <p className="text-gray-600">{t('admin.enrollmentRequests.empty')}</p>
-            <p className="text-sm text-gray-500 mt-2">{t('admin.enrollmentRequests.apiNotReady')}</p>
+            {apiError && <p className="text-sm text-red-500 mt-2">{apiError}</p>}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
             <div className="flex flex-wrap gap-2 p-4 border-b border-gray-200">
               <button
                 type="button"
-                onClick={() => setListTab('incomplete')}
+                onClick={() => {
+                  setListTab('incomplete');
+                  setIncompleteSubTab('ready');
+                }}
                 className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                   listTab === 'incomplete'
                     ? 'bg-primary text-white shadow-sm'
@@ -774,31 +587,44 @@ export default function PendingEnrollmentRequestsPage() {
               incompleteRequests.length === 0 ? (
                 <p className="p-8 text-center text-gray-600">{t('admin.enrollmentRequests.emptyIncomplete', '目前沒有待完成的代幣分配。')}</p>
               ) : (
-                <div className="space-y-8 p-4">
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                      {t('admin.enrollmentRequests.tableUnassignedTokens')}
-                      <span className="ml-2 font-normal text-gray-500">({readyToAssignRequests.length})</span>
-                    </h3>
-                    <p className="text-xs text-gray-500 mb-3">{t('admin.enrollmentRequests.tableUnassignedHint')}</p>
-                    {readyToAssignRequests.length === 0 ? (
-                      <p className="text-sm text-gray-500 py-4">{t('admin.enrollmentRequests.emptyUnassignedSection')}</p>
-                    ) : (
-                      renderRequestsTable(readyToAssignRequests, 'unassigned')
-                    )}
+                <div className="p-4 space-y-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-gray-500" />
+                      <select
+                        value={incompleteSubTab}
+                        onChange={(e) => setIncompleteSubTab(e.target.value as IncompleteSubTab)}
+                        className="border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary"
+                      >
+                        <option value="ready">
+                          {t('admin.enrollmentRequests.tableUnassignedTokens')} ({readyToAssignRequests.length})
+                        </option>
+                        <option value="insufficient">
+                          {t('admin.enrollmentRequests.tableAssignedTokens')} ({waitingForTokensRequests.length})
+                        </option>
+                      </select>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                      {t('admin.enrollmentRequests.tableAssignedTokens')}
-                      <span className="ml-2 font-normal text-gray-500">({waitingForTokensRequests.length})</span>
-                    </h3>
-                    <p className="text-xs text-gray-500 mb-3">{t('admin.enrollmentRequests.tableAssignedHint')}</p>
-                    {waitingForTokensRequests.length === 0 ? (
-                      <p className="text-sm text-gray-500 py-4">{t('admin.enrollmentRequests.emptyAssignedSection')}</p>
-                    ) : (
-                      renderRequestsTable(waitingForTokensRequests, 'assigned')
-                    )}
-                  </div>
+
+                  {incompleteSubTab === 'ready' ? (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-3">{t('admin.enrollmentRequests.tableUnassignedHint')}</p>
+                      {readyToAssignRequests.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-4">{t('admin.enrollmentRequests.emptyUnassignedSection')}</p>
+                      ) : (
+                        renderRequestsTable(readyToAssignRequests, 'unassigned')
+                      )}
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-3">{t('admin.enrollmentRequests.tableAssignedHint')}</p>
+                      {waitingForTokensRequests.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-4">{t('admin.enrollmentRequests.emptyAssignedSection')}</p>
+                      ) : (
+                        renderRequestsTable(waitingForTokensRequests, 'assigned')
+                      )}
+                    </div>
+                  )}
                 </div>
               )
             ) : completedRequests.length === 0 ? (
@@ -815,7 +641,11 @@ export default function PendingEnrollmentRequestsPage() {
           <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">{t('admin.enrollmentRequests.editTitle')}</h2>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  {isTokenReadyRow(editingRequest)
+                    ? t('admin.enrollmentRequests.selectClassTitle', '選擇課程並分配代幣')
+                    : t('admin.enrollmentRequests.editTitle')}
+                </h2>
                 <p className="text-sm text-gray-600 mt-1">
                   {editingRequest.studentName}
                   {editingRequest.userMobile ? ` · ${formatMobileForDisplay(editingRequest.userMobile, '')}` : ''}
