@@ -35,6 +35,7 @@ export interface TrialApplication {
   has_joined_courses?: boolean | null;
   has_dance_experience?: boolean | null;
   how_did_you_hear?: string | null;
+  referrer_name?: string | null;
   promo_code?: string | null;
   applied_at: string;
   updated_at?: string;
@@ -134,6 +135,7 @@ function normalizeTrialApplicationRow(raw: unknown): TrialApplication | null {
     has_joined_courses: toOptBool(o.has_joined_courses ?? o.hasJoinedCourses),
     has_dance_experience: toOptBool(o.has_dance_experience ?? o.hasDanceExperience),
     how_did_you_hear: toOptStr(o.how_did_you_hear ?? o.howDidYouHear),
+    referrer_name: toOptStr(o.referrer_name ?? o.referrerName),
     promo_code: toOptStr(o.promo_code ?? o.promoCode),
     applied_at: toStr(o.applied_at ?? o.created_at),
     updated_at: toOptStr(o.updated_at) ?? undefined,
@@ -800,6 +802,9 @@ export default function TrialApplicationsPage() {
                                 <div><span className="text-gray-500">{t('trial.hasJoinedCourses', { defaultValue: '是否參加過常規/暑期課程' })}：</span><span className="text-gray-900">{getBooleanLabel(app.has_joined_courses)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.hasDanceExperience', { defaultValue: '是否有舞蹈經驗' })}：</span><span className="text-gray-900">{getBooleanLabel(app.has_dance_experience)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.howDidYouHear', { defaultValue: '如何得知我們' })}：</span><span className="text-gray-900">{getHowDidYouHearLabel(app.how_did_you_hear)}</span></div>
+                                {app.how_did_you_hear === 'friendReferral' && app.referrer_name ? (
+                                  <div><span className="text-gray-500">{t('trial.referrerName', { defaultValue: '介紹人姓名' })}：</span><span className="text-gray-900">{app.referrer_name}</span></div>
+                                ) : null}
                                 <div><span className="text-gray-500">{t('trial.promoCode', { defaultValue: '優惠碼' })}：</span><span className="text-gray-900">{app.promo_code || '—'}</span></div>
                               </div>
                             </div>

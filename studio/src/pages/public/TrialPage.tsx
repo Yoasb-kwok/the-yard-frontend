@@ -61,6 +61,7 @@ type TrialFormDraft = {
   hasDanceExperience: boolean;
   howDidYouHear: string;
   promoCode: string;
+  referrerName: string;
 };
 
 type TrialNameSuggestion = {
@@ -92,6 +93,7 @@ export default function TrialPage() {
   const [hasDanceExperience, setHasDanceExperience] = useState(false);
   const [howDidYouHear, setHowDidYouHear] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [referrerName, setReferrerName] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   /**
@@ -213,6 +215,7 @@ export default function TrialPage() {
       hasDanceExperience,
       howDidYouHear,
       promoCode,
+      referrerName,
     };
     localStorage.setItem(TRIAL_FORM_DRAFT_KEY, JSON.stringify(draft));
   };
@@ -240,6 +243,7 @@ export default function TrialPage() {
       }
       if (typeof draft.howDidYouHear === 'string') setHowDidYouHear(draft.howDidYouHear);
       if (typeof draft.promoCode === 'string') setPromoCode(draft.promoCode);
+      if (typeof draft.referrerName === 'string') setReferrerName(draft.referrerName);
       if (!classData && !selectedTrialClass && draft.classData) {
         setSelectedTrialClass(draft.classData);
       }
@@ -342,6 +346,11 @@ export default function TrialPage() {
       return;
     }
 
+    if (howDidYouHear === 'friendReferral' && !referrerName.trim()) {
+      setError(t('trial.referrerNameRequired'));
+      return;
+    }
+
     // If logged in, still call backend so trial is saved and shows in 我的試堂申請
     if (isLoggedIn && user && profile) {
       trialSubmitLockRef.current = true;
@@ -385,6 +394,10 @@ export default function TrialPage() {
           hasDanceExperience,
           howDidYouHear: howDidYouHear || undefined,
           promoCode: promoCode.trim() || undefined,
+          referrerName:
+            howDidYouHear === 'friendReferral' ? referrerName.trim() || undefined : undefined,
+          referrer_name:
+            howDidYouHear === 'friendReferral' ? referrerName.trim() || undefined : undefined,
           // Ask backend to send trial-application confirmation email on success.
           sendConfirmationEmail: true,
           confirmationEmailType: 'trial_application_submitted',
@@ -465,6 +478,10 @@ export default function TrialPage() {
         hasDanceExperience,
         howDidYouHear: howDidYouHear || undefined,
         promoCode: promoCode.trim() || undefined,
+        referrerName:
+          howDidYouHear === 'friendReferral' ? referrerName.trim() || undefined : undefined,
+        referrer_name:
+          howDidYouHear === 'friendReferral' ? referrerName.trim() || undefined : undefined,
         // Ask backend to send trial-application confirmation email on success.
         sendConfirmationEmail: true,
         confirmationEmailType: 'trial_application_submitted',
@@ -1078,7 +1095,11 @@ export default function TrialPage() {
                       name="howDidYouHear"
                       className="appearance-none relative block w-full px-3 py-2 border border-gray-300 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
                       value={howDidYouHear}
-                      onChange={(e) => setHowDidYouHear(e.target.value)}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setHowDidYouHear(value);
+                        if (value !== 'friendReferral') setReferrerName('');
+                      }}
                     >
                       <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
                       <option value="facebook">{t('trial.howDidYouHearOptions.facebook')}</option>
@@ -1088,6 +1109,24 @@ export default function TrialPage() {
                       <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
                     </select>
                   </div>
+
+                  {howDidYouHear === 'friendReferral' && (
+                    <div>
+                      <label htmlFor="referrerName" className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('trial.referrerName')} <span className="text-red-600">*</span>
+                      </label>
+                      <input
+                        id="referrerName"
+                        name="referrerName"
+                        type="text"
+                        required
+                        className="appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm"
+                        placeholder={t('trial.referrerNamePlaceholder')}
+                        value={referrerName}
+                        onChange={(e) => setReferrerName(e.target.value)}
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label htmlFor="promoCode" className="block text-sm font-medium text-gray-700 mb-1">

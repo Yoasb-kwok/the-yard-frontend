@@ -345,6 +345,9 @@
       "theYardPromo": "The Yard Promo",
       "friendReferral": "Friend referral"
     },
+    "referrerName": "Referrer name",
+    "referrerNamePlaceholder": "Enter the name of the person who referred you",
+    "referrerNameRequired": "Please enter the referrer's name",
     "password": "Password",
     "passwordMin": "Minimum 6 characters",
     "submitApplication": "Submit Application",

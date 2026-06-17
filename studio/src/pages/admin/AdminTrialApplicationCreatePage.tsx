@@ -30,6 +30,7 @@ export default function AdminTrialApplicationCreatePage() {
   const [hasDanceExperience, setHasDanceExperience] = useState(false);
   const [howDidYouHear, setHowDidYouHear] = useState('');
   const [promoCode, setPromoCode] = useState('');
+  const [referrerName, setReferrerName] = useState('');
   const [classOptions, setClassOptions] = useState<ClassOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(true);
   const [classLoadError, setClassLoadError] = useState<string | null>(null);
@@ -172,6 +173,10 @@ export default function AdminTrialApplicationCreatePage() {
       );
       return;
     }
+    if (howDidYouHear === 'friendReferral' && !referrerName.trim()) {
+      setError(t('trial.referrerNameRequired'));
+      return;
+    }
 
     const appliedAtIso = new Date().toISOString();
     const normalizedPhone = contactPhone.trim();
@@ -239,6 +244,10 @@ export default function AdminTrialApplicationCreatePage() {
       has_dance_experience: hasDanceExperience,
       howDidYouHear: howDidYouHear || undefined,
       how_did_you_hear: howDidYouHear || undefined,
+      referrerName:
+        howDidYouHear === 'friendReferral' ? referrerName.trim() || undefined : undefined,
+      referrer_name:
+        howDidYouHear === 'friendReferral' ? referrerName.trim() || undefined : undefined,
       promoCode: promoCode.trim() || undefined,
       promo_code: promoCode.trim() || undefined,
     };
@@ -462,7 +471,11 @@ export default function AdminTrialApplicationCreatePage() {
               <span className="text-sm font-medium text-gray-700">{t('trial.howDidYouHear')}</span>
               <select
                 value={howDidYouHear}
-                onChange={(e) => setHowDidYouHear(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setHowDidYouHear(value);
+                  if (value !== 'friendReferral') setReferrerName('');
+                }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
               >
                 <option value="">{t('trial.howDidYouHearPlaceholder')}</option>
@@ -473,6 +486,21 @@ export default function AdminTrialApplicationCreatePage() {
                 <option value="friendReferral">{t('trial.howDidYouHearOptions.friendReferral')}</option>
               </select>
             </label>
+
+            {howDidYouHear === 'friendReferral' && (
+              <label className="space-y-1">
+                <span className="text-sm font-medium text-gray-700">
+                  {t('trial.referrerName')} <span className="text-red-600">*</span>
+                </span>
+                <input
+                  value={referrerName}
+                  onChange={(e) => setReferrerName(e.target.value)}
+                  required
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-primary focus:ring-2 focus:ring-primary"
+                  placeholder={t('trial.referrerNamePlaceholder')}
+                />
+              </label>
+            )}
 
             <label className="space-y-1">
               <span className="text-sm font-medium text-gray-700">

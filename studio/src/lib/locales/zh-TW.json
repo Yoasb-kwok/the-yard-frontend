@@ -343,6 +343,9 @@
       "theYardPromo": "The Yard Promo",
       "friendReferral": "朋友介紹"
     },
+    "referrerName": "介紹人姓名",
+    "referrerNamePlaceholder": "請填寫介紹人姓名",
+    "referrerNameRequired": "請填寫介紹人姓名",
     "usedPromoCode": "使用了推廣碼",
     "promoCodePlaceholder": "選填，方便統計推廣來源",
     "password": "密碼",
