@@ -7,7 +7,7 @@ import { formatDateTimeRange, shouldPostponeClassWithHolidays, formatProgramCode
 import { dedupeLatestEnrollmentPerStudent } from '../../lib/adminClassEnrollments';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
-import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users, Trash2 } from 'lucide-react';
+import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users, Trash2, AlertCircle, CalendarPlus } from 'lucide-react';
 import DateSelect from '../../components/DateSelect';
 import { type CourseLevel, useAuth } from '../../contexts/AuthContext';
 import { useClassTags, localizeTagLabel } from '../../lib/useClassTags';
@@ -26,7 +26,9 @@ interface Class {
   start_time: string;
   end_time: string;
   capacity: number;
+  min_enrollment: number;
   enrolled_count: number;
+  token_cost?: number;
   is_internal: boolean;
   is_cancelled: boolean;
   /** 可供試堂（課程介紹「可供試堂時段」只顯示 allow_trial 的班別） */
@@ -39,6 +41,32 @@ interface Class {
   postponed_from?: string | null;
   /** 出席名單是否已確認 */
   attendance_confirmed?: boolean;
+}
+
+/** Upcoming/non-ended classes with fewer enrollments than min_enrollment. */
+function isBelowMinEnrollment(classItem: Pick<Class, 'is_cancelled' | 'min_enrollment' | 'enrolled_count' | 'end_time'>): boolean {
+  if (classItem.is_cancelled) return false;
+  const min = Math.max(1, Number(classItem.min_enrollment) || 1);
+  const enrolled = Math.max(0, Number(classItem.enrolled_count) || 0);
+  if (enrolled >= min) return false;
+  const endMs = new Date(classItem.end_time).getTime();
+  return Number.isFinite(endMs) && endMs > Date.now();
+}
+
+function matchesStatusFilter(
+  classItem: Class,
+  statusFilter: StatusFilter,
+): boolean {
+  if (statusFilter === 'all') return true;
+  if (statusFilter === 'belowMinEnrollment') return isBelowMinEnrollment(classItem);
+  if (statusFilter === 'attendanceNotConfirmed') return !classItem.attendance_confirmed;
+  if (statusFilter === 'cancelled') return classItem.is_cancelled;
+  if (statusFilter === 'full') {
+    const capacity = Math.max(0, Number(classItem.capacity) || 0);
+    const enrolled = Math.max(0, Number(classItem.enrolled_count) || 0);
+    return capacity > 0 && enrolled >= capacity;
+  }
+  return true;
 }
 
 function getClassNameByLang(raw: any, lang: 'zh_tw' | 'zh_cn' | 'en'): string | undefined {
@@ -76,6 +104,61 @@ function buildClassCodePayload(classCode: string) {
   };
 }
 
+function getSeriesForClass(classItem: Class, allClasses: Class[]): Class[] {
+  const seriesCode = (classItem.class_code || '').trim();
+  let siblings: Class[];
+  if (seriesCode) {
+    siblings = allClasses.filter(
+      (c) =>
+        (c.class_code || '').trim() === seriesCode &&
+        c.is_internal === classItem.is_internal,
+    );
+  } else {
+    siblings = allClasses.filter(
+      (c) =>
+        c.name === classItem.name &&
+        c.instructor === classItem.instructor &&
+        c.location === classItem.location &&
+        c.is_internal === classItem.is_internal,
+    );
+  }
+  if (!siblings.some((c) => c.id === classItem.id)) {
+    siblings.push(classItem);
+  }
+  return siblings.sort(
+    (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime(),
+  );
+}
+
+const MAX_ADD_LESSONS = 20;
+
+function formatLocalDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** Next N lesson dates: +7 days each from last start, same weekday, skipping holidays. */
+function suggestNextLessonDates(
+  lastStartIso: string,
+  count: number,
+  holidayDatesSet: Set<string>,
+): string[] {
+  const n = Math.max(0, Math.min(MAX_ADD_LESSONS, Math.floor(Number(count) || 0)));
+  const cursor = new Date(lastStartIso);
+  if (Number.isNaN(cursor.getTime()) || n === 0) return [];
+
+  const dates: string[] = [];
+  for (let i = 0; i < n; i += 1) {
+    cursor.setDate(cursor.getDate() + 7);
+    for (let guard = 0; guard < 60; guard += 1) {
+      const key = formatLocalDateKey(cursor);
+      if (!holidayDatesSet.has(key)) break;
+      cursor.setDate(cursor.getDate() + 7);
+    }
+    dates.push(formatLocalDateKey(cursor));
+  }
+  return dates;
+}
+
 interface Instructor {
   id: string;
   name: string;
@@ -84,6 +167,8 @@ interface Instructor {
 }
 
 type LocationFilter = 'all' | 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui';
+
+type StatusFilter = 'all' | 'belowMinEnrollment' | 'attendanceNotConfirmed' | 'cancelled' | 'full';
 
 type ViewType = 'month' | 'week' | 'day' | 'threeDay';
 
@@ -133,6 +218,15 @@ function toLocalDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
 
+/** Response from POST /admin/classes/bulk-delete (see CLASS_DELETE_REFUND_SPEC.md). */
+type BulkDeleteClassesResult = {
+  requested_count?: number;
+  deleted_count?: number;
+  enrollments_withdrawn?: number;
+  tokens_refunded?: number;
+  enrollments_skipped_attended?: number;
+};
+
 export default function ClassesPage() {
   const { t, i18n } = useTranslation();
   const { profile } = useAuth();
@@ -149,6 +243,7 @@ export default function ClassesPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [view, setView] = useState<ViewType>('month');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [classNameFilter, setClassNameFilter] = useState<string>('');
   const [showExpiredClasses, setShowExpiredClasses] = useState(false);
   const [form, setForm] = useState({
@@ -163,6 +258,7 @@ export default function ClassesPage() {
     start_time: '', // HH:mm
     end_time: '', // HH:mm
     capacity: 10,
+    min_enrollment: 1,
     is_internal: false,
     location: 'sanpokong' as 'sanpokong' | 'causewaybay' | 'fotan' | 'sheungshui',
     level: 'entry' as CourseLevel,
@@ -181,6 +277,24 @@ export default function ClassesPage() {
     () => tagTypes.filter((tt) => tt.code !== 'level' && tt.code !== 'age'),
     [tagTypes]
   );
+  const [addLessonSource, setAddLessonSource] = useState<Class | null>(null);
+  const [addLessonForm, setAddLessonForm] = useState({ lessonCount: 1 });
+  const [addLessonSubmitting, setAddLessonSubmitting] = useState(false);
+  const addLessonSchedulePreview = useMemo(() => {
+    if (!addLessonSource) return [];
+    const count = Math.min(
+      MAX_ADD_LESSONS,
+      Math.max(1, Math.floor(Number(addLessonForm.lessonCount) || 0)),
+    );
+    const series = getSeriesForClass(addLessonSource, classes);
+    const last = series[series.length - 1] ?? addLessonSource;
+    const dates = suggestNextLessonDates(last.start_time, count, holidayDatesSet);
+    const startD = new Date(last.start_time);
+    const endD = new Date(last.end_time);
+    const startTime = `${String(startD.getHours()).padStart(2, '0')}:${String(startD.getMinutes()).padStart(2, '0')}`;
+    const endTime = `${String(endD.getHours()).padStart(2, '0')}:${String(endD.getMinutes()).padStart(2, '0')}`;
+    return dates.map((date) => ({ date, start_time: startTime, end_time: endTime }));
+  }, [addLessonSource, addLessonForm.lessonCount, classes, holidayDatesSet]);
   const [expandedAttendanceClassId, setExpandedAttendanceClassId] = useState<string | null>(null);
   const [deleteTargetClass, setDeleteTargetClass] = useState<Class | null>(null);
   const [deleteMode, setDeleteMode] = useState<'single' | 'series'>('single');
@@ -272,6 +386,7 @@ export default function ClassesPage() {
         start_time: cls.start_time,
         end_time: cls.end_time,
         capacity: cls.capacity ?? 10,
+        min_enrollment: cls.min_enrollment ?? 1,
         enrolled_count: cls.enrolled_count ?? 0,
         is_internal: cls.is_internal === 1 || cls.is_internal === true,
         is_cancelled: cls.is_cancelled === 1 || cls.is_cancelled === true,
@@ -490,7 +605,13 @@ export default function ClassesPage() {
     return new Date(cursor);
   }, [editingClass, form.repeat_weekly, form.date, form.total_lessons, holidayDatesSet]);
 
-  async function bulkDeleteClasses(classIds: Array<string | number>) {
+  async function bulkDeleteClasses(classIds: Array<string | number>): Promise<{
+    requested_count: number;
+    deleted_count: number;
+    enrollments_withdrawn: number;
+    tokens_refunded: number;
+    enrollments_skipped_attended: number;
+  }> {
     const ids = Array.from(
       new Set(
         classIds
@@ -501,17 +622,60 @@ export default function ClassesPage() {
     if (ids.length === 0) {
       throw new Error('No valid class ids to delete');
     }
-    const response = await api.post<{
-      requested_count?: number;
-      deleted_count?: number;
-    }>('/admin/classes/bulk-delete', { ids });
+    const response = await api.post<BulkDeleteClassesResult>('/admin/classes/bulk-delete', {
+      ids,
+      /** Backend: refund tokens & withdraw enrollments when class not yet marked attended. */
+      refund_tokens_if_unattended: true,
+    });
     if (!response.success) {
       throw new Error(response.msg || 'Failed to delete classes');
     }
+    const data = response.data ?? {};
     return {
-      requested_count: Number(response.data?.requested_count ?? ids.length),
-      deleted_count: Number(response.data?.deleted_count ?? 0),
+      requested_count: Number(data.requested_count ?? ids.length),
+      deleted_count: Number(data.deleted_count ?? 0),
+      enrollments_withdrawn: Number(data.enrollments_withdrawn ?? 0),
+      tokens_refunded: Number(data.tokens_refunded ?? 0),
+      enrollments_skipped_attended: Number(data.enrollments_skipped_attended ?? 0),
     };
+  }
+
+  function formatDeleteSuccessMessage(result: {
+    requested_count: number;
+    deleted_count: number;
+    enrollments_withdrawn: number;
+    tokens_refunded: number;
+    enrollments_skipped_attended: number;
+  }, deleteSeries: boolean): string {
+    if (result.deleted_count <= 0) {
+      return t('admin.classes.classesDeletedNone');
+    }
+
+    const hasRefundActivity =
+      result.enrollments_withdrawn > 0 ||
+      result.tokens_refunded > 0 ||
+      result.enrollments_skipped_attended > 0;
+
+    if (hasRefundActivity) {
+      return t('admin.classes.classDeletedRefundSummary', {
+        deleted: result.deleted_count,
+        withdrawn: result.enrollments_withdrawn,
+        tokens: result.tokens_refunded,
+        skipped: result.enrollments_skipped_attended,
+      });
+    }
+
+    if (deleteSeries) {
+      if (result.deleted_count === result.requested_count) {
+        return t('admin.classes.classesDeleted', { count: result.deleted_count });
+      }
+      return t('admin.classes.classesDeletedPartial', {
+        deleted: result.deleted_count,
+        requested: result.requested_count,
+      });
+    }
+
+    return t('admin.classes.classDeleted');
   }
 
   async function handleDeleteClass(classItem: Class, deleteSeries: boolean) {
@@ -525,27 +689,7 @@ export default function ClassesPage() {
     try {
       const result = await bulkDeleteClasses(targetClasses.map((c) => c.id));
       await loadClasses();
-      if (deleteSeries) {
-        if (result.deleted_count === result.requested_count) {
-          alert(t('admin.classes.classesDeleted', { count: result.deleted_count }));
-        } else if (result.deleted_count > 0) {
-          alert(
-            t('admin.classes.classesDeletedPartial', {
-              deleted: result.deleted_count,
-              requested: result.requested_count,
-            }),
-          );
-        } else {
-          alert(t('admin.classes.classesDeletedNone'));
-        }
-        return;
-      }
-
-      if (result.deleted_count > 0) {
-        alert(t('admin.classes.classDeleted'));
-      } else {
-        alert(t('admin.classes.classesDeletedNone'));
-      }
+      alert(formatDeleteSuccessMessage(result, deleteSeries));
     } catch (error) {
       console.error('Error deleting class:', error);
       alert(error instanceof Error ? error.message : t('common.error'));
@@ -555,6 +699,15 @@ export default function ClassesPage() {
   function openDeleteDialog(classItem: Class) {
     setDeleteTargetClass(classItem);
     setDeleteMode('single');
+  }
+
+  function openDeleteDialogFromEditModal() {
+    if (!editingClass) return;
+    const target = editingClass;
+    setShowModal(false);
+    setEditingClass(null);
+    setEditAllRepeats(false);
+    openDeleteDialog(target);
   }
 
   /** Build datetime string for API: local date + time as "YYYY-MM-DDTHH:mm:ss" (no Z) so backend stores the same time. */
@@ -633,6 +786,7 @@ export default function ClassesPage() {
       start_time: timeFromISO(classItem.start_time),
       end_time: timeFromISO(classItem.end_time),
       capacity: classItem.capacity,
+      min_enrollment: classItem.min_enrollment ?? 1,
       is_internal: classItem.is_internal,
       location: classItem.location || 'sanpokong',
       level: classItem.level || 'entry',
@@ -650,6 +804,103 @@ export default function ClassesPage() {
     setShowModal(true);
   }
 
+  function openAddLessonModal(classItem: Class) {
+    if (!isNumericClassId(classItem.id)) {
+      alert(t('admin.classes.demoDataCannotEdit'));
+      return;
+    }
+    setAddLessonSource(classItem);
+    setAddLessonForm({ lessonCount: 1 });
+    setShowModal(false);
+    setEditingClass(null);
+    setEditAllRepeats(false);
+  }
+
+  async function handleAddLessonSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!addLessonSource) return;
+    const lessonCount = Math.floor(Number(addLessonForm.lessonCount) || 0);
+    if (lessonCount < 1 || lessonCount > MAX_ADD_LESSONS) {
+      alert(t('admin.classes.addLessonCountRequired'));
+      return;
+    }
+    setAddLessonSubmitting(true);
+    try {
+      const src = addLessonSource;
+      const series = getSeriesForClass(src, classes);
+      const last = series[series.length - 1] ?? src;
+      const startTimeStr = timeFromISO(last.start_time);
+      const endTimeStr = timeFromISO(last.end_time);
+      const newDates = suggestNextLessonDates(last.start_time, lessonCount, holidayDatesSet);
+      if (newDates.length !== lessonCount) {
+        throw new Error(t('admin.classes.addLessonCountRequired'));
+      }
+
+      const newTotal = series.length + lessonCount;
+      const nameForApi =
+        (src.name_zh_tw && src.name_zh_tw.trim()) ||
+        (src.name_zh_cn && src.name_zh_cn.trim()) ||
+        (src.name_en && src.name_en.trim()) ||
+        src.name;
+      const selectedLevelCode = src.tag_values?.level || src.level || 'entry';
+      const selectedAgeTagCode = src.tag_values?.age || src.age_tag || '5-8';
+
+      const newIds: string[] = [];
+      for (const dateStr of newDates) {
+        const classData = {
+          name: nameForApi,
+          name_zh_tw: src.name_zh_tw?.trim() || undefined,
+          name_zh_cn: src.name_zh_cn?.trim() || undefined,
+          name_en: src.name_en?.trim() || undefined,
+          class_name_zh_tw: src.name_zh_tw?.trim() || undefined,
+          class_name_zh_cn: src.name_zh_cn?.trim() || undefined,
+          class_name_en: src.name_en?.trim() || undefined,
+          instructor: src.instructor,
+          substitute_instructor: src.substitute_instructor ?? null,
+          date: dateStr,
+          start_time: startTimeStr,
+          end_time: endTimeStr,
+          capacity: src.capacity,
+          min_enrollment: src.min_enrollment ?? 1,
+          token_cost: src.token_cost ?? 1,
+          location: src.location,
+          ...buildClassCodePayload(src.class_code || ''),
+          level: selectedLevelCode,
+          age_group: selectedAgeTagCode,
+          tag_values: src.tag_values ?? {},
+          is_internal: src.is_internal ? 1 : 0,
+          total_lessons: newTotal,
+        };
+
+        const response = await api.post('/admin/classes', classData);
+        if (!response.success || !response.data) {
+          throw new Error(response.msg || 'Failed to add lesson');
+        }
+        const newId = response.data.id?.toString();
+        if (newId && isNumericClassId(newId)) {
+          newIds.push(newId);
+        }
+      }
+
+      const patchIds = [
+        ...series.filter((c) => isNumericClassId(c.id)).map((c) => c.id),
+        ...newIds,
+      ];
+      await Promise.allSettled(
+        patchIds.map((id) => api.patch(`/admin/classes/${id}`, { total_lessons: newTotal })),
+      );
+
+      await loadClasses();
+      setAddLessonSource(null);
+      alert(t('admin.classes.addLessonSuccess', { count: lessonCount, total: newTotal }));
+    } catch (error) {
+      console.error('Error adding lesson:', error);
+      alert(error instanceof Error ? error.message : t('common.error'));
+    } finally {
+      setAddLessonSubmitting(false);
+    }
+  }
+
   function openCreateModal() {
     setEditingClass(null);
     const today = new Date().toISOString().slice(0, 10);
@@ -665,6 +916,7 @@ export default function ClassesPage() {
       start_time: '14:00',
       end_time: '15:00',
       capacity: 10,
+      min_enrollment: 1,
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
@@ -687,6 +939,15 @@ export default function ClassesPage() {
     }
     const selectedLevelCode = form.tag_values.level || form.level || 'entry';
     const selectedAgeTagCode = form.tag_values.age || ageRangeToTag(form.lowest_age, form.oldest_age);
+    const minEnrollment = Math.max(0, parseInt(String(form.min_enrollment), 10) || 0);
+    if (minEnrollment < 1) {
+      alert(t('admin.classes.minEnrollmentRequired'));
+      return;
+    }
+    if (minEnrollment > form.capacity) {
+      alert(t('admin.classes.minEnrollmentExceedsCapacity'));
+      return;
+    }
     // If editing, update the existing class(es)
     if (editingClass) {
       if (!isNumericClassId(editingClass.id)) {
@@ -725,6 +986,7 @@ export default function ClassesPage() {
               start_time: formatDateAsLocalDateTime(newClassStart),
               end_time: formatDateAsLocalDateTime(newClassEnd),
               capacity: form.capacity,
+              min_enrollment: minEnrollment,
               is_internal: form.is_internal ? 1 : 0,
               allow_trial: form.allow_trial ? 1 : 0,
               location: form.location,
@@ -755,6 +1017,7 @@ export default function ClassesPage() {
             start_time: startISO,
             end_time: endISO,
             capacity: form.capacity,
+            min_enrollment: minEnrollment,
             is_internal: form.is_internal ? 1 : 0,
             allow_trial: form.allow_trial ? 1 : 0,
             location: form.location,
@@ -782,6 +1045,7 @@ export default function ClassesPage() {
               start_time: response.data.start_time,
               end_time: response.data.end_time,
               capacity: response.data.capacity,
+              min_enrollment: response.data.min_enrollment ?? minEnrollment,
               enrolled_count: response.data.enrolled_count || 0,
               is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
               is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
@@ -815,6 +1079,7 @@ export default function ClassesPage() {
           start_time: '14:00',
           end_time: '15:00',
           capacity: 10,
+          min_enrollment: 1,
           is_internal: false,
           location: 'sanpokong',
           level: 'entry',
@@ -857,6 +1122,7 @@ export default function ClassesPage() {
           ...buildClassNamePayload(form),
           instructor: form.instructor,
           capacity: form.capacity,
+          min_enrollment: minEnrollment,
           location: form.location,
           ...buildClassCodePayload(form.class_code || ''),
           level: selectedLevelCode,
@@ -880,6 +1146,7 @@ export default function ClassesPage() {
             start_time: c.start_time,
             end_time: c.end_time,
             capacity: c.capacity,
+            min_enrollment: c.min_enrollment ?? minEnrollment,
             enrolled_count: c.enrolled_count || 0,
             is_internal: c.is_internal === 1,
             is_cancelled: c.is_cancelled === 1,
@@ -907,6 +1174,7 @@ export default function ClassesPage() {
           start_time: '14:00',
           end_time: '15:00',
           capacity: 10,
+          min_enrollment: 1,
           is_internal: false,
           location: 'sanpokong',
           level: 'entry',
@@ -953,6 +1221,7 @@ export default function ClassesPage() {
         start_time: adjustedStartTimeStr,
         end_time: adjustedEndTimeStr,
         capacity: form.capacity,
+        min_enrollment: minEnrollment,
         location: form.location,
         ...buildClassCodePayload(form.class_code),
         level: selectedLevelCode,
@@ -979,6 +1248,7 @@ export default function ClassesPage() {
             start_time: response.data.start_time,
             end_time: response.data.end_time,
             capacity: response.data.capacity,
+            min_enrollment: response.data.min_enrollment ?? minEnrollment,
             enrolled_count: response.data.enrolled_count || 0,
             is_internal: response.data.is_internal === 1 || response.data.is_internal === true,
             is_cancelled: response.data.is_cancelled === 1 || response.data.is_cancelled === true,
@@ -1020,6 +1290,7 @@ export default function ClassesPage() {
       start_time: '14:00',
       end_time: '15:00',
       capacity: 10,
+      min_enrollment: 1,
       is_internal: false,
       location: 'sanpokong',
       level: 'entry',
@@ -1079,8 +1350,9 @@ export default function ClassesPage() {
       
       const dateMatches = classDateStr === dateStr;
       const locationMatches = locationFilter === 'all' || classItem.location === locationFilter;
+      const statusMatches = matchesStatusFilter(classItem, statusFilter);
       
-      return dateMatches && locationMatches;
+      return dateMatches && locationMatches && statusMatches;
     });
   };
 
@@ -1105,6 +1377,11 @@ export default function ClassesPage() {
     // Filter by class name (display name)
     if (classNameFilter) {
       filtered = filtered.filter(classItem => (getClassDisplayName(classItem) || '').trim() === classNameFilter);
+    }
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((classItem) => matchesStatusFilter(classItem, statusFilter));
     }
 
     // Filter by selected date
@@ -1218,6 +1495,40 @@ export default function ClassesPage() {
   };
 
   /** Reported enrolment never shown above capacity; append (Full) when at or over capacity. */
+  const renderMinEnrollmentAlert = (classItem: Class, variant: 'badge' | 'icon' | 'inline' = 'icon'): ReactNode => {
+    if (!isBelowMinEnrollment(classItem)) return null;
+    const enrolled = Math.max(0, Number(classItem.enrolled_count) || 0);
+    const min = Math.max(1, Number(classItem.min_enrollment) || 1);
+    const tooltip = t('admin.classes.minEnrollmentNotMetTooltip', { enrolled, min });
+    if (variant === 'badge') {
+      return (
+        <span
+          className="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded inline-flex items-center gap-1"
+          title={tooltip}
+        >
+          <AlertCircle className="h-3 w-3 shrink-0" aria-hidden />
+          {t('admin.classes.minEnrollmentNotMetShort')}
+        </span>
+      );
+    }
+    if (variant === 'inline') {
+      return (
+        <span className="inline-flex items-center gap-0.5 text-amber-700 font-medium ml-1" title={tooltip}>
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t('admin.classes.minEnrollmentNotMetShort')}
+        </span>
+      );
+    }
+    return (
+      <AlertCircle
+        className="shrink-0 text-amber-300"
+        size={12}
+        aria-label={t('admin.classes.minEnrollmentNotMetShort')}
+        title={tooltip}
+      />
+    );
+  };
+
   const renderEnrollmentCountSummary = (classItem: Class): ReactNode => {
     const capacity = Math.max(0, Number(classItem.capacity) || 0);
     const raw = Math.max(0, Number(classItem.enrolled_count) || 0);
@@ -1226,9 +1537,13 @@ export default function ClassesPage() {
     return (
       <>
         {t('admin.classes.enrollmentCountSummary', { enrolled: displayEnrolled, capacity })}
+        {classItem.min_enrollment > 1 ? (
+          <span className="text-gray-600"> {t('admin.classes.minEnrollmentSummary', { min: classItem.min_enrollment })}</span>
+        ) : null}
         {isFull ? (
           <span className="text-amber-800 font-medium">{t('admin.classes.enrollmentFull', ' (Full)')}</span>
         ) : null}
+        {renderMinEnrollmentAlert(classItem, 'inline')}
       </>
     );
   };
@@ -1251,6 +1566,58 @@ export default function ClassesPage() {
     };
     return colorMap[location] ?? colorMap.sanpokong;
   };
+
+  const getCalendarClassTitle = (classItem: Class): string => {
+    const base = getClassDisplayName(classItem);
+    if (!isBelowMinEnrollment(classItem)) return base;
+    const enrolled = Math.max(0, Number(classItem.enrolled_count) || 0);
+    const min = Math.max(1, Number(classItem.min_enrollment) || 1);
+    return `${base} — ${t('admin.classes.minEnrollmentNotMetTooltip', { enrolled, min })}`;
+  };
+
+  const renderClassActionButtons = (classItem: Class) => (
+    <div className="flex gap-2 flex-wrap justify-end">
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleAttendance(String(classItem.id)); }}
+        className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
+          String(expandedAttendanceClassId) === String(classItem.id)
+            ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
+            : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
+        }`}
+      >
+        <Users className="h-4 w-4 mr-1" />
+        {t('admin.classes.attendance')}
+      </button>
+      {isNumericClassId(classItem.id) && (
+        <button
+          type="button"
+          onClick={() => openAddLessonModal(classItem)}
+          className="px-4 py-2 rounded-md text-sm font-medium bg-teal-100 text-teal-700 hover:bg-teal-200 flex items-center"
+          title={t('admin.classes.addLessonHint')}
+        >
+          <CalendarPlus className="h-4 w-4 mr-1" />
+          {t('admin.classes.addLesson')}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => openEditModal(classItem)}
+        className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
+      >
+        <Edit className="h-4 w-4 mr-1" />
+        {t('common.edit')}
+      </button>
+      <button
+        type="button"
+        onClick={() => openDeleteDialog(classItem)}
+        className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center"
+      >
+        <Trash2 className="h-4 w-4 mr-1" />
+        {t('common.delete')}
+      </button>
+    </div>
+  );
 
   const renderDayView = () => {
     const dayClasses = getClassesForDate(currentDate);
@@ -1301,6 +1668,7 @@ export default function ClassesPage() {
                           {t('admin.classes.cancelled')}
                         </span>
                       )}
+                      {renderMinEnrollmentAlert(classItem, 'badge')}
                     </div>
                     {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                       <p className="text-gray-600 mb-1 text-sm font-medium">{formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}</p>
@@ -1328,36 +1696,7 @@ export default function ClassesPage() {
                       {renderEnrollmentCountSummary(classItem)}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleAttendance(String(classItem.id)); }}
-                      className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
-                        String(expandedAttendanceClassId) === String(classItem.id)
-                          ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
-                          : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                      }`}
-                    >
-                      <Users className="h-4 w-4 mr-1" />
-                      {t('admin.classes.attendance')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(classItem)}
-                      className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      {t('common.edit')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openDeleteDialog(classItem)}
-                      className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center"
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      {t('common.delete')}
-                    </button>
-                  </div>
+                  {renderClassActionButtons(classItem)}
                 </div>
                 {String(expandedAttendanceClassId) === String(classItem.id) && (
                   attendanceLoading ? (
@@ -1470,9 +1809,12 @@ export default function ClassesPage() {
                         e.stopPropagation();
                         openEditModal(classItem);
                       }}
-                      title={getClassDisplayName(classItem)}
+                      title={getCalendarClassTitle(classItem)}
                     >
-                      <div className="font-medium truncate">{getClassDisplayName(classItem)}</div>
+                      <div className="flex items-start gap-0.5">
+                        <div className="font-medium truncate flex-1">{getClassDisplayName(classItem)}</div>
+                        {renderMinEnrollmentAlert(classItem, 'icon')}
+                      </div>
                       {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                         <div className="text-xs mt-0.5 truncate opacity-90 font-medium">
                           {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
@@ -1576,9 +1918,12 @@ export default function ClassesPage() {
                           e.stopPropagation();
                           openEditModal(classItem);
                         }}
-                        title={getClassDisplayName(classItem)}
+                        title={getCalendarClassTitle(classItem)}
                       >
-                        <div className="font-medium truncate">{getClassDisplayName(classItem)}</div>
+                        <div className="flex items-start gap-0.5">
+                          <div className="font-medium truncate flex-1">{getClassDisplayName(classItem)}</div>
+                          {renderMinEnrollmentAlert(classItem, 'icon')}
+                        </div>
                         {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                           <div className="text-xs mt-0.5 truncate opacity-90 font-medium">
                             {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
@@ -1679,9 +2024,14 @@ export default function ClassesPage() {
                           e.stopPropagation();
                           openEditModal(classItem);
                         }}
-                        title={getClassDisplayName(classItem)}
+                        title={getCalendarClassTitle(classItem)}
                       >
-                        <span>{formatTime(new Date(classItem.start_time))} {getClassDisplayName(classItem)}</span>
+                        <div className="flex items-center gap-0.5">
+                          <span className="truncate flex-1">
+                            {formatTime(new Date(classItem.start_time))} {getClassDisplayName(classItem)}
+                          </span>
+                          {renderMinEnrollmentAlert(classItem, 'icon')}
+                        </div>
                         {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                           <div className="truncate text-white/90 text-[10px] mt-0.5 font-medium">
                             {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}
@@ -1712,6 +2062,15 @@ export default function ClassesPage() {
         </div>
       </>
     );
+  };
+
+  const getStatusFilterLabel = (status: StatusFilter): string => {
+    if (status === 'all') return t('admin.classes.allStatuses');
+    if (status === 'belowMinEnrollment') return t('admin.classes.statusBelowMinEnrollment');
+    if (status === 'attendanceNotConfirmed') return t('admin.classes.attendanceNotConfirmed');
+    if (status === 'cancelled') return t('admin.classes.statusCancelled');
+    if (status === 'full') return t('admin.classes.statusFull');
+    return status;
   };
 
   const filteredClasses = getFilteredClasses();
@@ -1745,9 +2104,18 @@ export default function ClassesPage() {
 
   const sortedClasses = useMemo(() => {
     const list = [...filteredClasses];
-    list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    if (statusFilter === 'belowMinEnrollment') {
+      list.sort((a, b) => {
+        const gapA = Math.max(1, Number(a.min_enrollment) || 1) - Math.max(0, Number(a.enrolled_count) || 0);
+        const gapB = Math.max(1, Number(b.min_enrollment) || 1) - Math.max(0, Number(b.enrolled_count) || 0);
+        if (gapB !== gapA) return gapB - gapA;
+        return new Date(a.start_time).getTime() - new Date(b.start_time).getTime();
+      });
+    } else {
+      list.sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime());
+    }
     return list;
-  }, [filteredClasses]);
+  }, [filteredClasses, statusFilter]);
 
   if (loading) {
     return (
@@ -1925,6 +2293,23 @@ export default function ClassesPage() {
                 ))}
               </select>
             </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="filter-status" className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {t('admin.classes.filterByStatus')}:
+              </label>
+              <select
+                id="filter-status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="min-w-[10rem] px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:ring-primary focus:border-primary"
+              >
+                <option value="all">{t('admin.classes.allStatuses')}</option>
+                <option value="belowMinEnrollment">{t('admin.classes.statusBelowMinEnrollment')}</option>
+                <option value="attendanceNotConfirmed">{t('admin.classes.attendanceNotConfirmed')}</option>
+                <option value="full">{t('admin.classes.statusFull')}</option>
+                <option value="cancelled">{t('admin.classes.statusCancelled')}</option>
+              </select>
+            </div>
             <label htmlFor="filter-show-expired" className="flex items-center gap-2 cursor-pointer">
               <input
                 id="filter-show-expired"
@@ -1941,7 +2326,7 @@ export default function ClassesPage() {
         </div>
 
         {/* Selected Date Info and Clear Button */}
-        {(selectedDate || locationFilter !== 'all' || classNameFilter) && (
+        {(selectedDate || locationFilter !== 'all' || classNameFilter || statusFilter !== 'all') && (
           <div className="flex justify-between items-center bg-primary-lighter p-4 rounded-lg">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
@@ -1950,6 +2335,7 @@ export default function ClassesPage() {
                   : t('admin.classes.allClasses')}
                 {locationFilter !== 'all' && ` ${t('admin.classes.at')} ${getLocationLabel(locationFilter)}`}
                 {classNameFilter && ` · ${classNameFilter}`}
+                {statusFilter !== 'all' && ` · ${getStatusFilterLabel(statusFilter)}`}
               </h3>
               <p className="text-sm text-gray-600">
                 {filteredClasses.length} {filteredClasses.length === 1 ? t('admin.classes.class') : t('admin.classes.classes')} {t('admin.classes.scheduled')}
@@ -1970,6 +2356,14 @@ export default function ClassesPage() {
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
                 >
                   {t('admin.classes.clearLocationFilter')}
+                </button>
+              )}
+              {statusFilter !== 'all' && (
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  {t('admin.classes.clearStatusFilter')}
                 </button>
               )}
               {selectedDate && (
@@ -2023,6 +2417,7 @@ export default function ClassesPage() {
                         {t('admin.classes.cancelled')}
                       </span>
                     )}
+                    {renderMinEnrollmentAlert(classItem, 'badge')}
                   </div>
                   {formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number) && (
                     <p className="text-gray-600 mb-1 text-sm font-medium">{formatProgramCodeDisplay(classItem.class_code, classItem.lesson_number)}</p>
@@ -2055,36 +2450,7 @@ export default function ClassesPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); toggleAttendance(String(classItem.id)); }}
-                    className={`px-4 py-2 rounded-md text-sm font-medium flex items-center ${
-                      String(expandedAttendanceClassId) === String(classItem.id)
-                        ? 'bg-purple-200 text-purple-800 ring-2 ring-purple-400'
-                        : 'bg-purple-100 text-purple-700 hover:bg-purple-200'
-                    }`}
-                  >
-                    <Users className="h-4 w-4 mr-1" />
-                    {t('admin.classes.attendance')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(classItem)}
-                    className="px-4 py-2 rounded-md text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 flex items-center"
-                  >
-                    <Edit className="h-4 w-4 mr-1" />
-                    {t('common.edit')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openDeleteDialog(classItem)}
-                    className="px-4 py-2 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200 flex items-center"
-                  >
-                    <Trash2 className="h-4 w-4 mr-1" />
-                    {t('common.delete')}
-                  </button>
-                </div>
+                {renderClassActionButtons(classItem)}
               </div>
               {String(expandedAttendanceClassId) === String(classItem.id) && (
                 attendanceLoading ? (
@@ -2129,12 +2495,39 @@ export default function ClassesPage() {
           }}
         >
           <div className="bg-white rounded-lg max-w-md w-full mx-4 flex flex-col max-h-[90vh]">
-            <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-gray-200">
+            <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-gray-200 flex items-start justify-between gap-3">
               <h2 className="text-xl font-semibold text-gray-900">
                 {editingClass ? t('admin.classes.editClass') : t('admin.classes.createClass')}
               </h2>
+              {editingClass && (
+                <button
+                  type="button"
+                  onClick={openDeleteDialogFromEditModal}
+                  className="inline-flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-md text-sm font-medium bg-red-100 text-red-700 hover:bg-red-200"
+                  title={t('common.delete')}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {t('common.delete')}
+                </button>
+              )}
             </div>
             <div className="overflow-y-auto flex-1 px-6 py-4">
+              {editingClass && isNumericClassId(editingClass.id) && (
+                <div className="mb-4 p-4 bg-teal-50 rounded-lg border border-teal-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{t('admin.classes.addLesson')}</p>
+                    <p className="text-xs text-gray-600 mt-1">{t('admin.classes.addLessonHint')}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openAddLessonModal(editingClass)}
+                    className="inline-flex items-center gap-1.5 shrink-0 px-3 py-2 rounded-md text-sm font-medium bg-teal-600 text-white hover:bg-teal-700"
+                  >
+                    <CalendarPlus className="h-4 w-4" />
+                    {t('admin.classes.addLesson')}
+                  </button>
+                </div>
+              )}
               {editingClass && findRepeatedClasses(editingClass).length > 0 && (
                 <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
                   <p className="text-sm text-gray-700 mb-3">
@@ -2357,6 +2750,19 @@ export default function ClassesPage() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.minEnrollment')}</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  max={form.capacity}
+                  value={form.min_enrollment}
+                  onChange={(e) => setForm({ ...form, min_enrollment: parseInt(e.target.value, 10) || 1 })}
+                  className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="mt-1 text-xs text-gray-500">{t('admin.classes.minEnrollmentHint')}</p>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.location')}</label>
                 <select
                   required
@@ -2464,15 +2870,86 @@ export default function ClassesPage() {
         </div>
       )}
 
+      {addLessonSource && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg max-w-md w-full mx-4 flex flex-col max-h-[90vh]">
+            <div className="px-6 pt-6 pb-4 flex-shrink-0 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">
+                {t('admin.classes.addLessonTitle', { name: getClassDisplayName(addLessonSource) })}
+              </h2>
+              <p className="text-sm text-gray-600 mt-2">{t('admin.classes.addLessonHint')}</p>
+              <p className="text-sm text-gray-700 mt-2">
+                {t('admin.classes.addLessonSeriesInfo', {
+                  count: getSeriesForClass(addLessonSource, classes).length,
+                  next: getSeriesForClass(addLessonSource, classes).length + addLessonForm.lessonCount,
+                  add: addLessonForm.lessonCount,
+                })}
+              </p>
+            </div>
+            <form onSubmit={handleAddLessonSubmit} className="overflow-y-auto flex-1 px-6 py-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('admin.classes.addLessonCount')}</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={MAX_ADD_LESSONS}
+                  value={addLessonForm.lessonCount}
+                  onChange={(e) =>
+                    setAddLessonForm({
+                      lessonCount: Math.max(1, Math.min(MAX_ADD_LESSONS, parseInt(e.target.value, 10) || 1)),
+                    })
+                  }
+                  className="w-full min-h-[48px] px-4 py-3 text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                <p className="text-xs text-gray-500 mt-1">{t('admin.classes.addLessonCountHint')}</p>
+              </div>
+              {addLessonSchedulePreview.length > 0 && (
+                <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                  <p className="text-sm font-medium text-gray-800 mb-2">{t('admin.classes.addLessonSchedulePreview')}</p>
+                  <ul className="text-sm text-gray-700 space-y-1 max-h-40 overflow-y-auto">
+                    {addLessonSchedulePreview.map((slot, idx) => (
+                      <li key={`${slot.date}-${idx}`}>
+                        {slot.date} {slot.start_time}–{slot.end_time}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAddLessonSource(null)}
+                  disabled={addLessonSubmitting}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  type="submit"
+                  disabled={addLessonSubmitting}
+                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
+                >
+                  {addLessonSubmitting ? t('common.loading', 'Loading…') : t('admin.classes.addLessonConfirm')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {deleteTargetClass && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-3">
               {t('admin.classes.deleteDialogTitle', 'Delete Class')}
             </h3>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-gray-600 mb-3">
               {t('admin.classes.deleteDialogPrompt', 'Choose what to delete:')}
             </p>
+            <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
+              {t('admin.classes.deleteDialogRefundPolicy')}
+            </div>
             <div className="space-y-2 mb-6">
               <label className="flex items-center">
                 <input
@@ -2513,8 +2990,17 @@ export default function ClassesPage() {
                 type="button"
                 onClick={async () => {
                   const target = deleteTargetClass;
-                  setDeleteTargetClass(null);
                   if (!target) return;
+                  const seriesCount = findRepeatedClasses(target).length + 1;
+                  const confirmed = window.confirm(
+                    deleteMode === 'series'
+                      ? t('admin.classes.confirmDeleteSeries', {
+                          count: seriesCount,
+                        })
+                      : t('admin.classes.confirmDeleteSingle')
+                  );
+                  if (!confirmed) return;
+                  setDeleteTargetClass(null);
                   await handleDeleteClass(target, deleteMode === 'series');
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
