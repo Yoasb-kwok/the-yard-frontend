@@ -1,7 +1,11 @@
 import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight, CheckCircle, Package, X } from 'lucide-react';
-import { formatDateTimeRange, formatProgramCodeDisplay } from '../../lib/utils';
+import {
+  formatDateTimeRange,
+  formatMultiLessonTimeSummary,
+  formatProgramCodeDisplay,
+} from '../../lib/utils';
 import type { TokenAssignmentCourseGroup, TokenAssignmentClassRow } from '../../lib/tokenAssignmentGroups';
 import { normalizeClassId } from '../../lib/adminClassEnrollments';
 import { getLessonEnrollmentUiStatus } from '../../lib/courseLessonEnrollment';
@@ -28,6 +32,7 @@ export interface TokenAssignmentCourseListProps {
   tokensChargedByClassId?: Map<string, number>;
   enrollmentStatusByClassId?: Map<string, string>;
   awaitingTokensClassIds?: Set<string>;
+  trialEnrolledClassIds?: Set<string>;
 }
 
 export default function TokenAssignmentCourseList({
@@ -50,9 +55,29 @@ export default function TokenAssignmentCourseList({
   tokensChargedByClassId,
   enrollmentStatusByClassId,
   awaitingTokensClassIds,
+  trialEnrolledClassIds,
 }: TokenAssignmentCourseListProps) {
   const { t } = useTranslation();
 
+  const isTrialLesson = (lesson: TokenAssignmentClassRow): boolean =>
+    trialEnrolledClassIds?.has(normalizeClassId(lesson.id)) ?? false;
+
+  const enrollmentStatusBadgeClass = (status: string): string => {
+    switch (status) {
+      case 'sick_leave':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'absent':
+        return 'bg-red-100 text-red-800';
+      case 'leave_pending':
+        return 'bg-amber-100 text-amber-800';
+      case 'attended':
+        return 'bg-green-100 text-green-800';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-500';
+      default:
+        return 'bg-blue-100 text-blue-800';
+    }
+  };
   const lessonStatusLabel = (status: ReturnType<typeof getLessonEnrollmentUiStatus>): string => {
     switch (status) {
       case 'past':
@@ -61,6 +86,8 @@ export default function TokenAssignmentCourseList({
         return t('admin.tokenAssignment.lessonStatusFull');
       case 'assigned':
         return t('admin.tokenAssignment.lessonStatusAssigned');
+      case 'trial':
+        return t('admin.tokenAssignment.lessonStatusTrial');
       case 'awaiting_tokens':
         return t('admin.tokenAssignment.lessonStatusAwaiting');
       case 'cancelled':
@@ -95,7 +122,7 @@ export default function TokenAssignmentCourseList({
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
               {t('admin.tokenAssignment.instructor')}
             </th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+            <th className="min-w-[12rem] px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
               {t('admin.tokenAssignment.time')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
@@ -128,7 +155,8 @@ export default function TokenAssignmentCourseList({
             const first = group.lessons[0];
             const last = group.lessons[group.lessons.length - 1];
             const assignableInGroup = group.lessons.filter((l) => {
-              if (assignedClassIds.has(normalizeClassId(l.id))) return false;
+              const lessonKey = normalizeClassId(l.id);
+              if (assignedClassIds.has(lessonKey) || trialEnrolledClassIds?.has(lessonKey)) return false;
               if (canAssignFullCourseBatch?.(l)) return true;
               return canAssignToClass(l);
             });
@@ -172,24 +200,21 @@ export default function TokenAssignmentCourseList({
                       {mode === 'assigned' && (
                         <CheckCircle className="h-4 w-4 text-primary shrink-0" />
                       )}
-                      {multiLesson &&
-                        (mode === 'unassigned'
-                          ? group.assignedTokenCount > 0
-                          : group.unassignedCount > 0 || group.assignedTokenCount > 0) && (
+                      {multiLesson && group.assignedLessonCount > 0 && (
                         <span
                           className={`text-xs px-2 py-0.5 rounded ${
-                            mode === 'assigned' && group.unassignedCount === 0
+                            group.assignedLessonCount === group.lessons.length
                               ? 'bg-green-100 text-green-800'
                               : 'bg-blue-100 text-blue-800'
                           }`}
                         >
-                          {mode === 'assigned' && group.unassignedCount === 0
+                          {group.assignedLessonCount === group.lessons.length
                             ? t('admin.tokenAssignment.fullyAssigned', {
                                 total: group.lessons.length,
                                 defaultValue: '全部 {{total}} 堂已分配',
                               })
                             : t('admin.tokenAssignment.partiallyAssigned', {
-                                assigned: group.lessons.length - group.unassignedCount,
+                                assigned: group.assignedLessonCount,
                                 total: group.lessons.length,
                               })}
                         </span>
@@ -200,10 +225,20 @@ export default function TokenAssignmentCourseList({
                     {group.programCode || '—'}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">{group.instructor || '—'}</td>
-                  <td className="px-4 py-3 text-sm text-gray-700 whitespace-nowrap">
-                    {multiLesson && !expanded
-                      ? `${formatDateTimeRange(first.start_time, first.end_time, locale)} … ${formatDateTimeRange(last.start_time, last.end_time, locale)}`
-                      : formatDateTimeRange(first.start_time, first.end_time, locale)}
+                  <td className="min-w-[12rem] px-4 py-3 text-sm text-gray-700 align-top">
+                    {multiLesson && !expanded ? (
+                      <MultiLessonTimeSummary
+                        firstStart={first.start_time}
+                        firstEnd={first.end_time}
+                        lastStart={last.start_time}
+                        lastEnd={last.end_time}
+                        locale={locale}
+                      />
+                    ) : (
+                      <span className="whitespace-nowrap">
+                        {formatDateTimeRange(first.start_time, first.end_time, locale)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-700">
                     {getLocationLabel(group.location)}
@@ -219,7 +254,9 @@ export default function TokenAssignmentCourseList({
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {!multiLesson && enrollmentStatusByClassId?.get(first.id) && getStatusLabel ? (
-                          <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs font-medium ${enrollmentStatusBadgeClass(enrollmentStatusByClassId.get(first.id)!)}`}
+                          >
                             {getStatusLabel(enrollmentStatusByClassId.get(first.id)!)}
                           </span>
                         ) : (
@@ -247,13 +284,19 @@ export default function TokenAssignmentCourseList({
                       </button>
                     )}
                     {mode === 'unassigned' && !multiLesson && first && (
-                      <AssignButton
-                        lesson={first}
-                        canAssign={canAssignToClass(first)}
-                        getUnassignedTokens={getUnassignedTokens}
-                        isClassFull={isClassFull}
-                        onAssign={onAssignLesson}
-                      />
+                      isTrialLesson(first) ? (
+                        <span className="text-xs font-medium text-blue-800">
+                          {t('admin.tokenAssignment.lessonStatusTrial')}
+                        </span>
+                      ) : (
+                        <AssignButton
+                          lesson={first}
+                          canAssign={canAssignToClass(first)}
+                          getUnassignedTokens={getUnassignedTokens}
+                          isClassFull={isClassFull}
+                          onAssign={onAssignLesson}
+                        />
+                      )
                     )}
                     {mode === 'assigned' && !multiLesson && first && enrollmentIdByClassId?.get(first.id) && onRemoveAssignment && (
                       <button
@@ -280,8 +323,10 @@ export default function TokenAssignmentCourseList({
                     const uiStatus = getLessonEnrollmentUiStatus(lesson, {
                       assignedClassIds,
                       awaitingTokensClassIds,
+                      trialEnrolledClassIds,
                     });
                     const isAssigned = uiStatus === 'assigned';
+                    const isTrial = uiStatus === 'trial';
                     const statusText = lessonStatusLabel(uiStatus);
                     const tokens = tokensChargedByClassId?.get(lessonKey) ?? 0;
                     const enrollStatus = enrollmentStatusByClassId?.get(lessonKey);
@@ -291,6 +336,8 @@ export default function TokenAssignmentCourseList({
                         ? 'bg-gray-50/80 text-gray-500'
                         : uiStatus === 'full'
                           ? 'bg-amber-50/30'
+                          : isTrial
+                            ? 'bg-blue-50/40'
                           : isAssigned
                             ? 'hover:bg-green-50/30'
                             : 'hover:bg-gray-50';
@@ -337,6 +384,24 @@ export default function TokenAssignmentCourseList({
                       );
                     }
 
+                    if (mode === 'unassigned' && isTrial) {
+                      return (
+                        <tr key={`${group.key}-${lesson.id}`} className="bg-blue-50/40">
+                          <td />
+                          <td colSpan={7} className="px-4 py-2 pl-10 text-xs text-blue-900">
+                            <span className="inline-flex flex-wrap items-center gap-2">
+                              {formatProgramCodeDisplay(lesson.class_code, lesson.lesson_number) ||
+                                lesson.class_code}
+                              <span>·</span>
+                              {formatDateTimeRange(lesson.start_time, lesson.end_time, locale)}
+                              <span className="rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-800">
+                                {statusText}
+                              </span>
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    }
                     if (mode === 'assigned' && (uiStatus === 'past' || uiStatus === 'cancelled')) {
                       return (
                         <tr key={`${group.key}-${lesson.id}`} className={rowTone}>
@@ -400,14 +465,18 @@ export default function TokenAssignmentCourseList({
                               {lesson.enrolled_count} / {lesson.capacity}
                             </td>
                             <td className="px-4 py-2 text-sm">
-                              <AssignButton
-                                lesson={lesson}
-                                canAssign={canAssignToClass(lesson)}
-                                getUnassignedTokens={getUnassignedTokens}
-                                isClassFull={isClassFull}
-                                onAssign={onAssignLesson}
-                                compact
-                              />
+                              {isTrial ? (
+                                <span className="text-xs font-medium text-blue-800">{statusText}</span>
+                              ) : (
+                                <AssignButton
+                                  lesson={lesson}
+                                  canAssign={canAssignToClass(lesson)}
+                                  getUnassignedTokens={getUnassignedTokens}
+                                  isClassFull={isClassFull}
+                                  onAssign={onAssignLesson}
+                                  compact
+                                />
+                              )}
                             </td>
                           </>
                         ) : (
@@ -417,7 +486,9 @@ export default function TokenAssignmentCourseList({
                             </td>
                             <td className="px-4 py-2 text-sm">
                               {enrollStatus && getStatusLabel ? (
-                                <span className="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-xs font-medium ${enrollmentStatusBadgeClass(enrollStatus)}`}
+                                >
                                   {getStatusLabel(enrollStatus)}
                                 </span>
                               ) : (
@@ -452,6 +523,37 @@ export default function TokenAssignmentCourseList({
   );
 }
 
+function MultiLessonTimeSummary({
+  firstStart,
+  firstEnd,
+  lastStart,
+  lastEnd,
+  locale,
+}: {
+  firstStart: string;
+  firstEnd: string;
+  lastStart: string;
+  lastEnd: string;
+  locale: string;
+}) {
+  const { primary, secondary, secondaryIsTimeOnly } = formatMultiLessonTimeSummary(
+    firstStart,
+    firstEnd,
+    lastStart,
+    lastEnd,
+    locale,
+  );
+  return (
+    <div className="leading-snug">
+      <div className="whitespace-nowrap">{primary}</div>
+      {secondary ? (
+        <div className={`mt-0.5 ${secondaryIsTimeOnly ? 'text-gray-600' : 'text-gray-700'}`}>
+          {secondary}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 function AssignButton({
   lesson,
   canAssign,

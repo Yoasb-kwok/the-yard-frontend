@@ -28,6 +28,7 @@ export type LessonEnrollmentUiStatus =
   | 'full'
   | 'cancelled'
   | 'assigned'
+  | 'trial'
   | 'awaiting_tokens'
   | 'bookable';
 
@@ -146,11 +147,13 @@ export function getLessonEnrollmentUiStatus(
   options: {
     assignedClassIds: Set<string>;
     awaitingTokensClassIds?: Set<string>;
+    trialEnrolledClassIds?: Set<string>;
   },
 ): LessonEnrollmentUiStatus {
   if (lesson.is_cancelled) return 'cancelled';
   const id = normalizeClassId(lesson.id);
   if (options.assignedClassIds.has(id)) return 'assigned';
+  if (options.trialEnrolledClassIds?.has(id)) return 'trial';
   if (isLessonPast(lesson)) return 'past';
   if (isLessonFull(lesson)) return 'full';
   if (options.awaitingTokensClassIds?.has(id)) return 'awaiting_tokens';

@@ -26,14 +26,25 @@ import AdminUserEditModal, {
 import { buildAdminStudentProfilePatchRow } from '../../lib/studentProfilesApi';
 import AdminUserStudentsTable from '../../components/admin/AdminUserStudentsTable';
 import { readHasTrialFromApi, userHasTrialApplication } from '../../lib/adminUserTrials';
+import {
+  filterWalletTokensForProfile,
+  getLatestWalletExpiryDate,
+  sumWalletRemainingTokens,
+  type WalletTokenBatch,
+} from '../../lib/adminUserTokens';
 import DateSelect from '../../components/DateSelect';
 import { TableSortButton } from '../../components/TableSortButton';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
-interface UserToken {
-  remaining_tokens: number;
-  expiry_date: string;
+interface UserToken extends WalletTokenBatch {
   id?: string;
+}
+
+interface TokenExpiryEditContext {
+  userId: string;
+  studentName: string;
+  profileId: string;
+  tokens: UserToken[];
 }
 
 interface User {
@@ -58,17 +69,32 @@ interface User {
 
 function normalizeUserTokens(raw: unknown): UserToken[] {
   if (!Array.isArray(raw)) return [];
-  return raw.map((t: { id?: unknown; remaining_tokens?: unknown; balance?: unknown; expiry_date?: unknown; expires_at?: unknown }) => {
+  return raw.map((t: {
+    id?: unknown;
+    remaining_tokens?: unknown;
+    balance?: unknown;
+    expiry_date?: unknown;
+    expires_at?: unknown;
+    profile_id?: unknown;
+    student_profile_id?: unknown;
+  }) => {
     const exp =
       typeof t.expiry_date === 'string'
         ? t.expiry_date.slice(0, 10)
         : typeof t.expires_at === 'string'
           ? t.expires_at.slice(0, 10)
           : '';
+    const profileId =
+      t.profile_id != null
+        ? String(t.profile_id)
+        : t.student_profile_id != null
+          ? String(t.student_profile_id)
+          : null;
     return {
       id: t.id != null ? String(t.id) : undefined,
       remaining_tokens: Number(t.remaining_tokens ?? t.balance ?? 0),
       expiry_date: exp,
+      profile_id: profileId,
     };
   });
 }
@@ -122,8 +148,9 @@ export default function UsersPage() {
   const [editSaving, setEditSaving] = useState(false);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [tokenExpiryModal, setTokenExpiryModal] = useState(false);
-  const [selectedUserForTokenEdit, setSelectedUserForTokenEdit] = useState<User | null>(null);
-  const [tokenExpiryForm, setTokenExpiryForm] = useState<{ [key: number]: string }>({});
+  const [tokenExpiryEdit, setTokenExpiryEdit] = useState<TokenExpiryEditContext | null>(null);
+  const [tokenExpiryDateInput, setTokenExpiryDateInput] = useState('');
+  const [tokenExpirySaving, setTokenExpirySaving] = useState(false);
   const [sortKey, setSortKey] = useState<string | null>('parent_name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -382,52 +409,54 @@ export default function UsersPage() {
     alert(t('admin.users.passwordResetSent'));
   }
 
-  function getEarliestExpiryDate(userTokens: UserToken[]): string | null {
-    if (!userTokens || userTokens.length === 0) return null;
-    const validTokens = userTokens.filter(t => t.remaining_tokens > 0);
-    if (validTokens.length === 0) return null;
-    const dates = validTokens.map(t => new Date(t.expiry_date));
-    const earliestDate = new Date(Math.min(...dates.map(d => d.getTime())));
-    return earliestDate.toISOString().split('T')[0];
+  function getWalletExpiryDate(userTokens: UserToken[]): string | null {
+    return getLatestWalletExpiryDate(userTokens);
   }
 
-  function openTokenExpiryModal(user: User) {
-    setSelectedUserForTokenEdit(user);
-    const formData: { [key: number]: string } = {};
-    user.user_tokens.forEach((token, index) => {
-      formData[index] = token.expiry_date;
+  function openTokenExpiryModal(user: User, profileId: string, studentName: string) {
+    const allowLegacyPool = user.family.students.length <= 1;
+    const walletTokens = filterWalletTokensForProfile(user.user_tokens, profileId, {
+      allowLegacyPool,
+    }) as UserToken[];
+    const currentExpiry = getLatestWalletExpiryDate(walletTokens) || '';
+    setTokenExpiryEdit({
+      userId: user.id,
+      studentName,
+      profileId,
+      tokens: walletTokens,
     });
-    setTokenExpiryForm(formData);
+    setTokenExpiryDateInput(currentExpiry);
     setTokenExpiryModal(true);
   }
 
   async function handleTokenExpiryUpdate() {
-    if (!selectedUserForTokenEdit) return;
+    if (!tokenExpiryEdit) return;
+    if (!tokenExpiryDateInput) return;
 
+    setTokenExpirySaving(true);
     try {
-      // Update each token that has been modified
-      const updatePromises = selectedUserForTokenEdit.user_tokens.map(async (token, index) => {
-        const newExpiryDate = tokenExpiryForm[index];
-        if (newExpiryDate && newExpiryDate !== token.expiry_date && token.id) {
-          return api.patch(`/admin/user-tokens/${token.id}`, {
-            expiry_date: newExpiryDate,
-          });
-        }
-        return Promise.resolve(null);
-      });
+      const body: Record<string, string> = { expiry_date: tokenExpiryDateInput };
+      if (tokenExpiryEdit.profileId) {
+        body.student_profile_id = tokenExpiryEdit.profileId;
+        body.profile_id = tokenExpiryEdit.profileId;
+      }
 
-      await Promise.all(updatePromises);
+      const response = await api.patch(`/admin/users/${tokenExpiryEdit.userId}/token-wallet-expiry`, body);
+      if (!response.success) {
+        throw new Error(response.msg || 'Failed to update token expiry date');
+      }
 
-      // Reload users to get updated data
       await loadUsers();
 
       alert(t('admin.users.tokenExpiryDateUpdated'));
       setTokenExpiryModal(false);
-      setSelectedUserForTokenEdit(null);
-      setTokenExpiryForm({});
+      setTokenExpiryEdit(null);
+      setTokenExpiryDateInput('');
     } catch (error) {
       console.error('Error updating token expiry:', error);
       alert(error instanceof Error ? error.message : 'Failed to update token expiry date');
+    } finally {
+      setTokenExpirySaving(false);
     }
   }
 
@@ -474,7 +503,7 @@ export default function UsersPage() {
     if (!sk) return 0;
     let cmp = 0;
     const tokenSum = (u: User) => u.user_tokens.reduce((s, t) => s + (t.remaining_tokens || 0), 0);
-    const earliest = (u: User) => getEarliestExpiryDate(u.user_tokens);
+    const walletExpiry = (u: User) => getWalletExpiryDate(u.user_tokens);
     if (sk === 'account_number') {
       cmp = (a.account_number || '').localeCompare(b.account_number || '', undefined, {
         numeric: true,
@@ -523,8 +552,8 @@ export default function UsersPage() {
     } else if (sk === 'remaining_tokens') {
       cmp = tokenSum(a) - tokenSum(b);
     } else if (sk === 'token_expiry') {
-      const ea = earliest(a);
-      const eb = earliest(b);
+      const ea = walletExpiry(a);
+      const eb = walletExpiry(b);
       if (!ea && !eb) cmp = 0;
       else if (!ea) cmp = 1;
       else if (!eb) cmp = -1;
@@ -602,7 +631,7 @@ export default function UsersPage() {
     const rows: string[] = [];
     sortedUsers.forEach((u) => {
       const tokens = u.user_tokens.reduce((s, tok) => s + tok.remaining_tokens, 0);
-      const tokenExpiry = getEarliestExpiryDate(u.user_tokens);
+      const tokenExpiry = getWalletExpiryDate(u.user_tokens);
       const parentName = getParentName(u);
       const trialLabel = u.has_trial_application ? t('common.yes') : t('common.no');
       const joinedLabel = formatDateDdMmYy(u.created_at);
@@ -775,7 +804,7 @@ export default function UsersPage() {
                 paginatedUsers.flatMap((user) => {
                   const parentName = getParentName(user);
                   const isExpanded = expandedUserId === user.id;
-                  const earliestExpiry = getEarliestExpiryDate(user.user_tokens);
+                  const walletExpiryDate = getWalletExpiryDate(user.user_tokens);
                   const rows = [
                     <tr key={user.id} className={isExpanded ? 'bg-slate-50' : undefined}>
                       <td className="px-1 py-3 align-middle">
@@ -882,7 +911,7 @@ export default function UsersPage() {
                             <AdminUserStudentsTable
                               students={user.family.students}
                               hasTrialApplication={user.has_trial_application}
-                              tokenExpiryDate={earliestExpiry}
+                              tokenExpiryDate={walletExpiryDate}
                               onViewTrials={() => navigate('/admin/trial-applications')}
                               onAssignTokens={(profileId) =>
                                 navigate(
@@ -894,7 +923,10 @@ export default function UsersPage() {
                                   `/admin/users/${user.id}/schedule?profileId=${encodeURIComponent(profileId)}`,
                                 )
                               }
-                              onEditTokenExpiry={() => openTokenExpiryModal(user)}
+                              onEditTokenExpiry={(profileId) => {
+                                const student = user.family.students.find((s) => s.id === profileId);
+                                openTokenExpiryModal(user, profileId, student?.full_name || profileId);
+                              }}
                             />
                           </div>
                         </td>
@@ -974,45 +1006,45 @@ export default function UsersPage() {
         </div>
       )}
 
-      {tokenExpiryModal && selectedUserForTokenEdit && (
+      {tokenExpiryModal && tokenExpiryEdit && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {t('admin.users.editTokenExpiryDateTitle', { name: selectedUserForTokenEdit.full_name })}
+              {t('admin.users.editTokenExpiryDateTitle', { name: tokenExpiryEdit.studentName })}
             </h2>
-            
-            {selectedUserForTokenEdit.user_tokens.length === 0 ? (
+
+            {tokenExpiryEdit.tokens.length === 0 ? (
               <p className="text-gray-500 py-4">{t('admin.users.noTokens')}</p>
             ) : (
-              <div className="space-y-4">
-                {selectedUserForTokenEdit.user_tokens.map((token, index) => (
-                  <div key={index} className="border rounded-lg p-4 space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-500">
-                          {t('admin.users.remainingTokens')}: {token.remaining_tokens}
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('admin.users.currentExpiryDate')}
-                      </label>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {formatDateDdMmYy(token.expiry_date)}
-                      </p>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        {t('admin.users.newExpiryDate')}
-                      </label>
-                      <DateSelect
-                        value={tokenExpiryForm[index] || ''}
-                        onChange={(v) => setTokenExpiryForm({ ...tokenExpiryForm, [index]: v })}
-                        className="w-full"
-                        ariaLabel={t('admin.users.newExpiryDate')}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <div className="border rounded-lg p-4 space-y-4">
+                <p className="text-sm text-gray-600">
+                  {t('admin.users.remainingTokens')}:{' '}
+                  <span className="font-medium text-gray-900">
+                    {sumWalletRemainingTokens(tokenExpiryEdit.tokens)}
+                  </span>
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('admin.users.currentExpiryDate')}
+                  </label>
+                  <p className="text-sm text-gray-600 mb-3">
+                    {getLatestWalletExpiryDate(tokenExpiryEdit.tokens)
+                      ? formatDateDdMmYy(getLatestWalletExpiryDate(tokenExpiryEdit.tokens)!)
+                      : '—'}
+                  </p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {t('admin.users.newExpiryDate')}
+                  </label>
+                  <DateSelect
+                    value={tokenExpiryDateInput}
+                    onChange={setTokenExpiryDateInput}
+                    className="w-full"
+                    ariaLabel={t('admin.users.newExpiryDate')}
+                  />
+                  <p className="text-xs text-gray-500 mt-2">
+                    {t('admin.users.unifiedTokenExpiryHint')}
+                  </p>
+                </div>
               </div>
             )}
 
@@ -1020,19 +1052,21 @@ export default function UsersPage() {
               <button
                 onClick={() => {
                   setTokenExpiryModal(false);
-                  setSelectedUserForTokenEdit(null);
-                  setTokenExpiryForm({});
+                  setTokenExpiryEdit(null);
+                  setTokenExpiryDateInput('');
                 }}
                 className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                disabled={tokenExpirySaving}
               >
                 {t('common.cancel')}
               </button>
-              {selectedUserForTokenEdit.user_tokens.length > 0 && (
+              {tokenExpiryEdit.tokens.length > 0 && (
                 <button
                   onClick={handleTokenExpiryUpdate}
-                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark"
+                  disabled={tokenExpirySaving || !tokenExpiryDateInput}
+                  className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
                 >
-                  {t('admin.users.saveChanges')}
+                  {tokenExpirySaving ? t('common.loading') : t('admin.users.saveChanges')}
                 </button>
               )}
             </div>

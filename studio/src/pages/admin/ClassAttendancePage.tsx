@@ -5,6 +5,7 @@ import Layout from '../../components/Layout';
 import { formatDateTime, formatDateTimeRange, formatMobileForDisplay } from '../../lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../lib/api';
+import { dedupeLatestEnrollmentPerStudent } from '../../lib/adminClassEnrollments';
 import { ArrowLeft, Search, X, AlertTriangle, Users, RefreshCw } from 'lucide-react';
 import { TablePaginationBar, useTablePagination } from '../../components/TablePagination';
 
@@ -30,7 +31,7 @@ interface Enrollment {
   user_id: string;
   user_name: string;
   user_mobile: string | null;
-  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave';
+  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave' | 'cancelled';
   check_in_time: string | null;
   check_out_time: string | null;
   sick_leave_document_url: string | null;
@@ -109,18 +110,20 @@ export default function ClassAttendancePage() {
       }
       if (enrollRes.success && Array.isArray(enrollRes.data)) {
         setEnrollments(
-          enrollRes.data.map((e: any) => ({
-            id: String(e.id),
-            class_id: classId,
-            user_id: e.user_id ?? '',
-            user_name: e.user_name ?? '',
-            user_mobile: e.user_mobile ?? null,
-            status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
-            check_in_time: e.check_in_time ?? null,
-            check_out_time: e.check_out_time ?? null,
-            sick_leave_document_url: e.sick_leave_document_url ?? null,
-            created_at: e.created_at ?? '',
-          }))
+          dedupeLatestEnrollmentPerStudent(
+            enrollRes.data.map((e: any) => ({
+              id: String(e.id),
+              class_id: classId,
+              user_id: e.user_id ?? '',
+              user_name: e.user_name ?? '',
+              user_mobile: e.user_mobile ?? null,
+              status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+              check_in_time: e.check_in_time ?? null,
+              check_out_time: e.check_out_time ?? null,
+              sick_leave_document_url: e.sick_leave_document_url ?? null,
+              created_at: e.created_at ?? '',
+            })),
+          ),
         );
       } else {
         setEnrollments([]);

@@ -49,7 +49,5 @@ Thumbs.db
 *.wmv
 
 # Studio environment files
-studio/.env
-studio/.env.*
-!studio/.env.example
+studio/.env*
 

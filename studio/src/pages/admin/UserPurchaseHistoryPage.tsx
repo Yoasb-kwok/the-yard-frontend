@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
-import { extractServerErrorText, formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
+import { extractServerErrorText, formatCurrency, formatDateOnly, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api, ApiError } from '../../lib/api';
 import { patchAdminOrderPaymentStatus } from '../../lib/adminOrderApi';
 import {
@@ -31,6 +31,8 @@ interface Purchase {
   created_at: string;
   paid_at: string | null;
   token_count: number;
+  start_date: string | null;
+  remarks: string | null;
 }
 
 type PurchaseStatus = Purchase['payment_status'];
@@ -74,6 +76,11 @@ function normalizePurchaseRow(row: any): Purchase {
     created_at: String(row?.created_at ?? new Date().toISOString()),
     paid_at: row?.paid_at ?? null,
     token_count: toNumber(row?.token_count ?? pkg?.token_count ?? row?.tokens, 0),
+    start_date:
+      row?.start_date != null && String(row.start_date).trim() !== ''
+        ? String(row.start_date).slice(0, 10)
+        : null,
+    remarks: row?.remarks != null && String(row.remarks).trim() !== '' ? String(row.remarks).trim() : null,
   };
 }
 
@@ -451,6 +458,18 @@ export default function UserPurchaseHistoryPage() {
                         </span>
                       </div>
                     )}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">{t('admin.purchaseHistory.startDate')}</span>
+                      <span className="text-sm text-gray-900">
+                        {purchase.start_date ? formatDateOnly(purchase.start_date, getLocale()) : '–'}
+                      </span>
+                    </div>
+                    {purchase.remarks && (
+                      <div className="flex justify-between items-start gap-3">
+                        <span className="text-sm text-gray-600 shrink-0">{t('admin.purchaseHistory.remarks')}</span>
+                        <span className="text-sm text-gray-900 text-right break-words">{purchase.remarks}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                       <span className="text-sm text-gray-600">{t('admin.purchaseHistory.status')}</span>
                       <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(purchase.payment_status)}`}>
@@ -526,6 +545,12 @@ export default function UserPurchaseHistoryPage() {
                         {t('admin.purchaseHistory.date')}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('admin.purchaseHistory.startDate')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('admin.purchaseHistory.remarks')}
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {t('admin.purchaseHistory.actions')}
                       </th>
                     </tr>
@@ -593,6 +618,12 @@ export default function UserPurchaseHistoryPage() {
                               </div>
                             )}
                           </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                          {purchase.start_date ? formatDateOnly(purchase.start_date, getLocale()) : '–'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 align-top min-w-[10rem] max-w-[16rem] whitespace-pre-wrap break-words">
+                          {purchase.remarks || '–'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                           <div className="flex flex-wrap items-center gap-2">

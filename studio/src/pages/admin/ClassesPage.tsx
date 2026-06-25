@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
 import ClassAttendancePanel, { type ClassWithAttendance, type Enrollment } from '../../components/ClassAttendancePanel';
 import { formatDateTimeRange, shouldPostponeClassWithHolidays, formatProgramCodeDisplay, parseAgeRange, ageRangeToTag } from '../../lib/utils';
+import { dedupeLatestEnrollmentPerStudent } from '../../lib/adminClassEnrollments';
 import { api } from '../../lib/api';
 import { useHolidays } from '../../lib/useHolidays';
 import { Plus, Calendar, ChevronLeft, ChevronRight, Filter, MapPin, Edit, Users, Trash2 } from 'lucide-react';
@@ -90,6 +91,14 @@ function getClassDisplayName(c: Class): string {
   return (c.name_zh_tw && c.name_zh_tw.trim()) || (c.name_zh_cn && c.name_zh_cn.trim()) || (c.name_en && c.name_en.trim()) || c.name || '';
 }
 
+function getLocalDateStr(input: Date | string): string {
+  const d = typeof input === 'string' ? new Date(input) : input;
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function extractClassTagValues(raw: any): Record<string, string | null> {
   const source = raw?.tag_values ?? raw?.tagValues ?? raw?.tags ?? {};
   if (!source || typeof source !== 'object') return {};
@@ -141,6 +150,7 @@ export default function ClassesPage() {
   const [view, setView] = useState<ViewType>('month');
   const [locationFilter, setLocationFilter] = useState<LocationFilter>('all');
   const [classNameFilter, setClassNameFilter] = useState<string>('');
+  const [showExpiredClasses, setShowExpiredClasses] = useState(false);
   const [form, setForm] = useState({
     name: '',
     name_zh_tw: '',
@@ -309,18 +319,20 @@ export default function ClassesPage() {
     try {
       const res = await api.get<any[]>(`/admin/classes/${classId}/enrollments`);
       const list = res.success && Array.isArray(res.data) ? res.data : [];
-      const enrollments: Enrollment[] = list.map((e: any) => ({
-        id: String(e.id),
-        class_id: classId,
-        user_id: e.user_id ?? '',
-        user_name: e.user_name ?? '',
-        user_mobile: e.user_mobile ?? null,
-        status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
-        check_in_time: e.check_in_time ?? null,
-        check_out_time: e.check_out_time ?? null,
-        sick_leave_document_url: e.sick_leave_document_url ?? null,
-        created_at: e.created_at ?? '',
-      }));
+      const enrollments: Enrollment[] = dedupeLatestEnrollmentPerStudent(
+        list.map((e: any) => ({
+          id: String(e.id),
+          class_id: classId,
+          user_id: e.user_id ?? '',
+          user_name: e.user_name ?? '',
+          user_mobile: e.user_mobile ?? null,
+          status: (e.status && e.status !== '' ? e.status : 'absent') as Enrollment['status'],
+          check_in_time: e.check_in_time ?? null,
+          check_out_time: e.check_out_time ?? null,
+          sick_leave_document_url: e.sick_leave_document_url ?? null,
+          created_at: e.created_at ?? '',
+        })),
+      );
       return { class: classWithAttendance, enrollments };
     } catch {
       return { class: classWithAttendance, enrollments: [] };
@@ -1098,19 +1110,16 @@ export default function ClassesPage() {
     // Filter by selected date
     if (selectedDate) {
       filtered = filtered.filter(classItem => {
-        const classDate = new Date(classItem.start_time);
-        const year = classDate.getFullYear();
-        const month = classDate.getMonth();
-        const day = classDate.getDate();
-        const classDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        const selectedYear = selectedDate.getFullYear();
-        const selectedMonth = selectedDate.getMonth();
-        const selectedDay = selectedDate.getDate();
-        const selectedDateStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-${String(selectedDay).padStart(2, '0')}`;
-        
+        const classDateStr = getLocalDateStr(classItem.start_time);
+        const selectedDateStr = getLocalDateStr(selectedDate);
         return classDateStr === selectedDateStr;
       });
+    }
+
+    // Default: only today and future classes (skip when viewing a specific calendar day)
+    if (!showExpiredClasses && !selectedDate) {
+      const todayStr = getLocalDateStr(new Date());
+      filtered = filtered.filter((classItem) => getLocalDateStr(classItem.start_time) >= todayStr);
     }
 
     return filtered;
@@ -1916,6 +1925,18 @@ export default function ClassesPage() {
                 ))}
               </select>
             </div>
+            <label htmlFor="filter-show-expired" className="flex items-center gap-2 cursor-pointer">
+              <input
+                id="filter-show-expired"
+                type="checkbox"
+                checked={showExpiredClasses}
+                onChange={(e) => setShowExpiredClasses(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                {t('admin.classes.showExpiredClasses')}
+              </span>
+            </label>
           </div>
         </div>
 

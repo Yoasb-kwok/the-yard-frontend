@@ -1,13 +1,25 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
+import {
+  countIncompleteEnrollmentRequests,
+  loadAdminEnrollmentRequestQueue,
+} from './adminEnrollmentRequestQueue';
 
 export interface AdminPendingCounts {
   pendingApplications: number;
   pendingTrials: number;
+  /** Matches 未完成代幣分配 on /admin/enrollment-requests. */
   pendingEnrollmentRequests: number;
+  /** Orders with payment_status pending or failed (sidebar badge on purchase history). */
+  pendingOrders: number;
 }
 
-const ZERO_COUNTS: AdminPendingCounts = { pendingApplications: 0, pendingTrials: 0, pendingEnrollmentRequests: 0 };
+const ZERO_COUNTS: AdminPendingCounts = {
+  pendingApplications: 0,
+  pendingTrials: 0,
+  pendingEnrollmentRequests: 0,
+  pendingOrders: 0,
+};
 let lastKnownCounts: AdminPendingCounts = ZERO_COUNTS;
 
 /**
@@ -22,10 +34,18 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
       setCounts(ZERO_COUNTS);
       return;
     }
-    api
-      .get<AdminPendingCounts>('admin/pending-counts')
-      .then((res: unknown) => {
-        const data = (res as { data?: AdminPendingCounts })?.data;
+
+    let cancelled = false;
+
+    Promise.all([
+      api.get<AdminPendingCounts>('admin/pending-counts'),
+      loadAdminEnrollmentRequestQueue()
+        .then((requests) => countIncompleteEnrollmentRequests(requests))
+        .catch(() => lastKnownCounts.pendingEnrollmentRequests),
+    ])
+      .then(([pendingRes, incompleteEnrollmentCount]) => {
+        if (cancelled) return;
+        const data = (pendingRes as { data?: AdminPendingCounts })?.data;
         if (
           data &&
           typeof data.pendingApplications === 'number' &&
@@ -34,16 +54,20 @@ export function useAdminPendingCounts(isAdmin: boolean): AdminPendingCounts {
           const next: AdminPendingCounts = {
             pendingApplications: data.pendingApplications,
             pendingTrials: data.pendingTrials,
-            pendingEnrollmentRequests:
-              typeof data.pendingEnrollmentRequests === 'number' ? data.pendingEnrollmentRequests : 0,
+            pendingEnrollmentRequests: incompleteEnrollmentCount,
+            pendingOrders: typeof data.pendingOrders === 'number' ? data.pendingOrders : 0,
           };
           lastKnownCounts = next;
           setCounts(next);
         }
       })
       .catch(() => {
-        setCounts(lastKnownCounts);
+        if (!cancelled) setCounts(lastKnownCounts);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAdmin]);
 
   return isAdmin ? counts : ZERO_COUNTS;

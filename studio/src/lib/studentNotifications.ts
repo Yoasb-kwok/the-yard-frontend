@@ -3,8 +3,14 @@
  * 合併 API `/student/notifications`、試堂列表、報名課程內的請假狀態。
  */
 
-import type { EnrolledClass } from './studentEnrollments';
+import {
+  buildLessonDatesByEnrollmentId,
+  isPerLessonEnrollmentRow,
+  resolveLeaveLessonDisplayNumber,
+  type EnrolledClass,
+} from './studentEnrollments';
 import type { TrialApplicationItem, TrialStatus } from './studentTrialApplications';
+import { formatNotificationClassDate } from './utils';
 
 export type StudentNotificationCategory = 'trial' | 'leave' | 'extension' | 'class' | 'other';
 
@@ -22,6 +28,9 @@ export type ApiNotification = {
   leaveType?: string;
   daysLeft?: string;
   remainingTokens?: string;
+  lesson_index?: string | number;
+  lesson_number?: string | number;
+  n?: string | number;
   /** Legacy mock / DB fields */
   body?: string;
   created_at?: string;
@@ -79,6 +88,81 @@ function leaveTypeLabel(leaveType: string | undefined, t: TFn): string {
   return leaveType === 'personal' ? t('notifications.leaveTypePersonal') : t('notifications.leaveTypeSick');
 }
 
+function readLessonNumberField(raw: Record<string, unknown>, ...keys: string[]): string {
+  for (const key of keys) {
+    const value = raw[key];
+    if (value != null && String(value).trim() !== '') return String(value).trim();
+  }
+  return '';
+}
+
+function notificationLocale(locale?: string): string {
+  if (locale === 'zh-CN') return 'zh-CN';
+  if (locale === 'en') return 'en-US';
+  return 'zh-TW';
+}
+
+function classDateFromApiFields(n: ApiNotification, locale?: string): string {
+  if (n.dateTimeStr?.trim()) {
+    return formatNotificationClassDate(n.dateTimeStr, notificationLocale(locale));
+  }
+  return '';
+}
+
+function resolveLeaveClassDate(
+  enrollment: EnrolledClass,
+  lessonIndex: number | undefined | null,
+  locale?: string,
+): string {
+  const loc = notificationLocale(locale);
+  if (isPerLessonEnrollmentRow(enrollment)) {
+    return formatNotificationClassDate(enrollment.class.start_time, loc);
+  }
+  const dates = buildLessonDatesByEnrollmentId([enrollment]).get(enrollment.id) ?? [];
+  if (dates.length === 0) {
+    return formatNotificationClassDate(enrollment.class.start_time, loc);
+  }
+  const displayNum = resolveLeaveLessonDisplayNumber(enrollment, lessonIndex);
+  const lessonDate = dates[Math.max(0, displayNum - 1)] ?? dates[0];
+  return formatNotificationClassDate(lessonDate, loc);
+}
+
+function enrichApiNotificationFromEnrollments(
+  n: ApiNotification,
+  enrollments: EnrolledClass[],
+): ApiNotification {
+  if (categorizeNotificationType(n.type) !== 'leave') return n;
+  const className = (n.className ?? '').trim();
+  if (!className) return n;
+  const enrollment = enrollments.find((e) => (e.class?.name ?? '').trim() === className);
+  if (!enrollment) return n;
+  let next = { ...n };
+  if (!next.dateTimeStr?.trim()) {
+    next = { ...next, dateTimeStr: enrollment.class.start_time };
+  }
+  if (!resolveNotificationLessonNumber(next)) {
+    const pending = (enrollment.leave_requests ?? []).find((r) => r.status === 'pending');
+    if (pending?.lesson_index != null) {
+      next = { ...next, lesson_index: pending.lesson_index };
+    }
+  }
+  return next;
+}
+
+function resolveNotificationLessonNumber(n: ApiNotification): string {
+  const direct = readLessonNumberField(n as unknown as Record<string, unknown>, 'n', 'lesson_number', 'lessonNumber');
+  if (direct) return direct;
+  const idxRaw = n.lesson_index;
+  if (idxRaw == null || String(idxRaw).trim() === '') return '';
+  const idx = Number(idxRaw);
+  if (!Number.isFinite(idx)) return '';
+  return String(idx >= 1 ? Math.floor(idx) : Math.floor(idx) + 1);
+}
+
+/** Replace any remaining `{{key}}` placeholders (e.g. API stored a partial template). */
+export function interpolateNotificationTemplate(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
+}
 /** Map legacy `{ title, body, created_at }` mock rows to ApiNotification. */
 export function normalizeApiNotification(raw: Record<string, unknown>): ApiNotification | null {
   const id = String(raw.id ?? '').trim();
@@ -99,6 +183,9 @@ export function normalizeApiNotification(raw: Record<string, unknown>): ApiNotif
     leaveType: raw.leaveType != null ? String(raw.leaveType) : undefined,
     daysLeft: raw.daysLeft != null ? String(raw.daysLeft) : undefined,
     remainingTokens: raw.remainingTokens != null ? String(raw.remainingTokens) : undefined,
+    lesson_index: raw.lesson_index ?? raw.lessonIndex,
+    lesson_number: raw.lesson_number ?? raw.lessonNumber,
+    n: raw.n ?? raw.lesson_number ?? raw.lessonNumber,
     profile_id: raw.profile_id != null ? String(raw.profile_id) : undefined,
     student_profile_id: raw.student_profile_id != null ? String(raw.student_profile_id) : undefined,
     user_id: raw.user_id != null ? String(raw.user_id) : undefined,
@@ -128,11 +215,13 @@ export function matchesActiveProfile(n: ApiNotification, activeProfileId?: strin
   return targets.includes(activeProfileId);
 }
 
-export function buildNotification(n: ApiNotification, t: TFn): NotificationItem {
+export function buildNotification(n: ApiNotification, t: TFn, locale?: string): NotificationItem {
   const leaveLabel = leaveTypeLabel(n.leaveType, t);
+  const classDate = classDateFromApiFields(n, locale);
   const vars: Record<string, string> = {
     studentName: n.studentName || '',
     className: n.className || '',
+    classDate,
     dateTimeStr: n.dateTimeStr || '',
     leaveTypeLabel: leaveLabel,
     daysLeft: n.daysLeft ?? '',
@@ -142,6 +231,8 @@ export function buildNotification(n: ApiNotification, t: TFn): NotificationItem 
   let message = n.message ?? '';
   if (n.titleKey) title = t(`notifications.${n.titleKey}`, vars);
   if (n.messageKey) message = t(`notifications.${n.messageKey}`, vars);
+  title = interpolateNotificationTemplate(title, vars);
+  message = interpolateNotificationTemplate(message, vars);
   const type = n.type || 'other';
   return {
     id: n.id,
@@ -227,6 +318,7 @@ export function buildTrialApplicationNotifications(
 export function buildLeaveNotificationsFromEnrollments(
   enrollments: EnrolledClass[],
   t: TFn,
+  locale?: string,
 ): NotificationItem[] {
   const items: NotificationItem[] = [];
   enrollments.forEach((enrollment) => {
@@ -235,8 +327,8 @@ export function buildLeaveNotificationsFromEnrollments(
     (enrollment.leave_requests || []).forEach((r) => {
       const leaveTypeLabelStr =
         r.leave_type === 'personal' ? t('notifications.leaveTypePersonal') : t('notifications.leaveTypeSick');
-      const n = (r.lesson_index ?? 0) + 1;
-      const vars = { studentName, className, n: String(n), leaveTypeLabel: leaveTypeLabelStr };
+      const classDate = resolveLeaveClassDate(enrollment, r.lesson_index, locale);
+      const vars = { studentName, className, classDate, leaveTypeLabel: leaveTypeLabelStr };
       if (r.status === 'pending') {
         items.push({
           id: `leave-pending-${enrollment.id}-${r.lesson_index}`,
@@ -246,6 +338,7 @@ export function buildLeaveNotificationsFromEnrollments(
           message: t('notifications.leavePendingMessage', vars),
           date: new Date().toISOString(),
           studentName: studentName || undefined,
+          className: className || undefined,
         });
       } else if (r.status === 'approved') {
         items.push({
@@ -256,6 +349,7 @@ export function buildLeaveNotificationsFromEnrollments(
           message: t('notifications.leaveApprovedMessage', vars),
           date: new Date().toISOString(),
           studentName: studentName || undefined,
+          className: className || undefined,
         });
       } else if (r.status === 'rejected') {
         items.push({
@@ -266,20 +360,28 @@ export function buildLeaveNotificationsFromEnrollments(
           message: t('notifications.leaveRejectedMessage', vars),
           date: new Date().toISOString(),
           studentName: studentName || undefined,
+          className: className || undefined,
         });
       }
     });
 
     const sick = enrollment.sick_leave_application;
     if (sick?.status === 'pending') {
+      const classDate = resolveLeaveClassDate(enrollment, null, locale);
       items.push({
         id: `sick-pending-${enrollment.id}`,
         type: 'leave_pending',
         category: 'leave',
-        title: t('notifications.sickLeavePendingTitle'),
-        message: t('notifications.sickLeavePendingMessage', { studentName, className }),
+        title: t('notifications.leavePendingTitle'),
+        message: t('notifications.leavePendingMessage', {
+          studentName,
+          className,
+          classDate,
+          leaveTypeLabel: t('notifications.leaveTypeSick'),
+        }),
         date: new Date().toISOString(),
         studentName: studentName || undefined,
+        className: className || undefined,
       });
     } else if (sick?.status === 'approved') {
       items.push({
@@ -298,6 +400,7 @@ export function buildLeaveNotificationsFromEnrollments(
         }),
         date: new Date().toISOString(),
         studentName: studentName || undefined,
+        className: className || undefined,
       });
     } else if (sick?.status === 'rejected') {
       items.push({
@@ -316,6 +419,7 @@ export function buildLeaveNotificationsFromEnrollments(
         }),
         date: new Date().toISOString(),
         studentName: studentName || undefined,
+        className: className || undefined,
       });
     }
   });
@@ -375,6 +479,9 @@ export type StudentRequestRow = {
   status: string;
   class_name?: string;
   class_date?: string;
+  leave_type?: 'personal' | 'sick';
+  lesson_index?: number | null;
+  lesson_number?: number | null;
   created_at: string;
   user_name?: string;
   profile_id?: string;
@@ -386,15 +493,22 @@ export type StudentRequestRow = {
 export function buildNotificationsFromStudentRequests(
   rows: StudentRequestRow[],
   t: TFn,
+  locale?: string,
 ): NotificationItem[] {
   return rows.flatMap((row) => {
     const className = row.class_name ?? '';
     const studentName = row.user_name ?? '';
+    const leaveTypeLabel =
+      row.leave_type === 'personal' ? t('notifications.leaveTypePersonal') : t('notifications.leaveTypeSick');
+    const classDate = row.class_date
+      ? formatNotificationClassDate(row.class_date, notificationLocale(locale))
+      : '';
     const vars = {
       studentName,
       className,
+      classDate,
       dateTimeStr: row.class_date ?? '',
-      leaveTypeLabel: t('notifications.leaveTypeSick'),
+      leaveTypeLabel,
     };
     if (row.kind === 'extension') {
       if (row.status === 'pending') {
@@ -438,10 +552,11 @@ export function buildNotificationsFromStudentRequests(
         id: `sick-req-${row.id}`,
         type: 'leave_pending',
         category: 'leave' as const,
-        title: t('notifications.sickLeavePendingTitle'),
-        message: t('notifications.sickLeavePendingMessage', vars),
+        title: t('notifications.leavePendingTitle'),
+        message: t('notifications.leavePendingMessage', vars),
         date: row.created_at,
         studentName: studentName || undefined,
+        className: className || undefined,
       }];
     }
     if (row.status === 'approved') {
@@ -453,6 +568,7 @@ export function buildNotificationsFromStudentRequests(
         message: t('notifications.leaveApprovedMessage', vars),
         date: row.created_at,
         studentName: studentName || undefined,
+        className: className || undefined,
       }];
     }
     if (row.status === 'rejected') {
@@ -464,6 +580,7 @@ export function buildNotificationsFromStudentRequests(
         message: t('notifications.leaveRejectedMessage', vars),
         date: row.created_at,
         studentName: studentName || undefined,
+        className: className || undefined,
       }];
     }
     return [];
@@ -481,6 +598,46 @@ function toDayBucket(date: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** Pending: "爵士舞（2026年6月29日）的…" — Approved: "…申請（test）已獲…" */
+function parseClassNameFromLeaveMessage(message: string): string {
+  const approved = message.match(/申請[（(]([^）)]+)[）)]/);
+  if (approved) return approved[1].trim().toLowerCase();
+  const pending = message.match(/^(.+?)[（(]/);
+  if (pending) return pending[1].trim().toLowerCase();
+  const enPending = message.match(/for\s+(.+?)\s+\(/i);
+  if (enPending) return enPending[1].trim().toLowerCase();
+  return '';
+}
+
+function parseClassDateFromLeavePendingMessage(message: string): string {
+  const m = message.match(/[（(]([^）)]+)[）)]/);
+  if (!m) return '';
+  const inner = m[1].trim();
+  if (/\d{4}年|年\d{1,2}月|\b\d{4}\b|January|February|March|April|May|June|July|August|September|October|November|December/i.test(inner)) {
+    return inner.toLowerCase();
+  }
+  return '';
+}
+
+function leaveNotificationDedupeKey(item: NotificationItem): string {
+  const student = (item.studentName || '').trim().toLowerCase();
+  const className =
+    (item.className || '').trim().toLowerCase() || parseClassNameFromLeaveMessage(item.message);
+  const parts = [item.category, item.type, student, className];
+  if (item.type === 'leave_pending') {
+    parts.push(parseClassDateFromLeavePendingMessage(item.message));
+  }
+  return parts.join('|');
+}
+
+function extensionNotificationDedupeKey(item: NotificationItem): string {
+  return [
+    item.category,
+    item.type,
+    (item.studentName || '').trim().toLowerCase(),
+    (item.className || '').trim().toLowerCase() || parseClassNameFromLeaveMessage(item.message),
+  ].join('|');
+}
 function dedupeTrialNotifications(items: NotificationItem[]): NotificationItem[] {
   const seen = new Set<string>();
   return items.filter((item) => {
@@ -498,6 +655,29 @@ function dedupeTrialNotifications(items: NotificationItem[]): NotificationItem[]
   });
 }
 
+/** Same leave from API + enrollments, or multiple stored rows — keep latest only. */
+function dedupeLeaveAndExtensionNotifications(items: NotificationItem[]): NotificationItem[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (item.category === 'leave') {
+      const key = leaveNotificationDedupeKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }
+    if (item.category === 'extension') {
+      const key = extensionNotificationDedupeKey(item);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    }
+    return true;
+  });
+}
+
+function dedupeStudentNotifications(items: NotificationItem[]): NotificationItem[] {
+  return dedupeLeaveAndExtensionNotifications(dedupeTrialNotifications(items));
+}
 /** 合併各來源、去重、依時間排序。API 通知優先於同 id 的 client 合成項。 */
 export function collectStudentNotifications(input: {
   apiNotifications: ApiNotification[];
@@ -506,19 +686,20 @@ export function collectStudentNotifications(input: {
   studentRequests?: StudentRequestRow[];
   studentName?: string;
   t: TFn;
+  locale?: string;
 }): NotificationItem[] {
-  const { apiNotifications, trials, enrollments, studentRequests = [], studentName, t } = input;
+  const { apiNotifications, trials, enrollments, studentRequests = [], studentName, t, locale } = input;
 
   const fromApi = apiNotifications
     .filter((n) => n.type !== 'news')
-    .map((n) => buildNotification(n, t))
+    .map((n) => buildNotification(enrichApiNotificationFromEnrollments(n, enrollments), t, locale))
     .filter(isFocusedNotification);
 
   const synthesized = [
     ...buildTrialApplicationNotifications(trials, t, studentName),
-    ...buildLeaveNotificationsFromEnrollments(enrollments, t),
+    ...buildLeaveNotificationsFromEnrollments(enrollments, t, locale),
     ...buildExtensionNotificationsFromEnrollments(enrollments, t),
-    ...buildNotificationsFromStudentRequests(studentRequests, t),
+    ...buildNotificationsFromStudentRequests(studentRequests, t, locale),
   ];
 
   const byId = new Map<string, NotificationItem>();
@@ -526,7 +707,7 @@ export function collectStudentNotifications(input: {
   fromApi.forEach((n) => byId.set(n.id, n));
 
   const sorted = [...byId.values()].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  return dedupeTrialNotifications(sorted);
+  return dedupeStudentNotifications(sorted);
 }
 
 /** @deprecated Use buildLeaveNotificationsFromEnrollments */

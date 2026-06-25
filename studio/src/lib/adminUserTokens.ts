@@ -170,6 +170,49 @@ function balanceFromWallet(
   return { remaining, assigned, purchased };
 }
 
+export type WalletTokenBatch = {
+  remaining_tokens: number;
+  expiry_date: string;
+  profile_id?: string | null;
+  id?: string;
+};
+
+/** Latest expiry among active wallet batches (unified wallet expiry). */
+export function getLatestWalletExpiryDate(tokens: WalletTokenBatch[]): string | null {
+  if (!tokens?.length) return null;
+  const active = tokens.filter((t) => (t.remaining_tokens || 0) > 0 && t.expiry_date);
+  if (!active.length) return null;
+  return active.reduce((latest, token) => {
+    const exp = token.expiry_date.slice(0, 10);
+    return !latest || exp > latest ? exp : latest;
+  }, '' as string) || null;
+}
+
+export function sumWalletRemainingTokens(tokens: WalletTokenBatch[]): number {
+  if (!tokens?.length) return 0;
+  return tokens.reduce((sum, t) => sum + Math.max(0, Number(t.remaining_tokens) || 0), 0);
+}
+
+/** Active batches for a student profile (or legacy account pool when unscoped). */
+export function filterWalletTokensForProfile(
+  tokens: WalletTokenBatch[],
+  profileId: string,
+  options?: { allowLegacyPool?: boolean },
+): WalletTokenBatch[] {
+  const pid = profileId.trim();
+  const allowLegacy = options?.allowLegacyPool !== false;
+  const today = new Date().toISOString().slice(0, 10);
+
+  return tokens.filter((token) => {
+    if ((token.remaining_tokens || 0) <= 0) return false;
+    const exp = token.expiry_date?.slice(0, 10);
+    if (exp && exp < today) return false;
+    const rowProfile = token.profile_id?.trim() || null;
+    if (rowProfile) return rowProfile === pid;
+    return allowLegacy;
+  });
+}
+
 export function getAdminUserTokenBalance(
   userRow: Record<string, unknown>,
   enrollmentRows?: unknown,

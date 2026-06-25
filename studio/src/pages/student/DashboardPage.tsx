@@ -4,7 +4,12 @@ import Layout from '../../components/Layout';
 import PageLoading from '../../components/PageLoading';
 import { useAuth, type AddProfileData, type CourseLevel } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
-import { containsWhitespace, formatMobileForDisplay } from '../../lib/utils';
+import {
+  containsWhitespace,
+  formatMobileForDisplay,
+  formatPhoneForDisplay,
+  normalizePhoneToStorage,
+} from '../../lib/utils';
 import { api } from '../../lib/api';
 import { HK_DISTRICT_KEYS } from '../../lib/hkDistricts';
 import { pickEnrollmentProfileId, type EnrolledClass } from '../../lib/studentEnrollments';
@@ -54,9 +59,10 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!masterProfile) return;
+    const rawContact = masterProfile.contact_number ?? masterProfile.mobile ?? '';
     setParentForm({
       parents_name: masterProfile.parents_name ?? '',
-      contact_number: masterProfile.contact_number ?? masterProfile.mobile ?? '',
+      contact_number: rawContact ? formatPhoneForDisplay(rawContact, null, '') : '',
       residential_district: masterProfile.residential_district ?? '',
     });
   }, [masterProfile?.id, masterProfile?.parents_name, masterProfile?.contact_number, masterProfile?.residential_district, masterProfile?.mobile]);
@@ -84,7 +90,10 @@ export default function DashboardPage() {
     [classesByProfileId]
   );
 
-  const displayMobile = formatMobileForDisplay(user?.mobile ?? (parentForm.contact_number || null), '—');
+  const displayMobile = formatMobileForDisplay(
+    user?.mobile ?? masterProfile?.contact_number ?? masterProfile?.mobile ?? null,
+    '—',
+  );
 
   useEffect(() => {
     if (profiles && profiles.length > 0) loadUpcomingClasses();
@@ -115,7 +124,7 @@ export default function DashboardPage() {
     if (!masterProfile || !profiles?.length) return;
     const payload = {
       parents_name: parentForm.parents_name.trim() || null,
-      contact_number: parentForm.contact_number.trim() || null,
+      contact_number: normalizePhoneToStorage(parentForm.contact_number.trim()) || null,
       residential_district: parentForm.residential_district || null,
     };
     try {

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Layout from '../../components/Layout';
-import { Save, Bell, Plus, Trash2 } from 'lucide-react';
+import { Save, Plus, Trash2 } from 'lucide-react';
 import { getHomeAboutContent, saveHomeAboutContent } from '../../lib/homeAboutStorage';
 import { api } from '../../lib/api';
 import { resolveUploadUrl, uploadImage } from '../../lib/uploads';
@@ -25,7 +25,6 @@ const LAYOUT_OPTIONS: { value: HomeAboutBlockLayout; label: string }[] = [
   { value: 'split-image-right', label: '左文右圖' },
 ];
 
-const TOKEN_REMINDER_KEY = 'the_yard_token_expiry_reminder';
 const BLOCK_EDITOR_DEFAULT_LANG: HomeAboutLang = 'zh-TW';
 const BLOCK_LANG_OPTIONS: Array<{ value: HomeAboutLang; label: string }> = [
   { value: 'zh-TW', label: '繁體中文' },
@@ -41,7 +40,6 @@ export default function SettingsPage() {
   const [blocks, setBlocks] = useState<HomeAboutBlock[]>(() => createDefaultHomeAboutBlocks(4));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tokenExpiryReminder, setTokenExpiryReminder] = useState(() => localStorage.getItem(TOKEN_REMINDER_KEY) === 'true');
   const [blockEditorLang, setBlockEditorLang] = useState<Record<string, HomeAboutLang>>({});
 
   const quillModules = useMemo(
@@ -431,26 +429,6 @@ export default function SettingsPage() {
               {saving ? t('admin.settings.saving') : t('admin.settings.saveChanges')}
             </button>
           </div>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Bell className="h-5 w-5 text-primary" />
-            {t('admin.settings.reminderSection')}
-          </h2>
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={tokenExpiryReminder}
-              onChange={(e) => {
-                const v = e.target.checked;
-                setTokenExpiryReminder(v);
-                localStorage.setItem(TOKEN_REMINDER_KEY, v ? 'true' : 'false');
-              }}
-              className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
-            />
-            <span className="text-sm text-gray-700">{t('admin.settings.tokenExpiryReminder')}</span>
-          </label>
         </div>
       </div>
     </Layout>

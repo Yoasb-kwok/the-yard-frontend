@@ -1,5 +1,6 @@
 import { api } from './api';
 import { readWalletFromRecord, type WalletSnapshot } from './walletBalance';
+import { formatDateTimeRange } from './utils';
 
 export interface UserToken {
   id: string;
@@ -8,8 +9,106 @@ export interface UserToken {
   expiry_date: string;
 }
 
+function parseLessonDetail(raw: unknown): TokenUsageLessonDetail | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const className = String(r.class_name ?? r.className ?? '').trim();
+  if (!className) return null;
+  const start = r.start_time != null ? String(r.start_time) : r.startTime != null ? String(r.startTime) : undefined;
+  const end = r.end_time != null ? String(r.end_time) : r.endTime != null ? String(r.endTime) : undefined;
+  return {
+    class_name: className,
+    class_id: r.class_id != null ? String(r.class_id) : r.classId != null ? String(r.classId) : undefined,
+    program_code:
+      r.program_code != null
+        ? String(r.program_code)
+        : r.programCode != null
+          ? String(r.programCode)
+          : undefined,
+    start_time: start,
+    end_time: end,
+    date_time_formatted:
+      r.date_time_formatted != null
+        ? String(r.date_time_formatted)
+        : r.dateTimeFormatted != null
+          ? String(r.dateTimeFormatted)
+          : undefined,
+    location: r.location != null ? String(r.location) : undefined,
+  };
+}
+
+function parseLessonDetails(raw: unknown): TokenUsageLessonDetail[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const lessons = raw.map(parseLessonDetail).filter((x): x is TokenUsageLessonDetail => x != null);
+  return lessons.length > 0 ? lessons : undefined;
+}
+
+function toDayKey(iso: string): string {
+  return String(iso || '').slice(0, 10);
+}
+
+/** Group flat spend rows from the same assign action (same day + profile + token batch + course). */
+export function groupTokenUsageSpendItems(items: TokenUsageItem[]): TokenUsageItem[] {
+  const others: TokenUsageItem[] = [];
+  const spends: TokenUsageItem[] = [];
+
+  for (const item of items) {
+    if (item.kind === 'spend' && item.change < 0) spends.push(item);
+    else others.push(item);
+  }
+
+  const groups = new Map<string, TokenUsageItem[]>();
+  for (const item of spends) {
+    if (item.lessons && item.lessons.length > 1) {
+      others.push(item);
+      continue;
+    }
+    const courseKey = (item.class_name || '').trim() || '—';
+    const key = `${item.profile_id || ''}|${toDayKey(item.date)}|${item.user_token_id || 'none'}|${courseKey}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(item);
+  }
+
+  for (const [, rows] of groups) {
+    if (rows.length === 1) {
+      others.push(rows[0]);
+      continue;
+    }
+    const lessons = rows
+      .flatMap((r) => r.lessons ?? [])
+      .sort((a, b) => {
+        const ta = Date.parse(a.start_time ?? '');
+        const tb = Date.parse(b.start_time ?? '');
+        return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+      });
+    const totalChange = rows.reduce((sum, r) => sum + r.change, 0);
+    const uniqueNames = [...new Set(rows.map((r) => r.class_name).filter(Boolean))];
+    others.push({
+      id: `batch-${rows.map((r) => r.id).join('-')}`,
+      date: rows[0].date,
+      class_name: uniqueNames.length === 1 ? uniqueNames[0] : rows[0].class_name,
+      change: totalChange,
+      kind: 'spend',
+      profile_id: rows[0].profile_id,
+      user_token_id: rows[0].user_token_id,
+      lessons: lessons.length > 0 ? lessons : undefined,
+    });
+  }
+
+  return others.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
 export type TokenUsageKind = 'purchase' | 'spend' | 'refund';
 
+export type TokenUsageLessonDetail = {
+  class_name: string;
+  class_id?: string;
+  program_code?: string;
+  start_time?: string;
+  end_time?: string;
+  date_time_formatted?: string;
+  location?: string;
+};
 /** One line on the token activity list (negative = spent, positive = purchase/refund). */
 export interface TokenUsageItem {
   id: string;
@@ -18,6 +117,8 @@ export interface TokenUsageItem {
   change: number;
   kind?: TokenUsageKind;
   profile_id?: string;
+  user_token_id?: string;
+  lessons?: TokenUsageLessonDetail[];
 }
 
 interface OrderTokenLike {
@@ -181,12 +282,53 @@ export function normalizeTokenUsageList(payload: unknown): TokenUsageItem[] {
         change: kind === 'spend' ? -Math.abs(change) : Math.abs(change),
         kind,
         profile_id: r.profile_id != null ? String(r.profile_id) : undefined,
+        user_token_id:
+          r.user_token_id != null
+            ? String(r.user_token_id)
+            : r.userTokenId != null
+              ? String(r.userTokenId)
+              : undefined,
+        lessons: parseLessonDetails(r.lessons),
       };
     })
     .filter((x): x is TokenUsageItem => x != null)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
+function enrollmentIdFromUsageId(id: string): string | null {
+  if (id.startsWith('enr-')) return id.slice(4);
+  return null;
+}
+
+/** Attach lesson date/time from enrollments when token-usage API returns flat rows. */
+async function enrichSpendLessonsFromEnrollments(items: TokenUsageItem[]): Promise<TokenUsageItem[]> {
+  const needsLesson = items.some(
+    (i) => i.kind === 'spend' && i.change < 0 && (!i.lessons || i.lessons.length === 0),
+  );
+  if (!needsLesson) return items;
+
+  const enrollRes = await api.get('/class-enrollments/me').catch(() => null);
+  const fromEnrollments = usageFromEnrollments(enrollRes ?? []);
+  const byEnrollmentId = new Map<string, TokenUsageItem>();
+  for (const row of fromEnrollments) {
+    const eid = enrollmentIdFromUsageId(row.id);
+    if (eid) byEnrollmentId.set(eid, row);
+  }
+
+  return items.map((item) => {
+    if (item.kind !== 'spend' || item.change >= 0 || (item.lessons && item.lessons.length > 0)) {
+      return item;
+    }
+    const eid = enrollmentIdFromUsageId(item.id);
+    const source = eid ? byEnrollmentId.get(eid) : undefined;
+    if (!source?.lessons?.length) return item;
+    return {
+      ...item,
+      user_token_id: item.user_token_id ?? source.user_token_id,
+      lessons: source.lessons,
+    };
+  });
+}
 function usageFromRefunds(payload: unknown, refundFallbackLabel: string): TokenUsageItem[] {
   const rows = extractArray(payload, ['refunds', 'records', 'items', 'data']);
   return rows
@@ -222,16 +364,34 @@ function usageFromEnrollments(payload: unknown): TokenUsageItem[] {
       const charged = Number(r.tokens_charged ?? 0);
       if (!Number.isFinite(charged) || charged <= 0) return null;
       const cls = (r.class as Record<string, unknown> | undefined) ?? {};
+      const start = String(cls.start_time ?? r.class_start_time ?? '');
+      const end = String(cls.end_time ?? r.class_end_time ?? start);
+      const className = String(cls.name ?? r.class_name ?? '—');
       const date = String(
         r.created_at ?? cls.start_time ?? r.enrolled_at ?? new Date().toISOString(),
       );
+      const lesson: TokenUsageLessonDetail = {
+        class_name: className,
+        class_id: cls.id != null ? String(cls.id) : r.class_id != null ? String(r.class_id) : undefined,
+        program_code:
+          cls.program_code != null
+            ? String(cls.program_code)
+            : cls.class_code != null
+              ? String(cls.class_code)
+              : undefined,
+        start_time: start || undefined,
+        end_time: end || undefined,
+        location: cls.location != null ? String(cls.location) : undefined,
+      };
       return {
         id: `enr-${r.id ?? date}`,
         date,
-        class_name: String(cls.name ?? r.class_name ?? '—'),
+        class_name: className,
         change: -charged,
         kind: 'spend',
         profile_id: r.profile_id != null ? String(r.profile_id) : undefined,
+        user_token_id: r.user_token_id != null ? String(r.user_token_id) : undefined,
+        lessons: [lesson],
       };
     })
     .filter((x): x is TokenUsageItem => x != null);
@@ -308,6 +468,26 @@ export function formatTokenUsageLabel(
   return item.class_name?.trim() || '—';
 }
 
+export function formatTokenUsageLessonLine(
+  lesson: TokenUsageLessonDetail,
+  locale: string,
+  t: (key: string, opts?: Record<string, string>) => string,
+): string {
+  const when =
+    lesson.date_time_formatted ||
+    (lesson.start_time
+      ? formatDateTimeRange(lesson.start_time, lesson.end_time ?? lesson.start_time, locale)
+      : '');
+  const locationKey = lesson.location?.trim();
+  const branch = locationKey ? t(`home.locations.${locationKey}`, { defaultValue: locationKey }) : '';
+  const name = lesson.program_code
+    ? `${lesson.class_name} (${lesson.program_code})`
+    : lesson.class_name;
+  const parts = [name];
+  if (when) parts.push(when);
+  if (branch) parts.push(branch);
+  return parts.join(' · ');
+}
 /**
  * Load token usage + purchase + refund history (merged).
  */
@@ -315,16 +495,20 @@ export async function fetchTokenUsageHistory(options?: {
   profileId?: string;
   purchaseLabel?: string;
   refundLabel?: string;
+  language?: string;
   limit?: number;
 }): Promise<TokenUsageItem[]> {
   const limit = options?.limit ?? 50;
   const purchaseLabel = options?.purchaseLabel ?? 'Token package';
   const refundLabel = options?.refundLabel ?? 'Token refund';
+  const query: Record<string, string> = {};
+  if (options?.profileId) query.profileId = options.profileId;
+  if (options?.language) query.language = options.language;
 
   let primary: TokenUsageItem[] = [];
   for (const endpoint of TOKEN_USAGE_ENDPOINTS) {
     try {
-      const res = await api.get(endpoint);
+      const res = await api.get(endpoint, Object.keys(query).length ? query : undefined);
       const list = normalizeTokenUsageList(res);
       if (list.length > 0) {
         primary = list;
@@ -340,15 +524,16 @@ export async function fetchTokenUsageHistory(options?: {
       api.get('/class-enrollments/me').catch(() => ({ data: [] })),
       api.get('/orders/me').catch(() => ({ data: [] })),
     ]);
-    primary = mergeUsageLists(
-      ...usageFromEnrollments(enrollRes),
-      ...usageFromPaidOrders(ordersRes, purchaseLabel),
+    primary = groupTokenUsageSpendItems(
+      mergeUsageLists(...usageFromEnrollments(enrollRes), ...usageFromPaidOrders(ordersRes, purchaseLabel)),
     );
   }
 
   const refunds = await fetchRefundUsageHistory(refundLabel);
   const merged = mergeUsageLists(...primary, ...refunds);
-  return filterUsageByProfile(merged, options?.profileId).slice(0, limit);
+  const enriched = await enrichSpendLessonsFromEnrollments(merged);
+  const result = groupTokenUsageSpendItems(enriched);
+  return filterUsageByProfile(result, options?.profileId).slice(0, limit);
 }
 
 function filterUsageByProfile(items: TokenUsageItem[], profileId?: string): TokenUsageItem[] {

@@ -1,7 +1,7 @@
 /**
  * Stripe Hosted Checkout — backend contract (no publishable key on frontend).
  */
-import { api } from './api';
+import { api, ApiError } from './api';
 import { buildStripeCheckoutReturnUrls } from './appOrigin';
 
 export interface PaymentOrderStatus {
@@ -70,9 +70,45 @@ export function parsePaymentOrder(raw: unknown): PaymentOrderStatus | null {
   };
 }
 
+export const ORDER_REMARKS_MAX_LENGTH = 50;
+
+const PAYMENT_UNAVAILABLE_CODES = new Set([
+  'PAYMENT_UNAVAILABLE',
+  'STRIPE_NOT_CONFIGURED',
+  'STRIPE_CHECKOUT_FAILED',
+]);
+
+/** User-facing message when card checkout cannot start (never show Stripe/server config details). */
+export function resolveCheckoutStartError(
+  err: unknown,
+  t: (key: string, fallback?: string) => string,
+): string {
+  if (err instanceof ApiError) {
+    if (err.code && PAYMENT_UNAVAILABLE_CODES.has(err.code)) {
+      return t('shop.paymentUnavailable');
+    }
+    if (err.status === 502 || err.status === 503) {
+      return t('shop.paymentUnavailable');
+    }
+  }
+  return t('shop.paymentUnavailable');
+}
+
+export interface CheckoutOrderExtras {
+  startDate?: string | null;
+  remarks?: string | null;
+}
+
+function appendOrderExtras(body: Record<string, unknown>, extras?: CheckoutOrderExtras): void {
+  const startDate = extras?.startDate?.trim();
+  if (startDate) body.start_date = startDate;
+  const remarks = extras?.remarks?.trim();
+  if (remarks) body.remarks = remarks.slice(0, ORDER_REMARKS_MAX_LENGTH);
+}
+
 export async function createCheckoutSession(
   packageId: number,
-  options?: { studentProfileId?: string | null },
+  options?: CheckoutOrderExtras & { studentProfileId?: string | null },
 ): Promise<{ url: string; session_id: string }> {
   const returnUrls = buildStripeCheckoutReturnUrls();
   const body: Record<string, unknown> = {
@@ -85,6 +121,7 @@ export async function createCheckoutSession(
     body.studentProfileId = profileId;
     body.profile_id = profileId;
   }
+  appendOrderExtras(body, options);
   const res = (await api.post('/payment/checkout-session', body)) as ApiEnvelope;
   const payload = unwrapPayload(res);
   const url = String(payload.url ?? res.url ?? '').trim();
@@ -109,6 +146,48 @@ export async function confirmCheckoutSession(sessionId: string): Promise<Payment
   const payload = unwrapPayload(res);
   if (payload.order) return parsePaymentOrder(payload.order);
   return parsePaymentOrder(payload);
+}
+
+export interface CreateOfflineOrderParams extends CheckoutOrderExtras {
+  packageId: number;
+  quantity?: number;
+  paymentMethod: 'cash' | 'fps';
+  studentProfileId?: string | null;
+  couponId?: string | null;
+  discountAmount?: number;
+}
+
+/** Create a pending cash or FPS token package order (tokens credited when admin marks paid). */
+export async function createOfflineOrder(params: CreateOfflineOrderParams): Promise<PaymentOrderStatus> {
+  const body: Record<string, unknown> = {
+    package_id: params.packageId,
+    quantity: params.quantity ?? 1,
+    payment_method: params.paymentMethod,
+  };
+  const profileId = params.studentProfileId?.trim();
+  if (profileId) {
+    body.student_profile_id = profileId;
+    body.studentProfileId = profileId;
+    body.profile_id = profileId;
+  }
+  if (params.couponId) {
+    body.coupon_id = params.couponId;
+  }
+  if (params.discountAmount != null && Number.isFinite(params.discountAmount) && params.discountAmount > 0) {
+    body.discount_amount = params.discountAmount;
+  }
+  appendOrderExtras(body, params);
+
+  const res = (await api.post('/orders', body)) as ApiEnvelope;
+  if (!res.success) {
+    throw new Error(res.msg || 'Failed to create order');
+  }
+  const payload = unwrapPayload(res);
+  const order = parsePaymentOrder(payload);
+  if (!order) {
+    throw new Error('Invalid order response');
+  }
+  return order;
 }
 
 export async function getOrderStatus(params: {

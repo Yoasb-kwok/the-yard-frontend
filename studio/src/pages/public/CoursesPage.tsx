@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import PublicLayout from '../../components/PublicLayout';
-import { BookOpen, Calendar, MapPin, Search, ArrowDownWideNarrow, ChevronDown, ChevronUp, ChevronRight } from 'lucide-react';
+import { BookOpen, Calendar, MapPin, Search, ArrowDownWideNarrow, ChevronDown, ChevronUp, ChevronRight, X } from 'lucide-react';
 import type { AgeTag, CourseLevel } from '../../contexts/AuthContext';
 import type { CourseItem, CourseType } from '../../lib/coursesData';
 import { courseItemHasVerifiedClasses, mapApiCourseRowToCourseItem } from '../../lib/mapApiCourseRow';
@@ -141,6 +141,7 @@ export default function CoursesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('ageGroup');
   const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+  const [isHeroImagePreviewOpen, setHeroImagePreviewOpen] = useState(false);
   /** 每課程的「可供試堂時段」快取：展開時呼叫 GET /classes，無資料則不顯示假時段 */
   const [trialSlotsCache, setTrialSlotsCache] = useState<Record<string, { slots: TrialSlot[]; loading: boolean }>>({});
   const [introCatalog, setIntroCatalog] = useState(() => courseIntrosByClassCode([]));
@@ -269,6 +270,7 @@ export default function CoursesPage() {
 
   const locale = i18n.language === 'zh-CN' ? 'zh-CN' : i18n.language === 'zh-TW' ? 'zh-TW' : 'en-US';
   const hero = getCoursesPageHero();
+  const heroImageSrc = hero?.image_url?.trim() || '/images/Upgrade.png';
   const heroTitle = getHeroTitleForLocale(hero, t('courses.promotionFlowTitle', '舞蹈等級晉升流程（示意）'), i18n.language);
   const heroDesc = getHeroDescForLocale(hero, t('courses.promotionFlowDesc', '學生完成指定堂數及達到導師評核標準後，便有機會晉升至更高級別班別；個別級別或需參與內部評核／考試作實。'), i18n.language);
   const heroNote = getHeroNoteForLocale(hero, t('courses.promotionFlowNote', '以上為示意說明；實際晉升準則以中心最新安排為準。'), i18n.language);
@@ -341,12 +343,19 @@ export default function CoursesPage() {
           <section className="mb-8">
             <div className="rounded-2xl border border-primary/10 bg-white shadow-sm overflow-hidden flex flex-col sm:flex-row">
               <div className="sm:w-2/5 relative min-h-[160px] max-h-[280px] sm:max-h-[320px] bg-gradient-to-br from-primary/10 via-primary/5 to-amber-50 flex items-center justify-center overflow-hidden">
-                <img
-                  src={hero?.image_url?.trim() || '/images/Upgrade.png'}
-                  alt={t('courses.promotionFlowAlt', '舞蹈等級晉升示意圖')}
-                  className="w-full h-full object-contain"
-                  loading="lazy"
-                />
+                <button
+                  type="button"
+                  onClick={() => setHeroImagePreviewOpen(true)}
+                  className="group relative h-full w-full cursor-zoom-in"
+                  aria-label={t('courses.promotionFlowPreviewAria', '放大查看舞蹈等級晉升示意圖')}
+                >
+                  <img
+                    src={heroImageSrc}
+                    alt={t('courses.promotionFlowAlt', '舞蹈等級晉升示意圖')}
+                    className="w-full h-full object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                    loading="lazy"
+                  />
+                </button>
               </div>
               <div className="sm:w-3/5 p-5 sm:p-6 flex flex-col justify-center gap-2">
                 <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
@@ -564,6 +573,31 @@ export default function CoursesPage() {
           </div>
         </div>
       </div>
+      {isHeroImagePreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true">
+          <button
+            type="button"
+            aria-label={t('common.close', '關閉')}
+            className="absolute inset-0 cursor-zoom-out"
+            onClick={() => setHeroImagePreviewOpen(false)}
+          />
+          <div className="relative z-10 w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setHeroImagePreviewOpen(false)}
+              className="absolute -top-12 right-0 inline-flex items-center justify-center rounded-full bg-white/90 p-2 text-gray-700 hover:bg-white"
+              aria-label={t('common.close', '關閉')}
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <img
+              src={heroImageSrc}
+              alt={t('courses.promotionFlowAlt', '舞蹈等級晉升示意圖')}
+              className="mx-auto max-h-[85vh] w-auto max-w-full rounded-xl bg-white object-contain shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </PublicLayout>
   );
 }

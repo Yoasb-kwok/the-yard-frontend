@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatCurrency, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
+import { formatCurrency, formatDateOnly, formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { api } from '../../lib/api';
 import {
   buildPurchaseReceiptHtml,
@@ -31,6 +31,8 @@ interface Purchase {
   created_at: string;
   paid_at: string | null;
   token_count: number;
+  start_date: string | null;
+  remarks: string | null;
 }
 
 interface User {
@@ -80,6 +82,11 @@ function normalizePurchaseRow(row: any): Purchase {
     created_at: String(row?.created_at ?? new Date().toISOString()),
     paid_at: row?.paid_at ?? null,
     token_count: toNumber(row?.token_count ?? pkg?.token_count ?? row?.tokens, 0),
+    start_date:
+      row?.start_date != null && String(row.start_date).trim() !== ''
+        ? String(row.start_date).slice(0, 10)
+        : null,
+    remarks: row?.remarks != null && String(row.remarks).trim() !== '' ? String(row.remarks).trim() : null,
   };
 }
 
@@ -381,6 +388,8 @@ export default function UserPurchaseHistoryDetailPage() {
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.paymentStatus')}</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.paymentMethod')}</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.date')}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.startDate')}</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.remarks')}</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{t('admin.purchaseHistory.actions')}</th>
                     </tr>
                   </thead>
@@ -402,6 +411,12 @@ export default function UserPurchaseHistoryDetailPage() {
                         <td className="px-6 py-4 text-sm text-gray-600">{getPaymentMethodLabel(purchase.payment_method)}</td>
                         <td className="px-6 py-4 text-sm text-gray-600">
                           {formatDateTime(purchase.created_at, getLocale())}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 whitespace-nowrap">
+                          {purchase.start_date ? formatDateOnly(purchase.start_date, getLocale()) : '–'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 align-top min-w-[10rem] max-w-[16rem] whitespace-pre-wrap break-words">
+                          {purchase.remarks || '–'}
                         </td>
                         <td className="px-6 py-4 text-sm">
                           <div className="flex items-center gap-2">
@@ -466,6 +481,18 @@ export default function UserPurchaseHistoryDetailPage() {
                         <span className="text-gray-500">{t('admin.purchaseHistory.date')}:</span>
                         <span className="text-gray-900">{formatDateTime(purchase.created_at, getLocale())}</span>
                       </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">{t('admin.purchaseHistory.startDate')}:</span>
+                        <span className="text-gray-900">
+                          {purchase.start_date ? formatDateOnly(purchase.start_date, getLocale()) : '–'}
+                        </span>
+                      </div>
+                      {purchase.remarks && (
+                        <div className="flex justify-between items-start gap-3">
+                          <span className="text-gray-500 shrink-0">{t('admin.purchaseHistory.remarks')}:</span>
+                          <span className="text-gray-900 text-right break-words">{purchase.remarks}</span>
+                        </div>
+                      )}
                       {purchase.payment_status === 'paid' && (
                         <div className="flex items-center gap-2 pt-2 border-t">
                           <button

@@ -155,6 +155,7 @@ export default function Layout({ children }: LayoutProps) {
     if (path === '/admin/pending-applications') return pendingCounts.pendingApplications;
     if (path === '/admin/trial-applications') return pendingCounts.pendingTrials;
     if (path === '/admin/enrollment-requests') return pendingCounts.pendingEnrollmentRequests;
+    if (path === '/admin/purchase-history') return pendingCounts.pendingOrders;
     return 0;
   };
 

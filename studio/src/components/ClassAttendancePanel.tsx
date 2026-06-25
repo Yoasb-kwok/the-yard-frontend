@@ -10,7 +10,7 @@ export interface Enrollment {
   user_id: string;
   user_name: string;
   user_mobile: string | null;
-  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave';
+  status: 'enrolled' | 'attended' | 'absent' | 'sick_leave' | 'cancelled';
   check_in_time: string | null;
   check_out_time: string | null;
   sick_leave_document_url: string | null;
@@ -105,6 +105,8 @@ export default function ClassAttendancePanel({
         return 'bg-red-100 text-red-800';
       case 'sick_leave':
         return 'bg-yellow-100 text-yellow-800';
+      case 'cancelled':
+        return 'bg-gray-100 text-gray-500';
       default:
         return 'bg-gray-100 text-gray-800';
     }
@@ -382,16 +384,20 @@ export default function ClassAttendancePanel({
                     )}
                     {!selectedClass.attendance_confirmed && (
                       <td className="px-4 py-2 text-sm">
-                        <select
-                          value={enrollment.status}
-                          onChange={(e) => onUpdateStatus(enrollment.id, e.target.value as 'enrolled' | 'attended' | 'absent' | 'sick_leave')}
-                          className="text-sm border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
-                        >
-                          <option value="enrolled">{t('admin.attendance.statuses.enrolled')}</option>
-                          <option value="attended">{t('admin.attendance.statuses.attended')}</option>
-                          <option value="absent">{t('admin.attendance.statuses.absent')}</option>
-                          <option value="sick_leave">{t('admin.attendance.statuses.sick_leave')}</option>
-                        </select>
+                        {enrollment.status === 'cancelled' ? (
+                          <span className="text-gray-500 text-sm">{getStatusLabel('cancelled')}</span>
+                        ) : (
+                          <select
+                            value={enrollment.status}
+                            onChange={(e) => onUpdateStatus(enrollment.id, e.target.value as 'enrolled' | 'attended' | 'absent' | 'sick_leave')}
+                            className="text-sm border rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-primary"
+                          >
+                            <option value="enrolled">{t('admin.attendance.statuses.enrolled')}</option>
+                            <option value="attended">{t('admin.attendance.statuses.attended')}</option>
+                            <option value="absent">{t('admin.attendance.statuses.absent')}</option>
+                            <option value="sick_leave">{t('admin.attendance.statuses.sick_leave')}</option>
+                          </select>
+                        )}
                       </td>
                     )}
                     <td className="px-4 py-2 text-sm">

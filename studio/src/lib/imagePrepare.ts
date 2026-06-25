@@ -9,6 +9,34 @@
 
 const IMAGE_NAME_EXT = /\.(jpe?g|png|gif|webp|bmp|heic|heif|avif|tiff?|svg)$/i;
 
+const EXT_TO_MIME: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+  avif: 'image/avif',
+  tif: 'image/tiff',
+  tiff: 'image/tiff',
+  svg: 'image/svg+xml',
+};
+
+function inferImageMimeFromName(name: string): string | null {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  return EXT_TO_MIME[ext] ?? null;
+}
+
+/** Ensure FileReader produces `data:image/...;base64,...` (not `data:;base64,...`). */
+export function ensureImageFileMime(file: File): File {
+  const type = (file.type || '').toLowerCase();
+  if (type.startsWith('image/')) return file;
+  const inferred = inferImageMimeFromName(file.name) ?? 'image/jpeg';
+  return new File([file], file.name, { type: inferred, lastModified: file.lastModified });
+}
+
 export function isLikelyImageFile(file: File): boolean {
   const t = (file.type || '').toLowerCase();
   if (t.startsWith('image/')) return true;
@@ -75,12 +103,12 @@ export type NormalizeImageOptions = {
   maxInitialEdge?: number;
 };
 
-/** Defaults for `POST /api/admin/uploads` (balance quality vs body size / speed). */
+/** Defaults for `POST /api/admin/uploads` (keep JSON base64 body under typical ~1MB limits). */
 export const DEFAULT_UPLOAD_COMPRESSION: Required<
   Pick<NormalizeImageOptions, 'targetMaxBytes' | 'maxInitialEdge'>
 > = {
-  targetMaxBytes: 2.2 * 1024 * 1024,
-  maxInitialEdge: 2048,
+  targetMaxBytes: 750 * 1024,
+  maxInitialEdge: 1920,
 };
 
 /**
@@ -92,19 +120,20 @@ export async function normalizeImageFileForUpload(
   file: File,
   options?: NormalizeImageOptions
 ): Promise<File> {
-  if (!isLikelyImageFile(file)) return file;
+  const withMime = ensureImageFileMime(file);
+  if (!isLikelyImageFile(withMime)) return withMime;
 
-  const type = (file.type || '').toLowerCase();
-  if (type === 'image/svg+xml' || /\.svg$/i.test(file.name)) return file;
-  if (type === 'image/gif' || /\.gif$/i.test(file.name)) return file;
+  const type = (withMime.type || '').toLowerCase();
+  if (type === 'image/svg+xml' || /\.svg$/i.test(withMime.name)) return withMime;
+  if (type === 'image/gif' || /\.gif$/i.test(withMime.name)) return withMime;
 
   const targetMaxBytes = options?.targetMaxBytes ?? 5 * 1024 * 1024;
   let maxEdge = Math.min(4096, Math.max(480, options?.maxInitialEdge ?? 2560));
   let quality = 0.88;
 
   for (let i = 0; i < 14; i++) {
-    const out = await rasterizeToJpegFile(file, maxEdge, quality);
-    if (!out) return file;
+    const out = await rasterizeToJpegFile(withMime, maxEdge, quality);
+    if (!out) return withMime;
     if (out.size <= targetMaxBytes) return out;
     if (quality > 0.36) {
       quality -= 0.07;
@@ -114,6 +143,6 @@ export async function normalizeImageFileForUpload(
     quality = 0.82;
   }
 
-  const last = await rasterizeToJpegFile(file, 720, 0.32);
-  return last ?? file;
+  const last = await rasterizeToJpegFile(withMime, 720, 0.32);
+  return last ?? withMime;
 }

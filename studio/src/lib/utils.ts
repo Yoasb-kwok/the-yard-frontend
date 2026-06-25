@@ -60,6 +60,14 @@ export function formatDate(date: string | Date, locale: string = 'en-US'): strin
 }
 
 /** Compact calendar date: dd/mm/yy (e.g. 19/05/26). */
+/** Local calendar date as YYYY-MM-DD (not UTC). */
+export function getLocalDateIso(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function formatDateDdMmYy(date: string | Date): string {
   const d = new Date(date);
   if (isNaN(d.getTime())) return '–';
@@ -69,39 +77,118 @@ export function formatDateDdMmYy(date: string | Date): string {
   return `${day}/${month}/${year}`;
 }
 
+const DATE_ONLY_DISPLAY: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+function parseCalendarDateInput(date: string | Date): Date {
+  if (typeof date === 'string') {
+    const iso = date.trim().slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+      const [y, m, d] = iso.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+  }
+  return new Date(date);
+}
+
+/** Class date for student notifications, e.g. zh-TW: 2026年6月12日 */
+export function formatNotificationClassDate(date: string | Date, locale: string = 'zh-TW'): string {
+  if (date == null || date === '') return '';
+  const raw = String(date).trim();
+  let d: Date;
+  const slashDate = raw.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})/);
+  if (slashDate) {
+    d = new Date(Number(slashDate[1]), Number(slashDate[2]) - 1, Number(slashDate[3]));
+  } else {
+    d = parseCalendarDateInput(raw.includes('T') || raw.includes(' ') ? raw.replace(' ', 'T') : raw);
+  }
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(locale, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+/** Same date style as formatDateTime, without time (for YYYY-MM-DD / DATE columns). */
+export function formatDateOnly(date: string | Date, locale: string = 'en-US'): string {
+  const d = parseCalendarDateInput(date);
+  if (Number.isNaN(d.getTime())) return '–';
+  return d.toLocaleDateString(locale, DATE_ONLY_DISPLAY);
+}
+
 export function formatDateTime(date: string | Date, locale: string = 'en-US'): string {
   const d = new Date(date);
   return d.toLocaleDateString(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
+    ...DATE_ONLY_DISPLAY,
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
   });
 }
 
-/**
- * Show mobile without Hong Kong country prefix 852 (e.g. "85291234567", "+852 9123 4567" → "91234567").
- * Macau (853) and mainland (86) keep a +prefix for clarity. Other values are returned trimmed.
- */
-export function formatMobileForDisplay(mobile: string | null | undefined, emptyLabel = '–'): string {
-  if (mobile == null || String(mobile).trim() === '') return emptyLabel;
-  const trimmed = String(mobile).trim();
-  const compact = trimmed.replace(/\s+/g, '');
-  if (/^\+?852\d/.test(compact)) {
-    const local = compact.replace(/^\+?852/, '');
-    return local.length > 0 ? local : emptyLabel;
+function phoneDigitsOnly(v: string | null | undefined): string {
+  return v != null ? String(v).replace(/\D/g, '') : '';
+}
+
+/** Split stored phone into country code + local digits (handles duplicate prefixes like 852852…). */
+export function splitPhoneParts(
+  phone: string | null | undefined,
+  explicitCountryCode?: string | null,
+): { countryCode: string; local: string } {
+  let cc = phoneDigitsOnly(explicitCountryCode);
+  let digits = phoneDigitsOnly(phone);
+  if (!digits) return { countryCode: cc, local: '' };
+
+  if (cc && digits.startsWith(cc)) {
+    let local = digits.slice(cc.length);
+    while (cc && local.startsWith(cc) && local.length > 6) {
+      local = local.slice(cc.length);
+    }
+    return { countryCode: cc, local };
   }
-  if (/^\+?853\d/.test(compact)) {
-    const rest = compact.replace(/^\+?853/, '');
-    return rest.length > 0 ? `+853 ${rest}` : emptyLabel;
+
+  if (digits.startsWith('852') && digits.length >= 11) {
+    return { countryCode: '852', local: digits.slice(3) };
   }
-  if (/^\+?86\d/.test(compact)) {
-    const rest = compact.replace(/^\+?86/, '');
-    return rest.length > 0 ? `+86 ${rest}` : emptyLabel;
+  if (digits.startsWith('853') && digits.length >= 11) {
+    return { countryCode: '853', local: digits.slice(3) };
   }
-  return trimmed;
+  if (digits.startsWith('86') && digits.length >= 12) {
+    return { countryCode: '86', local: digits.slice(2) };
+  }
+
+  return { countryCode: cc || '852', local: digits };
+}
+
+/** Display phone with international prefix, e.g. +852 88888888. */
+export function formatPhoneForDisplay(
+  phone: string | null | undefined,
+  explicitCountryCode?: string | null,
+  emptyLabel = '–',
+): string {
+  const { countryCode, local } = splitPhoneParts(phone, explicitCountryCode);
+  if (!local && !countryCode) return emptyLabel;
+  if (!local) return countryCode ? `+${countryCode}` : emptyLabel;
+  return `+${countryCode} ${local}`;
+}
+
+/** Same as formatPhoneForDisplay — kept for existing call sites across admin/student UI. */
+export function formatMobileForDisplay(
+  mobile: string | null | undefined,
+  emptyLabel = '–',
+  explicitCountryCode?: string | null,
+): string {
+  return formatPhoneForDisplay(mobile, explicitCountryCode, emptyLabel);
+}
+
+/** Normalize user input to digits-only storage form, e.g. 85288888888. */
+export function normalizePhoneToStorage(
+  phone: string | null | undefined,
+  explicitCountryCode?: string | null,
+): string | null {
+  const { countryCode, local } = splitPhoneParts(phone, explicitCountryCode);
+  if (!local) return null;
+  return `${countryCode}${local}`;
 }
 
 /**
@@ -139,6 +226,57 @@ export function formatDateTimeRange(
   }
   const endDateStr = e.toLocaleDateString(locale, datePart);
   return `${dateStr} ${t0} - ${endDateStr} ${t1}`;
+}
+
+function formatTimeSlotOnly(start: Date, end: Date, locale: string): string {
+  const timePart: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  };
+  const t0 = start.toLocaleTimeString(locale, timePart);
+  const t1 = end.toLocaleTimeString(locale, timePart);
+  return `${t0}-${t1}`;
+}
+
+/**
+ * Collapsed multi-lesson row: show first→last schedule without a misleading "…" ellipsis.
+ * When all lessons share the same clock time, shows one date range line + one time line.
+ */
+export function formatMultiLessonTimeSummary(
+  firstStart: string | Date,
+  firstEnd: string | Date,
+  lastStart: string | Date,
+  lastEnd: string | Date,
+  locale: string = 'en-US',
+): { primary: string; secondary?: string; secondaryIsTimeOnly?: boolean } {
+  const fs = new Date(firstStart);
+  const fe = new Date(firstEnd);
+  const ls = new Date(lastStart);
+  const le = new Date(lastEnd);
+  if (Number.isNaN(fs.getTime()) || Number.isNaN(ls.getTime())) {
+    return { primary: formatDateTimeRange(firstStart, firstEnd, locale) };
+  }
+
+  const sameSlot =
+    fs.getHours() === ls.getHours() &&
+    fs.getMinutes() === ls.getMinutes() &&
+    fe.getHours() === le.getHours() &&
+    fe.getMinutes() === le.getMinutes();
+
+  if (sameSlot) {
+    return {
+      primary: `${formatDate(firstStart, locale)} – ${formatDate(lastStart, locale)}`,
+      secondary: formatTimeSlotOnly(fs, fe, locale),
+      secondaryIsTimeOnly: true,
+    };
+  }
+
+  return {
+    primary: formatDateTimeRange(firstStart, firstEnd, locale),
+    secondary: formatDateTimeRange(lastStart, lastEnd, locale),
+    secondaryIsTimeOnly: false,
+  };
 }
 
 /** True when this class occurrence has already ended (cannot enroll). */

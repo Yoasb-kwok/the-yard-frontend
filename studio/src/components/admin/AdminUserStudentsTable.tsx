@@ -7,16 +7,39 @@ import {
   formatStudentAgeLabel,
   formatStudentLevelLabel,
 } from '../../lib/adminUserFamily';
+import { getLatestWalletExpiryDate, type WalletTokenBatch } from '../../lib/adminUserTokens';
 
 export interface AdminUserStudentsTableProps {
   students: AdminStudentProfile[];
   hasTrialApplication?: boolean;
-  /** 帳戶層級：最早到期且仍有餘額的代幣批次 */
+  /** Account-level fallback: unified wallet expiry (latest batch with balance). */
   tokenExpiryDate?: string | null;
   onViewTrials?: () => void;
   onAssignTokens?: (studentProfileId: string) => void;
   onUpcomingClasses?: (studentProfileId: string) => void;
-  onEditTokenExpiry?: () => void;
+  onEditTokenExpiry?: (studentProfileId: string) => void;
+}
+
+function readStudentWalletExpiry(student: AdminStudentProfile, fallback?: string | null): string | null {
+  if (student.token_expiry_date) return student.token_expiry_date;
+  if (Array.isArray(student.user_tokens) && student.user_tokens.length > 0) {
+    const batches = student.user_tokens.map((raw) => {
+      const row = raw as Record<string, unknown>;
+      const exp =
+        typeof row.expiry_date === 'string'
+          ? row.expiry_date.slice(0, 10)
+          : typeof row.expires_at === 'string'
+            ? row.expires_at.slice(0, 10)
+            : '';
+      return {
+        remaining_tokens: Number(row.remaining_tokens ?? row.balance ?? 0),
+        expiry_date: exp,
+      } satisfies WalletTokenBatch;
+    });
+    const latest = getLatestWalletExpiryDate(batches);
+    if (latest) return latest;
+  }
+  return fallback ?? null;
 }
 
 export default function AdminUserStudentsTable({
@@ -78,10 +101,10 @@ export default function AdminUserStudentsTable({
           <Clock className="h-3.5 w-3.5" />
         </button>
       )}
-      {onEditTokenExpiry && (
+      {onEditTokenExpiry && students[0] && (
         <button
           type="button"
-          onClick={onEditTokenExpiry}
+          onClick={() => onEditTokenExpiry(students[0].id)}
           className="text-amber-600 hover:text-amber-800 p-0.5 inline-flex shrink-0"
           title={t('admin.users.editTokenExpiryDate')}
         >
@@ -117,7 +140,7 @@ export default function AdminUserStudentsTable({
         {onEditTokenExpiry && (
           <button
             type="button"
-            onClick={onEditTokenExpiry}
+            onClick={() => onEditTokenExpiry(studentId)}
             className="text-amber-600 hover:text-amber-800 p-0.5 inline-flex shrink-0"
             title={t('admin.users.editTokenExpiryDate')}
           >
@@ -176,11 +199,10 @@ export default function AdminUserStudentsTable({
                     : '—'}
               </td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap tabular-nums">
-                {s.token_expiry_date
-                  ? formatDateDdMmYy(s.token_expiry_date)
-                  : index === 0 && tokenExpiryDate
-                    ? formatDateDdMmYy(tokenExpiryDate)
-                    : '—'}
+                {(() => {
+                  const expiry = readStudentWalletExpiry(s, index === 0 ? tokenExpiryDate : null);
+                  return expiry ? formatDateDdMmYy(expiry) : '—';
+                })()}
               </td>
               <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                 {formatStudentAgeLabel(s, t, getAgeFromDateOfBirth)}

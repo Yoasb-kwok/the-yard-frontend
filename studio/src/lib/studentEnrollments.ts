@@ -9,6 +9,7 @@ import { getLessonDates, getLessonDatesSkipHolidays } from './utils';
 export interface EnrolledClass {
   id: string;
   status: string;
+  created_at?: string;
   class_id?: string;
   user_id?: string;
   profile_id?: string;
@@ -105,6 +106,27 @@ export function getEnrollmentLessonsRemaining(e: EnrolledClass): number {
   const booked = getEnrolledLessonSlotCount(e);
   const attended = Math.max(0, Number(e.attended_lessons ?? e.lessons_used ?? 0));
   return Math.max(0, booked - attended);
+}
+
+/** 1-based lesson number for leave notifications (API may send 0-based index or lesson_number). */
+export function resolveLeaveLessonDisplayNumber(
+  enrollment: Pick<EnrolledClass, 'class'>,
+  lessonIndex: number | undefined | null,
+): number {
+  const classLesson = enrollment.class.lesson_number;
+  if (lessonIndex == null) {
+    if (classLesson != null && classLesson >= 1) return classLesson;
+    return 1;
+  }
+  const idx = Number(lessonIndex);
+  if (!Number.isFinite(idx)) {
+    if (classLesson != null && classLesson >= 1) return classLesson;
+    return 1;
+  }
+  if (classLesson != null && classLesson >= 1 && (idx === classLesson || idx === classLesson - 1)) {
+    return classLesson;
+  }
+  return idx >= 1 ? Math.floor(idx) : Math.floor(idx) + 1;
 }
 
 /** One API row = one scheduled lesson (backend returns one enrollment per class row). */

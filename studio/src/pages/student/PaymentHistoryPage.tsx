@@ -252,6 +252,8 @@ export default function PaymentHistoryPage() {
     }
   };
 
+  const canShowReceiptActions = (status: Payment['status']) => status === 'completed';
+
   const getPaymentMethodLabel = (method: string) => {
     switch (method) {
       case 'credit_card':
@@ -375,37 +377,39 @@ export default function PaymentHistoryPage() {
                         {getStatusLabel(payment.status)}
                       </span>
                     </div>
-                    <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
-                      <button
-                        type="button"
-                        onClick={() => handleViewReceipt(payment)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
-                      >
-                        <Receipt className="h-4 w-4" />
-                        {t('paymentHistory.viewReceipt')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReceiptDownload(payment)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
-                      >
-                        <Download className="h-4 w-4" />
-                        {t('paymentHistory.downloadReceipt')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleReceiptEmail(payment)}
-                        disabled={sendingReceiptId === payment.id}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
-                      >
-                        {sendingReceiptId === payment.id ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Mail className="h-4 w-4" />
-                        )}
-                        {t('paymentHistory.emailReceipt')}
-                      </button>
-                    </div>
+                    {canShowReceiptActions(payment.status) && (
+                      <div className="flex gap-2 pt-3 border-t border-gray-100 mt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleViewReceipt(payment)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+                        >
+                          <Receipt className="h-4 w-4" />
+                          {t('paymentHistory.viewReceipt')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReceiptDownload(payment)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+                        >
+                          <Download className="h-4 w-4" />
+                          {t('paymentHistory.downloadReceipt')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReceiptEmail(payment)}
+                          disabled={sendingReceiptId === payment.id}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary border border-primary rounded-md hover:bg-primary/5"
+                        >
+                          {sendingReceiptId === payment.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                          {t('paymentHistory.emailReceipt')}
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -476,37 +480,41 @@ export default function PaymentHistoryPage() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => handleViewReceipt(payment)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
-                            >
-                              <Receipt className="h-4 w-4" />
-                              {t('paymentHistory.viewReceipt')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleReceiptDownload(payment)}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
-                            >
-                              <Download className="h-4 w-4" />
-                              {t('paymentHistory.downloadReceipt')}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleReceiptEmail(payment)}
-                              disabled={sendingReceiptId === payment.id}
-                              className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
-                            >
-                              {sendingReceiptId === payment.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Mail className="h-4 w-4" />
-                              )}
-                              {t('paymentHistory.emailReceipt')}
-                            </button>
-                          </div>
+                          {canShowReceiptActions(payment.status) ? (
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleViewReceipt(payment)}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
+                              >
+                                <Receipt className="h-4 w-4" />
+                                {t('paymentHistory.viewReceipt')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReceiptDownload(payment)}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
+                              >
+                                <Download className="h-4 w-4" />
+                                {t('paymentHistory.downloadReceipt')}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReceiptEmail(payment)}
+                                disabled={sendingReceiptId === payment.id}
+                                className="inline-flex items-center gap-1 px-2 py-1 text-sm font-medium text-primary hover:bg-primary/10 rounded"
+                              >
+                                {sendingReceiptId === payment.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Mail className="h-4 w-4" />
+                                )}
+                                {t('paymentHistory.emailReceipt')}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}

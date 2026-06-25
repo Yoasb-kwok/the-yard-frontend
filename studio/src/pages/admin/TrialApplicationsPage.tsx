@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../../components/Layout';
-import { formatDateTime } from '../../lib/utils';
+import { formatDateTime, formatMobileForDisplay } from '../../lib/utils';
 import { buildTrialConfirmedEmailPatch } from '../../lib/trialConfirmedEmailPayload';
 import { api } from '../../lib/api';
 import { BookOpen, ChevronDown, ChevronRight, Filter, Pencil, Plus } from 'lucide-react';
@@ -35,6 +35,7 @@ export interface TrialApplication {
   has_joined_courses?: boolean | null;
   has_dance_experience?: boolean | null;
   how_did_you_hear?: string | null;
+  referrer_name?: string | null;
   promo_code?: string | null;
   applied_at: string;
   updated_at?: string;
@@ -134,6 +135,7 @@ function normalizeTrialApplicationRow(raw: unknown): TrialApplication | null {
     has_joined_courses: toOptBool(o.has_joined_courses ?? o.hasJoinedCourses),
     has_dance_experience: toOptBool(o.has_dance_experience ?? o.hasDanceExperience),
     how_did_you_hear: toOptStr(o.how_did_you_hear ?? o.howDidYouHear),
+    referrer_name: toOptStr(o.referrer_name ?? o.referrerName),
     promo_code: toOptStr(o.promo_code ?? o.promoCode),
     applied_at: toStr(o.applied_at ?? o.created_at),
     updated_at: toOptStr(o.updated_at) ?? undefined,
@@ -161,6 +163,7 @@ export default function TrialApplicationsPage() {
   const [editNotes, setEditNotes] = useState<Record<string, string>>({});
   const [branchFilter, setBranchFilter] = useState<BranchFilter>('all');
   const [savingStatuses, setSavingStatuses] = useState(false);
+  const [savingRowId, setSavingRowId] = useState<string | null>(null);
   const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
   const [openNoteEditorId, setOpenNoteEditorId] = useState<string | null>(null);
   const [noteEditorDraft, setNoteEditorDraft] = useState('');
@@ -454,6 +457,19 @@ export default function TrialApplicationsPage() {
     return value ? t('common.yes', { defaultValue: '是' }) : t('common.no', { defaultValue: '否' });
   }
 
+  function getHowDidYouHearLabel(value: string | null | undefined): string {
+    const key = String(value ?? '').trim();
+    if (!key) return '—';
+    const i18nKey = `trial.howDidYouHearOptions.${key}`;
+    const translated = t(i18nKey, { defaultValue: '' });
+    return translated || key;
+  }
+
+  function getSexLabel(value: boolean | null | undefined): string {
+    if (value == null) return '—';
+    return value ? t('profile.male', { defaultValue: '男' }) : t('profile.female', { defaultValue: '女' });
+  }
+
   function openNoteEditor(app: TrialApplication) {
     setOpenNoteEditorId(app.id);
     setNoteEditorDraft(String(editNotes[app.id] ?? app.notes ?? ''));
@@ -470,76 +486,117 @@ export default function TrialApplicationsPage() {
     closeNoteEditor();
   }
 
-  /** 一次儲存 table 內所有改動（狀態＋備注） */
+  async function persistTrialApplicationUpdate(
+    id: string,
+    opts?: { statusOverride?: TrialApplication['status']; notesOverride?: string },
+  ): Promise<{ row: TrialApplication; statusChanged: boolean } | null> {
+    const app = applications.find((a) => a.id === id);
+    if (!app) return null;
+
+    const previousStatus = toSelectableStatus(app.status);
+    const status = toSelectableStatus(opts?.statusOverride ?? editStatus[id] ?? app.status);
+    const notes = String(opts?.notesOverride ?? editNotes[id] ?? app.notes ?? '').trim();
+    const payload: Record<string, unknown> = { status, notes, language: i18n.language || 'zh-TW' };
+    if (status === 'confirmed' && previousStatus !== 'confirmed') {
+      const emailExtras = buildTrialConfirmedEmailPatch(app, {
+        language: i18n.language || 'zh-TW',
+        branchKey: resolveApplicationBranchKey(app),
+        branchLabel: getDisplayBranch(app),
+        courseCode: getDisplayCourseCode(app),
+        classDatetimeFormatted: getTrialClassDatetimeDisplay(app),
+      });
+      if (emailExtras) Object.assign(payload, emailExtras);
+    }
+
+    const res = await api.patch<Record<string, unknown>>(`/admin/trial-applications/${id}`, payload);
+    if (!res.success) throw new Error(res.msg || 'Update failed');
+
+    const serverRow = normalizeTrialApplicationRow(res.data);
+    const row =
+      serverRow ??
+      ({
+        ...app,
+        status,
+        notes,
+        updated_at: new Date().toISOString(),
+      } as TrialApplication);
+
+    return { row, statusChanged: previousStatus !== status };
+  }
+
+  function applyPersistedTrialRow(id: string, row: TrialApplication) {
+    setApplications((prev) => prev.map((a) => (a.id === id ? row : a)));
+    setEditStatus((prev) => ({ ...prev, [id]: toSelectableStatus(row.status) }));
+    setEditNotes((prev) => ({ ...prev, [id]: String(row.notes ?? '') }));
+  }
+
+  async function handleStatusSelect(app: TrialApplication, nextStatus: TrialApplication['status']) {
+    const normalizedNext = toSelectableStatus(nextStatus);
+    const normalizedCurrent = toSelectableStatus(app.status);
+    if (normalizedNext === normalizedCurrent || savingRowId === app.id || savingStatuses) {
+      setOpenStatusMenuId(null);
+      return;
+    }
+
+    setEditStatus((prev) => ({ ...prev, [app.id]: normalizedNext }));
+    setOpenStatusMenuId(null);
+    setSavingRowId(app.id);
+    setSaveSuccessMessage(null);
+    try {
+      const result = await persistTrialApplicationUpdate(app.id, { statusOverride: normalizedNext });
+      if (!result) return;
+      applyPersistedTrialRow(app.id, result.row);
+      if (result.statusChanged) {
+        setSaveSuccessMessage(
+          t('admin.trialApplications.statusSaved', {
+            defaultValue: '狀態已更新，學生帳戶及電郵通知將同步更新。',
+          }),
+        );
+        window.setTimeout(() => setSaveSuccessMessage(null), 3000);
+      }
+    } catch (err) {
+      setEditStatus((prev) => ({ ...prev, [app.id]: normalizedCurrent }));
+      console.error('Failed to save trial application status', err);
+      const msg = err instanceof Error ? err.message : t('common.error', 'Something went wrong.');
+      alert(t('admin.trialApplications.saveFailed', 'Save failed: {{msg}}', { msg }));
+    } finally {
+      setSavingRowId(null);
+    }
+  }
+
+  /** 一次儲存 table 內所有改動（備注；狀態已在選取時即時儲存） */
   async function saveAllStatuses() {
-    if (changedRowIds.length === 0 || savingStatuses) return;
+    const noteOnlyRowIds = changedRowIds.filter((id) => {
+      const app = applications.find((a) => a.id === id);
+      if (!app) return false;
+      const current = toSelectableStatus(app.status);
+      const draft = toSelectableStatus(editStatus[id] ?? app.status);
+      const currentNote = String(app.notes ?? '').trim();
+      const draftNote = String(editNotes[id] ?? app.notes ?? '').trim();
+      return current === draft && currentNote !== draftNote;
+    });
+    if (noteOnlyRowIds.length === 0 || savingStatuses) return;
     setSavingStatuses(true);
     setSaveSuccessMessage(null);
     try {
       const updates = await Promise.all(
-        changedRowIds.map(async (id) => {
-          const app = applications.find((a) => a.id === id);
-          if (!app) return { id, row: null as TrialApplication | null, statusChanged: false };
-          const previousStatus = toSelectableStatus(app.status);
-          const status = toSelectableStatus(editStatus[id] ?? app.status);
-          const notes = String(editNotes[id] ?? app.notes ?? '').trim();
-          const payload: Record<string, unknown> = { status, notes };
-          if (status === 'confirmed' && previousStatus !== 'confirmed') {
-            const emailExtras = buildTrialConfirmedEmailPatch(app, {
-              language: i18n.language || 'zh-TW',
-              branchKey: resolveApplicationBranchKey(app),
-              branchLabel: getDisplayBranch(app),
-              courseCode: getDisplayCourseCode(app),
-              classDatetimeFormatted: getTrialClassDatetimeDisplay(app),
-            });
-            if (emailExtras) Object.assign(payload, emailExtras);
-          }
-          const res = await api.patch<Record<string, unknown>>(`/admin/trial-applications/${id}`, payload);
-          if (!res.success) throw new Error(res.msg || 'Update failed');
-          const serverRow = normalizeTrialApplicationRow(res.data);
-          const row =
-            serverRow ??
-            ({
-              ...app,
-              status,
-              notes,
-              updated_at: new Date().toISOString(),
-            } as TrialApplication);
-          return { id, row, statusChanged: previousStatus !== status };
-        })
+        noteOnlyRowIds.map(async (id) => {
+          const result = await persistTrialApplicationUpdate(id);
+          if (!result) return { id, row: null as TrialApplication | null };
+          return { id, row: result.row };
+        }),
       );
 
-      const byId = new Map(updates.filter((u) => u.row).map((u) => [u.id, u.row as TrialApplication]));
-      setApplications((prev) => prev.map((a) => byId.get(a.id) ?? a));
-      setEditStatus((prev) => {
-        const next = { ...prev };
-        byId.forEach((row, id) => {
-          next[id] = toSelectableStatus(row.status);
-        });
-        return next;
+      updates.forEach(({ id, row }) => {
+        if (row) applyPersistedTrialRow(id, row);
       });
-      setEditNotes((prev) => {
-        const next = { ...prev };
-        byId.forEach((row, id) => {
-          next[id] = String(row.notes ?? '');
-        });
-        return next;
-      });
-      setOpenStatusMenuId(null);
       setOpenNoteEditorId(null);
-      const statusChangedCount = updates.filter((u) => u.statusChanged).length;
       setSaveSuccessMessage(
-        t(
-          'common.statusesUpdated',
-          {
-            count: statusChangedCount,
-            defaultValue: `${statusChangedCount} 個狀態已修改`,
-          },
-        ),
+        t('common.saved', { defaultValue: '已儲存' }),
       );
       window.setTimeout(() => setSaveSuccessMessage(null), 3000);
     } catch (err) {
-      console.error('Failed to save trial application statuses', err);
+      console.error('Failed to save trial application notes', err);
       const msg = err instanceof Error ? err.message : t('common.error', 'Something went wrong.');
       alert(t('admin.trialApplications.saveFailed', 'Save failed: {{msg}}', { msg }));
     } finally {
@@ -646,7 +703,7 @@ export default function TrialApplicationsPage() {
                     const rows: JSX.Element[] = [
                       <tr key={rowKey} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{app.applicant_name}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700">{app.applicant_phone || '—'}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700">{formatMobileForDisplay(app.applicant_phone, '—')}</td>
                         <td className="px-4 py-3 text-sm text-gray-900">{app.trial_class}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{getDisplayCourseCode(app)}</td>
                         <td className="px-4 py-3 text-sm text-gray-700">{app.preferred_datetime ? formatDateTime(app.preferred_datetime, getLocale()) : (app.trial_date ? formatDateTime(app.trial_date, getLocale()) : '—')}</td>
@@ -682,12 +739,13 @@ export default function TrialApplicationsPage() {
                           <div className="relative inline-block" data-status-menu-root="true">
                             <button
                               type="button"
+                              disabled={savingRowId === app.id}
                               onClick={() => setOpenStatusMenuId((prev) => (prev === app.id ? null : app.id))}
-                              className={`inline-flex min-w-[5.75rem] items-center justify-center rounded-md border px-2 py-1.5 text-sm font-medium transition-colors ${getStatusButtonClasses(
+                              className={`inline-flex min-w-[5.75rem] items-center justify-center rounded-md border px-2 py-1.5 text-sm font-medium transition-colors disabled:opacity-60 ${getStatusButtonClasses(
                                 editStatus[app.id] ?? app.status
                               )}`}
                             >
-                              {getStatusLabel(editStatus[app.id] ?? app.status)}
+                              {savingRowId === app.id ? '...' : getStatusLabel(editStatus[app.id] ?? app.status)}
                             </button>
                             {openStatusMenuId === app.id && (
                               <div className="absolute left-0 z-20 mt-2 w-36 rounded-lg border border-gray-200 bg-white p-2 shadow-lg">
@@ -698,10 +756,7 @@ export default function TrialApplicationsPage() {
                                       <button
                                         key={s}
                                         type="button"
-                                        onClick={() => {
-                                          setEditStatus((prev) => ({ ...prev, [app.id]: s }));
-                                          setOpenStatusMenuId(null);
-                                        }}
+                                        onClick={() => handleStatusSelect(app, s)}
                                         className={`w-full rounded-md border px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
                                           selected ? 'ring-2 ring-primary ring-offset-1' : ''
                                         } ${getStatusButtonClasses(s)}`}
@@ -737,16 +792,19 @@ export default function TrialApplicationsPage() {
                               </h3>
                               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                                 <div><span className="text-gray-500">{t('admin.trialApplications.applicant', '姓名')}：</span><span className="text-gray-900">{app.applicant_name || '—'}</span></div>
-                                <div><span className="text-gray-500">{t('admin.trialApplications.phone', '聯絡電話')}：</span><span className="text-gray-900">{app.applicant_phone || '—'}</span></div>
+                                <div><span className="text-gray-500">{t('admin.trialApplications.phone', '聯絡電話')}：</span><span className="text-gray-900">{formatMobileForDisplay(app.applicant_phone, '—')}</span></div>
                                 <div><span className="text-gray-500">{t('trial.email', { defaultValue: '電郵' })}：</span><span className="text-gray-900">{app.applicant_email || '—'}</span></div>
                                 <div><span className="text-gray-500">{t('trial.nickName', { defaultValue: '暱稱' })}：</span><span className="text-gray-900">{app.nick_name || '—'}</span></div>
                                 <div><span className="text-gray-500">{t('trial.dateOfBirth', { defaultValue: '出生日期' })}：</span><span className="text-gray-900">{app.date_of_birth ? formatDateOnly(app.date_of_birth) : '—'}</span></div>
-                                <div><span className="text-gray-500">{t('trial.sex', { defaultValue: '性別' })}：</span><span className="text-gray-900">{app.sex == null ? '—' : app.sex ? t('profile.female', { defaultValue: '女' }) : t('profile.male', { defaultValue: '男' })}</span></div>
+                                <div><span className="text-gray-500">{t('trial.sex', { defaultValue: '性別' })}：</span><span className="text-gray-900">{getSexLabel(app.sex)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.parentsName', { defaultValue: '家長姓名' })}：</span><span className="text-gray-900">{app.parents_name || '—'}</span></div>
                                 <div><span className="text-gray-500">{t('trial.residentialDistrict', { defaultValue: '居住地區' })}：</span><span className="text-gray-900">{getDistrictLabel(app.residential_district)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.hasJoinedCourses', { defaultValue: '是否參加過常規/暑期課程' })}：</span><span className="text-gray-900">{getBooleanLabel(app.has_joined_courses)}</span></div>
                                 <div><span className="text-gray-500">{t('trial.hasDanceExperience', { defaultValue: '是否有舞蹈經驗' })}：</span><span className="text-gray-900">{getBooleanLabel(app.has_dance_experience)}</span></div>
-                                <div><span className="text-gray-500">{t('trial.howDidYouHear', { defaultValue: '如何得知我們' })}：</span><span className="text-gray-900">{app.how_did_you_hear || '—'}</span></div>
+                                <div><span className="text-gray-500">{t('trial.howDidYouHear', { defaultValue: '如何得知我們' })}：</span><span className="text-gray-900">{getHowDidYouHearLabel(app.how_did_you_hear)}</span></div>
+                                {app.how_did_you_hear === 'friendReferral' && app.referrer_name ? (
+                                  <div><span className="text-gray-500">{t('trial.referrerName', { defaultValue: '介紹人姓名' })}：</span><span className="text-gray-900">{app.referrer_name}</span></div>
+                                ) : null}
                                 <div><span className="text-gray-500">{t('trial.promoCode', { defaultValue: '優惠碼' })}：</span><span className="text-gray-900">{app.promo_code || '—'}</span></div>
                               </div>
                             </div>
@@ -762,7 +820,18 @@ export default function TrialApplicationsPage() {
             <div className="border-t border-gray-200 px-4 py-3">
               <button
                 type="button"
-                disabled={savingStatuses || changedRowIds.length === 0}
+                disabled={
+                  savingStatuses ||
+                  changedRowIds.filter((id) => {
+                    const app = applications.find((a) => a.id === id);
+                    if (!app) return false;
+                    const current = toSelectableStatus(app.status);
+                    const draft = toSelectableStatus(editStatus[id] ?? app.status);
+                    const currentNote = String(app.notes ?? '').trim();
+                    const draftNote = String(editNotes[id] ?? app.notes ?? '').trim();
+                    return current === draft && currentNote !== draftNote;
+                  }).length === 0
+                }
                 onClick={saveAllStatuses}
                 className="px-4 py-2 text-sm font-medium bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50"
               >

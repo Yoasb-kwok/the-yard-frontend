@@ -1,15 +1,13 @@
 /**
  * Image upload helper for admin CMS.
  *
- * Calls `POST /api/admin/uploads`. Backends differ:
- * - **Multipart binary** (`file` or `image`) avoids huge JSON bodies and Express `json()` size limits.
- * - Some expect JSON `{ image: "<data URL>" }` or `{ base64, mime }`.
- *
- * Order: **JSON first** (`base64`+`mime`, then `image` data URL), then multipart — many backends
- * validate JSON only and return 400 for multipart-only requests.
+ * Calls `POST /api/admin/uploads`. Backend accepts:
+ * - multipart/form-data: `file` or `image` (binary) — preferred
+ * - JSON: `{ image | dataUrl: "<data URL>" }` or `{ base64, mime }`
  */
 
-import { DEFAULT_UPLOAD_COMPRESSION, normalizeImageFileForUpload } from './imagePrepare';
+import { api, ApiError } from './api';
+import { DEFAULT_UPLOAD_COMPRESSION, ensureImageFileMime, normalizeImageFileForUpload } from './imagePrepare';
 
 const DEFAULT_PROD_API_URL = 'https://theyardapis.01tech.work/api';
 const API_BASE_URL =
@@ -26,7 +24,6 @@ function buildUrl(endpoint: string): string {
 }
 
 export interface UploadedAsset {
-  /** URL the backend returned (absolute or `/uploads/...` relative). */
   url: string;
   mime?: string;
   size?: number;
@@ -41,26 +38,41 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-async function readResponseJson(response: Response): Promise<unknown> {
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) return null;
-  try {
-    return await response.json();
-  } catch {
-    return null;
+/** Parse data URLs including `data:;base64,...` (empty MIME from FileReader). */
+function parseDataUrlParts(
+  dataUrl: string,
+  fallbackMime: string
+): { mime: string; base64: string; normalizedDataUrl: string } | null {
+  const match = /^data:([^,]*),(.*)$/s.exec(dataUrl);
+  if (!match) return null;
+  const meta = match[1] ?? '';
+  const payload = match[2] ?? '';
+  if (!payload || !meta.includes('base64')) return null;
+
+  const mimePart = meta.split(';')[0]?.trim() ?? '';
+  let mime = mimePart.length > 0 ? mimePart : fallbackMime;
+  if (!mime.startsWith('image/')) {
+    mime = fallbackMime.startsWith('image/') ? fallbackMime : 'image/jpeg';
   }
+  return {
+    mime,
+    base64: payload,
+    normalizedDataUrl: `data:${mime};base64,${payload}`,
+  };
 }
 
 function extractMsg(parsed: unknown): string | null {
-  if (parsed && typeof parsed === 'object' && 'msg' in parsed && typeof (parsed as { msg: unknown }).msg === 'string') {
-    return (parsed as { msg: string }).msg;
-  }
+  if (!parsed || typeof parsed !== 'object') return null;
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.msg === 'string' && obj.msg.trim()) return obj.msg;
+  if (typeof obj.message === 'string' && obj.message.trim()) return obj.message;
   return null;
 }
 
 function extractUrlFromUploadBody(parsed: unknown): string | null {
   if (!parsed || typeof parsed !== 'object') return null;
   const obj = parsed as Record<string, unknown>;
+  if (obj.success === false) return null;
   if (typeof obj.url === 'string') return obj.url;
   const data = obj.data;
   if (typeof data === 'string') return data;
@@ -73,11 +85,20 @@ function extractUrlFromUploadBody(parsed: unknown): string | null {
   return null;
 }
 
+async function readResponseJson(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) return null;
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 /** Resolve a possibly-relative upload URL to an absolute one for `<img src>`. */
 export function resolveUploadUrl(url: string | null | undefined): string {
   if (!url) return '';
   if (/^(https?:|data:)/i.test(url)) return url;
-  // Relative path from backend (e.g. "/uploads/xxx.png")
   const origin =
     (API_BASE_URL || '').replace(/\/api\/?$/, '') ||
     (typeof window !== 'undefined' ? window.location.origin : '');
@@ -85,111 +106,84 @@ export function resolveUploadUrl(url: string | null | undefined): string {
   return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
 }
 
+type UploadPayload = { url: string; absolute_url?: string; filename?: string; mime?: string };
+
 /**
  * Upload a file to `/api/admin/uploads`.
- * Returns a URL safe to store and use in `<img src>`: `data:` and `http(s):` unchanged;
- * relative paths like `/uploads/...` are resolved to the API origin (Vite proxy in dev).
+ * Returns a URL safe to store and use in `<img src>`.
  */
 export async function uploadImage(file: File, purpose?: string): Promise<string> {
-  const prepared = await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION);
+  const prepared = ensureImageFileMime(
+    await normalizeImageFileForUpload(file, DEFAULT_UPLOAD_COMPRESSION)
+  );
   const token = localStorage.getItem('token');
-  const authHeaders: Record<string, string> = {};
-  if (token) authHeaders.Authorization = `Bearer ${token}`;
-
-  const url = buildUrl('/admin/uploads');
-
-  const postJson = async (body: Record<string, unknown>) => {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { ...authHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const parsed = await readResponseJson(response);
-    return { response, parsed };
-  };
+  if (!token) {
+    throw new Error('Please log in again before uploading images.');
+  }
 
   const safeFilename =
     typeof prepared.name === 'string' && prepared.name.length > 0
       ? prepared.name.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 120) || 'upload.jpg'
       : 'upload.jpg';
 
-  const postMultipartBinary = async (fieldName: 'file' | 'image') => {
+  const dataUrl = await fileToDataUrl(prepared);
+  const parsedParts = parseDataUrlParts(dataUrl, prepared.type || 'image/jpeg');
+  if (!parsedParts) {
+    throw new Error('Failed to read image data for upload.');
+  }
+  const { mime, base64, normalizedDataUrl } = parsedParts;
+
+  const authHeaders: Record<string, string> = { Authorization: `Bearer ${token}` };
+  const uploadUrl = buildUrl('/admin/uploads');
+  let lastMsg = 'Upload failed';
+
+  const postMultipart = async (fieldName: 'file' | 'image') => {
     const form = new FormData();
-    // Omit explicit filename where possible — odd names can break some multer setups.
     form.append(fieldName, prepared, safeFilename);
     if (purpose) form.append('purpose', purpose);
-    const response = await fetch(url, {
+    const response = await fetch(uploadUrl, {
       method: 'POST',
       body: form,
-      headers: { ...authHeaders },
+      headers: authHeaders,
     });
     const parsed = await readResponseJson(response);
-    return { response, parsed };
+    lastMsg = extractMsg(parsed) || lastMsg;
+    if (!response.ok) return null;
+    const out = extractUrlFromUploadBody(parsed);
+    return out ? resolveUploadUrl(out) : null;
   };
 
-  /** Multipart text fields only (some stacks use multer.none + string `image`). */
-  const postMultipartTextImage = async (imageValue: string) => {
-    const form = new FormData();
-    form.append('image', imageValue);
-    if (purpose) form.append('purpose', purpose);
-    const response = await fetch(url, {
-      method: 'POST',
-      body: form,
-      headers: { ...authHeaders },
-    });
-    const parsed = await readResponseJson(response);
-    return { response, parsed };
+  const postJson = async (body: Record<string, unknown>) => {
+    const response = await api.post<UploadPayload>('/admin/uploads', body);
+    if (!response.success) {
+      lastMsg = response.msg || response.message || lastMsg;
+      return null;
+    }
+    const out = extractUrlFromUploadBody(response);
+    return out ? resolveUploadUrl(out) : null;
   };
 
-  const dataUrl = await fileToDataUrl(prepared);
-  const parts = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
-  const mime = parts?.[1];
-  const base64 = parts?.[2];
-  const purposeOpt = purpose ? { purpose } : {};
-
-  /**
-   * Many local backends validate JSON (`base64` + `mime` or `image` data URL) and never
-   * read multipart `file` — sending multipart first always produced 400. JSON first fixes
-   * sub‑~1MB photos; larger files still fall through to multipart.
-   */
-  const attempts: Array<() => Promise<{ response: Response; parsed: unknown }>> = [];
-  if (mime && base64) {
-    attempts.push(
-      () => postJson({ base64, mime, ...purposeOpt }),
-      () => postJson({ image_base64: base64, mime_type: mime, ...purposeOpt }),
-      () => postJson({ base64, mimeType: mime, ...purposeOpt }),
-      () => postJson({ file: base64, mime, ...purposeOpt })
-    );
-  }
-  attempts.push(
-    () => postJson({ image: dataUrl, ...purposeOpt }),
-    () => postMultipartBinary('file'),
-    () => postMultipartBinary('image'),
-    () => postMultipartTextImage(dataUrl)
-  );
-
-  let lastMsg = `Upload failed`;
-  let lastStatus = 0;
+  const attempts: Array<() => Promise<string | null>> = [
+    () => postMultipart('file'),
+    () => postMultipart('image'),
+    () => postJson({ image: normalizedDataUrl }),
+    () => postJson({ dataUrl: normalizedDataUrl }),
+    () => postJson({ base64, mime }),
+  ];
 
   for (const run of attempts) {
-    let response: Response;
-    let parsed: unknown;
     try {
-      ({ response, parsed } = await run());
-    } catch (e) {
-      lastMsg = e instanceof Error ? e.message : String(e);
-      continue;
+      const url = await run();
+      if (url) return url;
+    } catch (err) {
+      lastMsg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : String(err);
     }
-    lastStatus = response.status;
-    lastMsg = extractMsg(parsed) || lastMsg;
-
-    if (!response.ok) continue;
-
-    const out = extractUrlFromUploadBody(parsed);
-    if (out) return resolveUploadUrl(out);
-
-    lastMsg = 'Upload response missing url';
   }
 
-  throw new Error(lastMsg || `Upload failed (${lastStatus})`);
+  throw new Error(lastMsg);
 }

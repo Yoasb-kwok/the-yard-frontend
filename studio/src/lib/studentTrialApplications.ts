@@ -13,10 +13,36 @@ export interface TrialApplicationItem {
   class_name: string;
   status: TrialStatus;
   applied_date?: string;
+  preferred_datetime?: string | null;
+  class_end_time?: string | null;
+  class_location?: string | null;
   assigned_class_name?: string | null;
   profile_id?: string;
   student_name?: string;
   user_id?: string;
+}
+
+export function getTrialBranchLabel(
+  location: string | null | undefined,
+  t: (key: string, fallback?: string) => string,
+): string {
+  const key = String(location || '').trim().toLowerCase();
+  if (!key) return '';
+  const translated = t(`home.locations.${key}`, '');
+  return translated || key;
+}
+
+export function formatTrialClassSchedule(
+  trial: Pick<TrialApplicationItem, 'preferred_datetime' | 'class_end_time'>,
+  locale: string,
+  formatDateTimeRange: (start: string | Date, end: string | Date, locale?: string) => string,
+  formatDateTime: (date: string | Date, locale?: string) => string,
+): string {
+  const start = trial.preferred_datetime;
+  if (!start) return '';
+  const end = trial.class_end_time;
+  if (end) return formatDateTimeRange(start, end, locale);
+  return formatDateTime(start, locale);
 }
 
 export function getTrialStatusLabel(status: TrialStatus, t: (k: string, d?: string) => string): string {

@@ -3,12 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../contexts/AuthContext';
-import { formatCurrency, calculateDiscount } from '../../lib/utils';
+import { formatCurrency, calculateDiscount, getLocalDateIso } from '../../lib/utils';
 import { ShoppingCart, Check } from 'lucide-react';
 import { api } from '../../lib/api';
 import { fetchTokenPackages } from '../../lib/tokenPackages';
-import { createCheckoutSession } from '../../lib/paymentApi';
+import {
+  createCheckoutSession,
+  resolveCheckoutStartError,
+  createOfflineOrder,
+  ORDER_REMARKS_MAX_LENGTH,
+  type CheckoutOrderExtras,
+} from '../../lib/paymentApi';
 import { getSitePageContentForLocale, loadSimpleSitePage } from '../../lib/sitePageContent';
+import DateSelect from '../../components/DateSelect';
 
 interface TokenPackage {
   id: number;
@@ -77,6 +84,8 @@ export default function ShopPage() {
     discount_value: number;
   } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'credit_card' | 'cash'>('credit_card');
+  const [startDate, setStartDate] = useState(() => getLocalDateIso());
+  const [orderRemarks, setOrderRemarks] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -86,10 +95,18 @@ export default function ShopPage() {
     legacy: '',
     mode: 'legacy',
   });
+  const todayIso = useMemo(() => getLocalDateIso(), []);
 
   useEffect(() => {
     loadPackages();
   }, []);
+
+  const checkoutExtras = useMemo((): CheckoutOrderExtras => {
+    const extras: CheckoutOrderExtras = {};
+    if (startDate.trim()) extras.startDate = startDate.trim();
+    if (orderRemarks.trim()) extras.remarks = orderRemarks.trim();
+    return extras;
+  }, [startDate, orderRemarks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -262,24 +279,53 @@ export default function ShopPage() {
       try {
         const { url } = await createCheckoutSession(cart[0].package.id, {
           studentProfileId: profile?.id,
+          ...checkoutExtras,
         });
         window.location.href = url;
       } catch (e) {
-        alert(e instanceof Error ? e.message : t('shop.stripeRedirectError'));
+        alert(resolveCheckoutStartError(e, t));
         setSubmitting(false);
       }
       return;
     }
 
+    if (!profile?.id) {
+      alert(t('shop.profileRequired', { defaultValue: 'Please select a student profile before checkout.' }));
+      return;
+    }
+
+    const cartSubtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
+    const cartDiscount = appliedCoupon
+      ? calculateDiscount(cartSubtotal, appliedCoupon.discount_type, appliedCoupon.discount_value)
+      : 0;
+
     setSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    alert(t('shop.orderPlaced'));
-    setCart([]);
-    setAppliedCoupon(null);
-    setCouponCode('');
-    setReferralCode('');
-    navigate('/dashboard');
-    setSubmitting(false);
+    try {
+      for (let i = 0; i < cart.length; i++) {
+        const item = cart[i];
+        const lineSubtotal = item.package.price * item.quantity;
+        const lineDiscount = cartSubtotal > 0 ? (cartDiscount * lineSubtotal) / cartSubtotal : 0;
+        await createOfflineOrder({
+          packageId: item.package.id,
+          quantity: item.quantity,
+          paymentMethod: 'cash',
+          studentProfileId: profile.id,
+          couponId: i === 0 && appliedCoupon ? appliedCoupon.id : undefined,
+          discountAmount: lineDiscount > 0 ? lineDiscount : undefined,
+          ...checkoutExtras,
+        });
+      }
+      alert(t('shop.orderPlaced'));
+      setCart([]);
+      setAppliedCoupon(null);
+      setCouponCode('');
+      setReferralCode('');
+      navigate('/payment-history');
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('shop.orderFailed', { defaultValue: 'Failed to place order.' }));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.package.price * item.quantity, 0);
@@ -447,6 +493,38 @@ export default function ShopPage() {
                     <div className="flex justify-between text-lg font-bold">
                       <span>{t('shop.total')}:</span>
                       <span>{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 mb-4 pt-4 border-t">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('shop.startDate')}
+                      </label>
+                      <DateSelect
+                        value={startDate}
+                        onChange={setStartDate}
+                        minDate={todayIso}
+                        required
+                        className="w-full"
+                        ariaLabel={t('shop.startDate')}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        {t('shop.remarks')}
+                      </label>
+                      <textarea
+                        value={orderRemarks}
+                        onChange={(e) => setOrderRemarks(e.target.value.slice(0, ORDER_REMARKS_MAX_LENGTH))}
+                        placeholder={t('shop.remarksPlaceholder')}
+                        maxLength={ORDER_REMARKS_MAX_LENGTH}
+                        rows={3}
+                        className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-primary resize-y min-h-[4.5rem]"
+                      />
+                      <p className="text-xs text-gray-500 mt-1 text-right">
+                        {orderRemarks.length}/{ORDER_REMARKS_MAX_LENGTH}
+                      </p>
                     </div>
                   </div>
 
