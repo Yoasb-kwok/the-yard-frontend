@@ -41,7 +41,9 @@
     "attendanceChange": "改出席",
     "approveApplication": "同意申请",
     "rejectApplication": "拒绝申请",
-    "deleteUser": "删除用户"
+    "deleteUser": "删除用户",
+    "deleteClass": "删除课程",
+    "unassignTokens": "取消派币"
   },
   "common": {
     "loading": "加载中...",

@@ -41,7 +41,9 @@
     "attendanceChange": "Change attendance",
     "approveApplication": "Approve application",
     "rejectApplication": "Reject application",
-    "deleteUser": "Delete user"
+    "deleteUser": "Delete user",
+    "deleteClass": "Delete class",
+    "unassignTokens": "Unassign tokens"
   },
   "common": {
     "loading": "Loading...",

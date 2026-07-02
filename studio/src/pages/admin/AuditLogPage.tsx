@@ -23,6 +23,8 @@ const ACTION_KEYS: Record<string, string> = {
   approve_application: 'audit.approveApplication',
   reject_application: 'audit.rejectApplication',
   delete_user: 'audit.deleteUser',
+  delete_class: 'audit.deleteClass',
+  unassign_tokens: 'audit.unassignTokens',
 };
 
 export default function AuditLogPage() {
